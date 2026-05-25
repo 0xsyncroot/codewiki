@@ -512,7 +512,7 @@ The two critical blockers are fully resolved and the quality is significantly im
 
 **Headline: for enterprise .NET tasks — ~70% fewer tool calls, ~83% fewer tokens, ~$0.0122 saved per task vs grep/read baseline (fresh `codewiki 0.1.1` measurement, 2026-05-25).**
 
-This section provides a .NET-specific, measured agent-savings benchmark, with actual CLI output bytes from a freshly-indexed eShopOnWeb (254 .cs) and jellyfin (2,065 .cs) corpus on `codewiki 0.1.1`. The aggregate is also summarised in [`README.md` §4](README.md).
+This section provides a .NET-specific, measured agent-savings benchmark, with actual CLI output bytes from a freshly-indexed eShopOnWeb (254 .cs) and jellyfin (2,065 .cs) corpus on `codewiki 0.1.1`. The authoritative, recall-scored, cross-language savings measurement is the headline table in [`README.md` §1](README.md); this appendix is the deeper .NET-specific companion.
 
 ---
 
@@ -856,4 +856,4 @@ wc -c /tmp/bench/eShopOnWeb/src/ApplicationCore/Interfaces/IBasketService.cs \
 2. Task 5 illustrates a real codewiki limitation: FTS on "configured" matches EF `*Configuration` classes before `Startup.cs`. A second, more specific query is needed. This is an honest 2-call scenario, not the ideal 1-call case.
 3. Interface→impl now traverses real `implements` edges (Task 3 uses `impact`, which surfaces `EfRepository` directly). `callers` still returns `(none)` for a DI-injected interface because interface-typed constructor parameters are not modeled as direct *call* edges — the `query` output (listing consumer constructors) and `impact` (listing the implementation) together answer the question.
 4. Cost arithmetic uses input token pricing only. Output token costs (the agent's response) are the same for both paths and cancel out in the delta.
-5. `context` byte/token counts (Tasks 2, 5) vary ±~5% between cold index builds because hybrid BM25 + graph-path ranking is non-deterministic across the parallel-resolution graph ordering. `query` / `callers` / `impact` are deterministic. The aggregate call/token/$ reductions are stable across builds; the per-task `context` numbers reflect one representative clean-index run. (This .NET-only study was originally driven by `run-dotnet.sh`, now removed and superseded by the cross-language, recall-scored `run-savings.sh` — see `README.md` §4.1.)
+5. `context` byte/token counts (Tasks 2, 5) vary ±~5% between cold index builds because hybrid BM25 + graph-path ranking is non-deterministic across the parallel-resolution graph ordering. `query` / `callers` / `impact` are deterministic. The aggregate call/token/$ reductions are stable across builds; the per-task `context` numbers reflect one representative clean-index run. (This .NET-only study complements the cross-language, recall-scored `run-savings.sh` harness — see [`README.md` §1](README.md), the authoritative savings measurement, and §5 for its methodology.)
