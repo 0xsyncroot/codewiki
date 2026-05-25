@@ -50,12 +50,9 @@ jobs:
             artifact_name: codewiki
             archive_ext: tar.gz
 
-          - target: x86_64-apple-darwin
-            os: macos-13
-            use_cross: false
-            artifact_name: codewiki
-            archive_ext: tar.gz
-
+          # macOS Intel (x86_64-apple-darwin) is omitted: GitHub's macos-13
+          # runners queue unpredictably. Apple Silicon covers modern Macs;
+          # Intel users can build from source until it returns in a later release.
           - target: aarch64-apple-darwin
             os: macos-14
             use_cross: false

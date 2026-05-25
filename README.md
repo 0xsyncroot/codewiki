@@ -141,9 +141,10 @@ put `codewiki` on your PATH.
 |----|------|---------------|
 | Linux | x86_64 | `codewiki-x86_64-unknown-linux-gnu.tar.gz` |
 | Linux | ARM64 | `codewiki-aarch64-unknown-linux-gnu.tar.gz` |
-| macOS | Intel | `codewiki-x86_64-apple-darwin.tar.gz` |
 | macOS | Apple Silicon | `codewiki-aarch64-apple-darwin.tar.gz` |
 | Windows | x86_64 | `codewiki-x86_64-pc-windows-msvc.zip` |
+
+> macOS Intel (`x86_64`): build from source for now (see below) — a pre-built Intel binary will return in a later release.
 
 Each asset has a matching `<asset>.sha256`. Download both, then verify and install:
 
