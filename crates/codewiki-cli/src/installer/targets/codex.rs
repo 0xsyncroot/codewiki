@@ -10,9 +10,9 @@ use anyhow::Result;
 use codewiki_mcp::constants::{MCP_BINARY_NAME, MCP_SERVE_ARGS_GLOBAL};
 
 use crate::installer::shared::{
-    atomic_write, instructions_template, remove_marked_section,
-    replace_or_append_marked_section, FileAction, RemoveAction, SectionAction, WriteResult,
-    CODEWIKI_SECTION_END, CODEWIKI_SECTION_START,
+    atomic_write, instructions_template, remove_marked_section, replace_or_append_marked_section,
+    FileAction, RemoveAction, SectionAction, WriteResult, CODEWIKI_SECTION_END,
+    CODEWIKI_SECTION_START,
 };
 
 use super::{AgentTarget, DetectionResult, InstallOptions, Location};
@@ -139,7 +139,11 @@ fn remove_toml_table(content: &str, header: &str) -> (String, &'static str) {
     result_lines.extend_from_slice(&lines[end..]);
 
     // Trim trailing blank lines.
-    while result_lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) {
+    while result_lines
+        .last()
+        .map(|l| l.trim().is_empty())
+        .unwrap_or(false)
+    {
         result_lines.pop();
     }
 
@@ -173,7 +177,14 @@ fn write_mcp_entry() -> Result<(PathBuf, FileAction)> {
     }
 
     atomic_write(&file, &next_content)?;
-    Ok((file, if created { FileAction::Created } else { FileAction::Updated }))
+    Ok((
+        file,
+        if created {
+            FileAction::Created
+        } else {
+            FileAction::Updated
+        },
+    ))
 }
 
 #[tracing::instrument(level = "debug")]
@@ -295,9 +306,14 @@ impl AgentTarget for CodexTarget {
 
     fn print_config(&self, loc: Location) -> String {
         if loc != Location::Global {
-            return "# Codex CLI has no project-local config — use --location=global.\n".to_string();
+            return "# Codex CLI has no project-local config — use --location=global.\n"
+                .to_string();
         }
-        format!("# Add to {}\n\n{}\n", toml_config_path().display(), build_toml_block())
+        format!(
+            "# Add to {}\n\n{}\n",
+            toml_config_path().display(),
+            build_toml_block()
+        )
     }
 
     fn describe_paths(&self, loc: Location) -> Vec<PathBuf> {

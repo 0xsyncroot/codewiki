@@ -35,10 +35,8 @@ fn method_decl_regex() -> &'static Regex {
     RE.get_or_init(|| {
         // Matches: (public|private|protected) <return-type> methodName(
         // [^(]* is safe because return types don't contain ( normally.
-        Regex::new(
-            r#"(?:public|private|protected)\s+[^(;{]*\s+([A-Za-z_][A-Za-z0-9_]*)\s*\("#,
-        )
-        .expect("spring method_decl_regex")
+        Regex::new(r#"(?:public|private|protected)\s+[^(;{]*\s+([A-Za-z_][A-Za-z0-9_]*)\s*\("#)
+            .expect("spring method_decl_regex")
     })
 }
 
@@ -136,12 +134,9 @@ impl FrameworkResolver for SpringResolver {
 
         // Service
         if name.ends_with("Service") {
-            if let Some(id) = resolve_by_name_kind(
-                name,
-                &[NodeKind::Class],
-                &["service", "services"],
-                context,
-            ) {
+            if let Some(id) =
+                resolve_by_name_kind(name, &[NodeKind::Class], &["service", "services"], context)
+            {
                 return Ok(Some(make_resolved_edge(reference, id, 0.85, self.name())));
             }
         }
@@ -183,7 +178,11 @@ impl FrameworkResolver for SpringResolver {
         }
 
         // PascalCase entity / model
-        let is_pascal = name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+        let is_pascal = name
+            .chars()
+            .next()
+            .map(|c| c.is_uppercase())
+            .unwrap_or(false)
             && name.chars().all(|c| c.is_alphanumeric());
         if is_pascal {
             if let Some(id) = resolve_by_name_kind(
@@ -454,7 +453,10 @@ mod tests {
         };
 
         let resolver = SpringResolver;
-        assert!(resolver.detect(&ctx), "spring-boot in pom.xml must trigger detect");
+        assert!(
+            resolver.detect(&ctx),
+            "spring-boot in pom.xml must trigger detect"
+        );
     }
 
     #[test]
@@ -468,7 +470,10 @@ mod tests {
             .extract(Path::new("UserController.kt"), content, &ctx)
             .expect("extract ok");
 
-        assert!(result.nodes.is_empty(), "non-.java file must produce no nodes");
+        assert!(
+            result.nodes.is_empty(),
+            "non-.java file must produce no nodes"
+        );
     }
 
     #[test]
@@ -498,7 +503,11 @@ mod tests {
             .expect("extract ok");
 
         assert_eq!(result.nodes.len(), 5, "five route nodes");
-        let methods: Vec<&str> = result.nodes.iter().map(|n| n.name.split(' ').next().unwrap()).collect();
+        let methods: Vec<&str> = result
+            .nodes
+            .iter()
+            .map(|n| n.name.split(' ').next().unwrap())
+            .collect();
         assert!(methods.contains(&"GET"));
         assert!(methods.contains(&"POST"));
         assert!(methods.contains(&"PUT"));

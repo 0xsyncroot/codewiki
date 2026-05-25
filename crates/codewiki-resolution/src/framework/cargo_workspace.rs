@@ -217,7 +217,10 @@ impl FrameworkResolver for CargoWorkspaceResolver {
         // with zero filesystem reads.  For tokio (~30k refs, ~14 members) this
         // eliminates ~420k filesystem reads per resolution run.
         {
-            let mut guard = self.workspace_cache.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = self
+                .workspace_cache
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let needs_build = match *guard {
                 None => true,
                 Some((ref cached_root, _)) => cached_root != context.project_root,
@@ -233,7 +236,10 @@ impl FrameworkResolver for CargoWorkspaceResolver {
 
         // Now look up the reference in the cached map.
         // We take the lock again for the lookup — it is brief (pure HashMap reads).
-        let guard = self.workspace_cache.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = self
+            .workspace_cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let workspace_map = match *guard {
             Some((_, ref map)) => map,
             None => return Ok(None), // unreachable: we just populated it above
@@ -254,7 +260,12 @@ impl FrameworkResolver for CargoWorkspaceResolver {
                     .iter()
                     .find(|n| n.kind == NodeKind::Module && n.id.starts_with("crate:"))
                 {
-                    return Ok(Some(make_resolved_edge(reference, node.id.clone(), 0.9, self.name())));
+                    return Ok(Some(make_resolved_edge(
+                        reference,
+                        node.id.clone(),
+                        0.9,
+                        self.name(),
+                    )));
                 }
                 // Do NOT fall back to constructing a synthetic "crate:{name}" id.
                 // If the crate node was not found in the DB by get_nodes_by_name, it
@@ -306,10 +317,18 @@ impl FrameworkResolver for CargoWorkspaceResolver {
             let toml_rel = format!("{}/Cargo.toml", member_path);
             let pkg_name = if let Some(member_toml) = context.read_file(&toml_rel) {
                 get_package_name(&member_toml).unwrap_or_else(|| {
-                    member_path.split('/').next_back().unwrap_or(member_path).to_string()
+                    member_path
+                        .split('/')
+                        .next_back()
+                        .unwrap_or(member_path)
+                        .to_string()
                 })
             } else {
-                member_path.split('/').next_back().unwrap_or(member_path).to_string()
+                member_path
+                    .split('/')
+                    .next_back()
+                    .unwrap_or(member_path)
+                    .to_string()
             };
 
             // Register aliases (hyphen ↔ underscore).
@@ -455,7 +474,11 @@ members = ["crates/alpha", "crates/beta", "crates/gamma"]
         fs::write(dir.path().join("Cargo.toml"), workspace_toml).unwrap();
 
         // Member Cargo.tomls
-        for (sub, name) in &[("alpha", "alpha-crate"), ("beta", "beta-crate"), ("gamma", "gamma-crate")] {
+        for (sub, name) in &[
+            ("alpha", "alpha-crate"),
+            ("beta", "beta-crate"),
+            ("gamma", "gamma-crate"),
+        ] {
             let crate_dir = dir.path().join("crates").join(sub);
             fs::create_dir_all(&crate_dir).unwrap();
             fs::write(
@@ -475,7 +498,8 @@ members = ["crates/alpha", "crates/beta", "crates/gamma"]
             .expect("extract ok");
 
         assert_eq!(result.nodes.len(), 3, "three module nodes");
-        let names: std::collections::HashSet<_> = result.nodes.iter().map(|n| n.name.as_str()).collect();
+        let names: std::collections::HashSet<_> =
+            result.nodes.iter().map(|n| n.name.as_str()).collect();
         assert!(names.contains("alpha-crate"), "alpha-crate present");
         assert!(names.contains("beta-crate"), "beta-crate present");
         assert!(names.contains("gamma-crate"), "gamma-crate present");
@@ -494,7 +518,11 @@ members = ["crates/alpha", "crates/beta", "crates/gamma"]
         add_crate_alias(&mut map, "my-tool", "crates/my-tool");
         assert!(map.contains_key("my-tool"), "hyphen form present");
         assert!(map.contains_key("my_tool"), "underscore form present");
-        assert_eq!(map.get("my-tool"), map.get("my_tool"), "both point to same path");
+        assert_eq!(
+            map.get("my-tool"),
+            map.get("my_tool"),
+            "both point to same path"
+        );
     }
 
     /// T-308: `members = ["crates/*"]` is expanded via known_files.
@@ -507,9 +535,18 @@ members = ["crates/alpha", "crates/beta", "crates/gamma"]
             "other/thing.rs".to_string(),
         ];
         let expanded = expand_glob_members(&raw, &known);
-        assert!(expanded.contains(&"crates/alpha".to_string()), "crates/alpha expanded");
-        assert!(expanded.contains(&"crates/beta".to_string()), "crates/beta expanded");
-        assert!(!expanded.contains(&"other".to_string()), "other/ not included");
+        assert!(
+            expanded.contains(&"crates/alpha".to_string()),
+            "crates/alpha expanded"
+        );
+        assert!(
+            expanded.contains(&"crates/beta".to_string()),
+            "crates/beta expanded"
+        );
+        assert!(
+            !expanded.contains(&"other".to_string()),
+            "other/ not included"
+        );
     }
 
     /// T-308: member A with `path = "../B"` dependency emits an edge A→B.
@@ -529,7 +566,11 @@ members = ["crates/app", "crates/core"]
         // crates/core
         let core_dir = dir.path().join("crates").join("core");
         fs::create_dir_all(&core_dir).unwrap();
-        fs::write(core_dir.join("Cargo.toml"), "[package]\nname = \"core\"\nversion = \"0.1.0\"\n").unwrap();
+        fs::write(
+            core_dir.join("Cargo.toml"),
+            "[package]\nname = \"core\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
 
         // crates/app — depends on core via path
         let app_dir = dir.path().join("crates").join("app");
@@ -571,7 +612,10 @@ members = ["crates/app", "crates/core"]
         let ctx = make_ctx_with_root(dir.path(), &caches, &aliases, &[]);
 
         let resolver = CargoWorkspaceResolver::new();
-        assert!(resolver.detect(&ctx), "must detect workspace via Cargo.toml");
+        assert!(
+            resolver.detect(&ctx),
+            "must detect workspace via Cargo.toml"
+        );
     }
 
     /// T-308: extract() is a no-op for non-workspace Cargo.toml.

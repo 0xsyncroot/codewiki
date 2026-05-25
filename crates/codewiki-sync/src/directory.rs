@@ -118,21 +118,29 @@ mod tests {
     fn walk_returns_source_files() {
         let dir = make_temp_project();
         let files = walk_source_files(dir.path());
-        let names: Vec<_> = files.iter()
+        let names: Vec<_> = files
+            .iter()
             .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
             .collect();
         assert!(names.contains(&"main.ts".to_string()), "expected main.ts");
-        assert!(names.contains(&"helper.py".to_string()), "expected helper.py");
+        assert!(
+            names.contains(&"helper.py".to_string()),
+            "expected helper.py"
+        );
     }
 
     #[test]
     fn walk_skips_large_files() {
         let dir = make_temp_project();
         let files = walk_source_files(dir.path());
-        let names: Vec<_> = files.iter()
+        let names: Vec<_> = files
+            .iter()
             .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
             .collect();
-        assert!(!names.contains(&"big.ts".to_string()), "big.ts should be skipped");
+        assert!(
+            !names.contains(&"big.ts".to_string()),
+            "big.ts should be skipped"
+        );
     }
 
     #[test]
@@ -141,7 +149,10 @@ mod tests {
         let files = walk_source_files(dir.path());
         for f in &files {
             let s = f.to_string_lossy();
-            assert!(!s.contains(".codewiki"), "should not contain .codewiki path: {s}");
+            assert!(
+                !s.contains(".codewiki"),
+                "should not contain .codewiki path: {s}"
+            );
         }
     }
 
@@ -149,11 +160,18 @@ mod tests {
     fn walk_respects_gitignore() {
         let dir = make_gitignored_project();
         let files = walk_source_files(dir.path());
-        let names: Vec<_> = files.iter()
+        let names: Vec<_> = files
+            .iter()
             .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
             .collect();
-        assert!(names.contains(&"index.ts".to_string()), "index.ts should be present");
-        assert!(!names.contains(&"ignored.ts".to_string()), "ignored.ts should be absent");
+        assert!(
+            names.contains(&"index.ts".to_string()),
+            "index.ts should be present"
+        );
+        assert!(
+            !names.contains(&"ignored.ts".to_string()),
+            "ignored.ts should be absent"
+        );
     }
 
     /// T-320: `.gitignore` must be honoured even when the walk root is NOT inside a git
@@ -166,7 +184,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("included.ts"), b"export const x = 1;").unwrap();
         fs::create_dir(dir.path().join("vendor")).unwrap();
-        fs::write(dir.path().join("vendor").join("dep.ts"), b"export const y = 2;").unwrap();
+        fs::write(
+            dir.path().join("vendor").join("dep.ts"),
+            b"export const y = 2;",
+        )
+        .unwrap();
         fs::write(dir.path().join(".gitignore"), b"vendor/\n").unwrap();
 
         // Confirm there is no .git/ directory — this is the bug-trigger condition.
@@ -181,7 +203,10 @@ mod tests {
             .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
             .collect();
 
-        assert!(names.contains(&"included.ts".to_string()), "included.ts must be indexed");
+        assert!(
+            names.contains(&"included.ts".to_string()),
+            "included.ts must be indexed"
+        );
         assert!(
             !names.contains(&"dep.ts".to_string()),
             "dep.ts inside vendor/ must be excluded by .gitignore even without .git/"

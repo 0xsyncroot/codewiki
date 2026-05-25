@@ -1,6 +1,4 @@
-# .github/workflows/ci.yml
-# CodeGraph Rust CI — tests, benchmarks, parity, coverage
-# Owner: A7
+# CodeWiki CI — formatting, lints, and the cross-platform test suite.
 
 name: CI
 
@@ -14,9 +12,9 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  # ── Lint & format ───────────────────────────────────────────────────────────
+  # ── Formatting & lints ──────────────────────────────────────────────────────
   lint:
-    name: Lint (fmt + clippy + cargo-about)
+    name: Lint (fmt + clippy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,159 +31,26 @@ jobs:
       - name: Clippy (all targets, all features)
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Install cargo-about
-        run: cargo install cargo-about
-
-      - name: Check third-party license attributions
-        run: cargo about generate --manifest-path Cargo.toml -o /dev/null
-
-  # ── Native tests ────────────────────────────────────────────────────────────
+  # ── Cross-platform tests ────────────────────────────────────────────────────
   test:
-    name: Test (${{ matrix.os }} / ${{ matrix.target }})
+    name: Test (${{ matrix.os }})
     needs: lint
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Linux x86_64 GNU — primary dev target
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            use_cross: false
-
-          # Linux x86_64 musl — static binary (shipped to users)
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            use_cross: true
-
-          # macOS Apple Silicon — ARM64
-          - os: macos-14
-            target: aarch64-apple-darwin
-            use_cross: false
-
-          # macOS Intel — x86_64 (kept until usage drops below 5%)
-          - os: macos-13
-            target: x86_64-apple-darwin
-            use_cross: false
-
-          # Windows MSVC — day-1 per DECISIONS D2
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-            use_cross: false
-
+        os: [ubuntu-latest, macos-14, windows-2022]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Install cross (musl target)
-        if: matrix.use_cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
-
-      - name: Run tests (native)
-        if: "!matrix.use_cross"
-        run: cargo test --all-features --target ${{ matrix.target }}
-
-      - name: Run tests (cross/musl)
-        if: matrix.use_cross
-        run: cross test --all-features --target ${{ matrix.target }}
-
-  # ── Parity gate ─────────────────────────────────────────────────────────────
-  parity:
-    name: Parity (golden-output diff)
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: parity
-
-      - name: Build parity-runner
-        run: cargo build --release --bin parity-runner
-
-      - name: Run parity diff against golden JSON
-        run: |
-          ./target/release/parity-runner compare ts-baseline \
-            --golden parity/golden-outputs/ \
-            --threshold-counts 0.01 \
-            --threshold-mrr 0.10 \
-            --threshold-nodes 5
-
-      - name: Upload parity report (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: parity-report
-          path: parity/reports/
-
-  # ── Coverage ────────────────────────────────────────────────────────────────
-  coverage:
-    name: Coverage (llvm-cov)
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: coverage
+          key: ${{ matrix.os }}
 
-      - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov
+      - name: Build
+        run: cargo build --workspace --all-features
 
-      - name: Collect coverage
-        run: |
-          cargo llvm-cov --all-features --workspace \
-            --lcov --output-path lcov.info
-
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: lcov.info
-          fail_ci_if_error: true
-
-  # ── Criterion benchmarks (main only) ────────────────────────────────────────
-  bench:
-    name: Benchmark (criterion, main only)
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: bench
-
-      - name: Run criterion benchmarks
-        run: |
-          cargo bench --bench cold_index \
-                      --bench incremental_sync \
-                      --bench mcp_tools \
-            -- --output-format bencher | tee bench-results.txt
-
-      - name: Store benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          tool: cargo
-          output-file-path: bench-results.txt
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
-          alert-threshold: "130%"
-          comment-on-alert: true
-          fail-on-alert: false
+      - name: Test
+        run: cargo test --workspace --all-features

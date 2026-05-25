@@ -17,13 +17,13 @@
 
 use crate::server_instructions::SERVER_INSTRUCTIONS;
 use crate::tools;
-use codewiki_storage::{QueryHandle, StorageImpl, open as open_db};
+use codewiki_storage::{open as open_db, QueryHandle, StorageImpl};
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        AnnotateAble, CallToolRequestParam, CallToolResult, Implementation,
-        InitializeRequestParam, InitializeResult, ListToolsResult, PaginatedRequestParam,
-        ProtocolVersion, ServerCapabilities, ToolsCapability,
+        AnnotateAble, CallToolRequestParam, CallToolResult, Implementation, InitializeRequestParam,
+        InitializeResult, ListToolsResult, PaginatedRequestParam, ProtocolVersion,
+        ServerCapabilities, ToolsCapability,
     },
     service::RequestContext,
     Error as McpError, RoleServer,
@@ -97,7 +97,8 @@ impl CodeWikiMcpServer {
             ));
         }
 
-        let conn = open_db(&db_path).map_err(|e| format!("Failed to open DB at {}: {e}", db_path.display()))?;
+        let conn = open_db(&db_path)
+            .map_err(|e| format!("Failed to open DB at {}: {e}", db_path.display()))?;
         let handle: Arc<dyn QueryHandle> = Arc::new(StorageImpl::new(conn, 10_000));
 
         // Store in cache
@@ -267,10 +268,7 @@ mod tests {
             Ok(codewiki_core::Subgraph::default())
         }
 
-        fn get_code(
-            &self,
-            _node_id: &str,
-        ) -> Result<Option<String>, codewiki_core::CodeWikiError> {
+        fn get_code(&self, _node_id: &str) -> Result<Option<String>, codewiki_core::CodeWikiError> {
             Ok(None)
         }
 
@@ -342,7 +340,10 @@ mod tests {
             name: "codewiki_search".into(),
             arguments: Some({
                 let mut map = serde_json::Map::new();
-                map.insert("query".to_string(), serde_json::Value::String("test".to_string()));
+                map.insert(
+                    "query".to_string(),
+                    serde_json::Value::String("test".to_string()),
+                );
                 map
             }),
         };
@@ -361,7 +362,10 @@ mod tests {
         };
         let result = tools::dispatch(handle, params).await.unwrap();
         let text = extract_text(&result);
-        assert!(text.contains("wal"), "status should include 'wal' journal mode");
+        assert!(
+            text.contains("wal"),
+            "status should include 'wal' journal mode"
+        );
     }
 
     #[tokio::test]
@@ -371,7 +375,10 @@ mod tests {
             name: "codewiki_callers".into(),
             arguments: Some({
                 let mut map = serde_json::Map::new();
-                map.insert("symbol".to_string(), serde_json::Value::String("myFunc".to_string()));
+                map.insert(
+                    "symbol".to_string(),
+                    serde_json::Value::String("myFunc".to_string()),
+                );
                 map
             }),
         };
@@ -387,7 +394,10 @@ mod tests {
             name: "codewiki_callees".into(),
             arguments: Some({
                 let mut map = serde_json::Map::new();
-                map.insert("symbol".to_string(), serde_json::Value::String("myFunc".to_string()));
+                map.insert(
+                    "symbol".to_string(),
+                    serde_json::Value::String("myFunc".to_string()),
+                );
                 map
             }),
         };
@@ -403,7 +413,10 @@ mod tests {
             name: "codewiki_impact".into(),
             arguments: Some({
                 let mut map = serde_json::Map::new();
-                map.insert("symbol".to_string(), serde_json::Value::String("CoreType".to_string()));
+                map.insert(
+                    "symbol".to_string(),
+                    serde_json::Value::String("CoreType".to_string()),
+                );
                 map
             }),
         };
@@ -431,7 +444,10 @@ mod tests {
             name: "codewiki_explore".into(),
             arguments: Some({
                 let mut map = serde_json::Map::new();
-                map.insert("query".to_string(), serde_json::Value::String("AuthService".to_string()));
+                map.insert(
+                    "query".to_string(),
+                    serde_json::Value::String("AuthService".to_string()),
+                );
                 map
             }),
         };
@@ -447,7 +463,10 @@ mod tests {
             name: "codewiki_node".into(),
             arguments: Some({
                 let mut map = serde_json::Map::new();
-                map.insert("symbol".to_string(), serde_json::Value::String("handleRequest".to_string()));
+                map.insert(
+                    "symbol".to_string(),
+                    serde_json::Value::String("handleRequest".to_string()),
+                );
                 map
             }),
         };
@@ -463,7 +482,10 @@ mod tests {
             name: "codewiki_context".into(),
             arguments: Some({
                 let mut map = serde_json::Map::new();
-                map.insert("task".to_string(), serde_json::Value::String("add user authentication".to_string()));
+                map.insert(
+                    "task".to_string(),
+                    serde_json::Value::String("add user authentication".to_string()),
+                );
                 map
             }),
         };

@@ -34,7 +34,9 @@ fn camel_to_snake(s: &str) -> String {
 pub struct RailsResolver;
 
 impl FrameworkResolver for RailsResolver {
-    fn name(&self) -> &'static str { "rails" }
+    fn name(&self) -> &'static str {
+        "rails"
+    }
     fn languages(&self) -> Option<&'static [Language]> {
         static LANGS: &[Language] = &[Language::Ruby];
         Some(LANGS)
@@ -59,7 +61,11 @@ impl FrameworkResolver for RailsResolver {
         let name = &reference.reference_name;
 
         // PascalCase → model lookup
-        if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+        if name
+            .chars()
+            .next()
+            .map(|c| c.is_uppercase())
+            .unwrap_or(false)
             && !name.contains('_')
         {
             if let Some(id) = resolve_rails_model(name, context) {
@@ -69,18 +75,28 @@ impl FrameworkResolver for RailsResolver {
 
         if name.ends_with("Controller") {
             let candidates = context.get_nodes_by_name(name);
-            let ctrl = candidates.iter().find(|n| {
-                n.kind == NodeKind::Class && n.file_path.contains("controllers/")
-            });
+            let ctrl = candidates
+                .iter()
+                .find(|n| n.kind == NodeKind::Class && n.file_path.contains("controllers/"));
             if let Some(n) = ctrl {
-                return Ok(Some(make_resolved_edge(reference, n.id.clone(), 0.85, self.name())));
+                return Ok(Some(make_resolved_edge(
+                    reference,
+                    n.id.clone(),
+                    0.85,
+                    self.name(),
+                )));
             }
         }
 
         if name.ends_with("Helper") || name.ends_with("Service") || name.ends_with("Job") {
             let candidates = context.get_nodes_by_name(name);
             if let Some(n) = candidates.first() {
-                return Ok(Some(make_resolved_edge(reference, n.id.clone(), 0.8, self.name())));
+                return Ok(Some(make_resolved_edge(
+                    reference,
+                    n.id.clone(),
+                    0.8,
+                    self.name(),
+                )));
             }
         }
 
@@ -94,7 +110,9 @@ impl FrameworkResolver for RailsResolver {
         _context: &ResolutionContext<'_>,
     ) -> Result<FrameworkExtractionResult, CodeWikiError> {
         let file_str = file_path.to_string_lossy();
-        if !file_str.ends_with(".rb") { return Ok(FrameworkExtractionResult::empty()); }
+        if !file_str.ends_with(".rb") {
+            return Ok(FrameworkExtractionResult::empty());
+        }
         let safe = strip_comments(content, CommentLang::Ruby);
         let mut nodes = Vec::new();
         let mut unresolved_refs = Vec::new();
@@ -129,7 +147,11 @@ impl FrameworkResolver for RailsResolver {
             });
         }
 
-        Ok(FrameworkExtractionResult { nodes, edges: Vec::new(), unresolved_refs })
+        Ok(FrameworkExtractionResult {
+            nodes,
+            edges: Vec::new(),
+            unresolved_refs,
+        })
     }
 }
 
@@ -141,12 +163,17 @@ fn resolve_rails_model(name: &str, context: &ResolutionContext<'_>) -> Option<St
     ] {
         if context.file_exists(path) {
             let nodes = context.get_nodes_in_file(path);
-            if let Some(n) = nodes.iter().find(|n| n.kind == NodeKind::Class && n.name == name) {
+            if let Some(n) = nodes
+                .iter()
+                .find(|n| n.kind == NodeKind::Class && n.name == name)
+            {
                 return Some(n.id.clone());
             }
         }
     }
     let candidates = context.get_nodes_by_name(name);
-    candidates.iter().find(|n| n.kind == NodeKind::Class && n.file_path.contains("app/models/"))
+    candidates
+        .iter()
+        .find(|n| n.kind == NodeKind::Class && n.file_path.contains("app/models/"))
         .map(|n| n.id.clone())
 }

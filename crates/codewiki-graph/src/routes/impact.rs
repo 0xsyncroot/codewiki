@@ -50,8 +50,7 @@ pub async fn handle(
 
     match result {
         Ok(subgraph) => {
-            let resp =
-                build_subgraph_response(subgraph, effective_limit, &HashSet::new(), None);
+            let resp = build_subgraph_response(subgraph, effective_limit, &HashSet::new(), None);
             Json(resp).into_response()
         }
         Err(e) => super::ApiError::internal(e.to_string()).into_response(),

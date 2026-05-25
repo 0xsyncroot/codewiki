@@ -49,8 +49,7 @@ pub async fn handle(
             languages: None,
             path_filter: None,
         };
-        let results = search_nodes_fts(&conn, &q, &opts)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let results = search_nodes_fts(&conn, &q, &opts).map_err(|e| anyhow::anyhow!("{e}"))?;
         Ok::<Vec<codewiki_core::SearchResult>, anyhow::Error>(results)
     })
     .await

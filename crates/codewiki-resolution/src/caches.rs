@@ -90,7 +90,9 @@ mod tests {
             name: "myFunc".to_string(),
             ..Default::default()
         };
-        caches.name_cache.insert("myFunc".to_string(), vec![node.clone()]);
+        caches
+            .name_cache
+            .insert("myFunc".to_string(), vec![node.clone()]);
         let result = caches.name_cache.get(&"myFunc".to_string());
         assert!(result.is_some(), "cache hit expected");
         assert_eq!(result.unwrap()[0].id, "n1");
@@ -101,7 +103,9 @@ mod tests {
         // file_cache capacity = capacity / 5 = 100 / 5 = 20
         // We can't directly inspect capacity, but we can verify it builds without panic.
         let caches = ResolverCaches::new(100);
-        caches.file_cache.insert("foo.ts".to_string(), "content".to_string());
+        caches
+            .file_cache
+            .insert("foo.ts".to_string(), "content".to_string());
         assert!(caches.file_cache.get(&"foo.ts".to_string()).is_some());
     }
 }

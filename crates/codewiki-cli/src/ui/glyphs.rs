@@ -29,36 +29,40 @@ pub fn use_unicode() -> bool {
 /// Glyph set for success / failure / info / warning indicators.
 pub struct Glyphs {
     pub success: &'static str,
-    pub error:   &'static str,
-    pub info:    &'static str,
-    pub warn:    &'static str,
+    pub error: &'static str,
+    pub info: &'static str,
+    pub warn: &'static str,
     pub spinner: &'static [&'static str],
-    pub bullet:  &'static str,
+    pub bullet: &'static str,
 }
 
 /// Unicode glyph set.
 pub const UNICODE: Glyphs = Glyphs {
     success: "✓",
-    error:   "✗",
-    info:    "ℹ",
-    warn:    "⚠",
+    error: "✗",
+    info: "ℹ",
+    warn: "⚠",
     spinner: &["·", "✢", "✳", "✶", "✻", "✽"],
-    bullet:  "◆",
+    bullet: "◆",
 };
 
 /// ASCII fallback glyph set.
 pub const ASCII: Glyphs = Glyphs {
     success: "[OK]",
-    error:   "[ERR]",
-    info:    "[i]",
-    warn:    "[!]",
+    error: "[ERR]",
+    info: "[i]",
+    warn: "[!]",
     spinner: &[".", "*", "+", "x", "o", "O"],
-    bullet:  "*",
+    bullet: "*",
 };
 
 /// Return the appropriate glyph set for the current environment.
 pub fn glyphs() -> &'static Glyphs {
-    if use_unicode() { &UNICODE } else { &ASCII }
+    if use_unicode() {
+        &UNICODE
+    } else {
+        &ASCII
+    }
 }
 
 #[cfg(test)]

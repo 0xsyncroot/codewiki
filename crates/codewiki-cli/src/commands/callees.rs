@@ -12,7 +12,13 @@ pub fn run(name: String, depth: usize, path: Option<PathBuf>) -> Result<()> {
 
     // Step 1: resolve name → node_id via search.
     let results = storage
-        .search_nodes(&name, SearchOptions { limit: 1, ..Default::default() })
+        .search_nodes(
+            &name,
+            SearchOptions {
+                limit: 1,
+                ..Default::default()
+            },
+        )
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let node = match results.into_iter().next() {
@@ -23,7 +29,10 @@ pub fn run(name: String, depth: usize, path: Option<PathBuf>) -> Result<()> {
         }
     };
 
-    println!("Callees of `{}` ({}:{}):", node.name, node.file_path, node.start_line);
+    println!(
+        "Callees of `{}` ({}:{}):",
+        node.name, node.file_path, node.start_line
+    );
 
     // Step 2: BFS callees up to depth.
     let callees = storage
@@ -39,10 +48,7 @@ pub fn run(name: String, depth: usize, path: Option<PathBuf>) -> Result<()> {
         let edge_kind = format!("{:?}", edge.kind).to_lowercase();
         println!(
             "  \u{2192} `{}` ({}:{}) --[{}]-->",
-            callee.name,
-            callee.file_path,
-            callee.start_line,
-            edge_kind
+            callee.name, callee.file_path, callee.start_line, edge_kind
         );
     }
     Ok(())

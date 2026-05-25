@@ -126,12 +126,13 @@ pub fn build_subgraph_response(
         }
     }
 
-    let kept_ids: std::collections::HashSet<&str> =
-        nodes.keys().map(String::as_str).collect();
+    let kept_ids: std::collections::HashSet<&str> = nodes.keys().map(String::as_str).collect();
 
     let edges = dedup_edges(subgraph.edges)
         .into_iter()
-        .filter(|e| kept_ids.contains(e.source_id.as_str()) && kept_ids.contains(e.target_id.as_str()))
+        .filter(|e| {
+            kept_ids.contains(e.source_id.as_str()) && kept_ids.contains(e.target_id.as_str())
+        })
         .collect::<Vec<_>>();
 
     let node_count = nodes.len();

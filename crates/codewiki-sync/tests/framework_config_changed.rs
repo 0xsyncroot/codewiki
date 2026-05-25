@@ -6,7 +6,7 @@
 
 use codewiki_sync::{
     events::{framework_config_channel, FsChangeKind},
-    watcher::{FileWatcher, WatcherConfig, DEFAULT_DEBOUNCE_MS},
+    watcher::{FileWatcher, WatcherConfig},
 };
 use std::time::Duration;
 use tempfile::TempDir;
@@ -52,11 +52,8 @@ async fn framework_config_changed_on_tsconfig_modify() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Modify tsconfig.json — this should trigger a FrameworkConfigChanged.
-    std::fs::write(
-        &tsconfig_path,
-        r#"{"compilerOptions": {"strict": true}}"#,
-    )
-    .expect("failed to modify tsconfig.json");
+    std::fs::write(&tsconfig_path, r#"{"compilerOptions": {"strict": true}}"#)
+        .expect("failed to modify tsconfig.json");
 
     // Wait for the broadcast with a 500 ms timeout (debounce 100ms + margin).
     let deadline = Duration::from_millis(500);
@@ -129,7 +126,11 @@ async fn no_framework_event_for_source_file() {
         Err(_) => { /* timeout — correct: no framework event */ }
         Ok(Ok(event)) => {
             // Any framework event received must NOT be for app.ts.
-            let name = event.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let name = event
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
             assert_ne!(
                 name, "app.ts",
                 "should not emit FrameworkConfigChanged for app.ts"

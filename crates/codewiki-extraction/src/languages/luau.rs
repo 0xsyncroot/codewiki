@@ -18,7 +18,10 @@
 //! | `call_stmt`        | require() → import ref; other → call ref (default) |
 //! | `anon_fn` in local | Function node named after the binding variable      |
 
-use crate::ast_walker::{generate_node_id, is_in_function_scope, DocCommentStyle, ExtractCtx, LanguageConfig, LanguageExtractor};
+use crate::ast_walker::{
+    generate_node_id, is_in_function_scope, DocCommentStyle, ExtractCtx, LanguageConfig,
+    LanguageExtractor,
+};
 use codewiki_core::{Edge, EdgeKind, Node, NodeKind};
 
 pub struct LuauExtractor;
@@ -30,23 +33,23 @@ pub struct LuauExtractor;
 /// `visit_node_hook` and marked consumed so the default dispatch never sees it.
 pub static CONFIG: LanguageConfig = LanguageConfig {
     // local_fn_stmt: handled by default dispatch (function_name field present)
-    function_types:    &["local_fn_stmt"],
-    class_types:       &[],
-    method_types:      &[],       // fn_stmt table methods handled in hook
-    interface_types:   &[],
-    struct_types:      &[],
-    enum_types:        &[],
+    function_types: &["local_fn_stmt"],
+    class_types: &[],
+    method_types: &[], // fn_stmt table methods handled in hook
+    interface_types: &[],
+    struct_types: &[],
+    enum_types: &[],
     enum_member_types: &[],
-    type_alias_types:  &[],       // type_stmt fully handled in hook (export check needed)
-    import_types:      &[],       // require() handled in hook via call_stmt
-    call_types:        &["call_stmt"],
-    variable_types:    &[],       // local_var_stmt fully handled in hook
-    property_types:    &[],
-    field_types:       &[],
+    type_alias_types: &[], // type_stmt fully handled in hook (export check needed)
+    import_types: &[],     // require() handled in hook via call_stmt
+    call_types: &["call_stmt"],
+    variable_types: &[], // local_var_stmt fully handled in hook
+    property_types: &[],
+    field_types: &[],
     extra_class_types: &[],
     namespace_types: &[],
-    name_field:        "function_name",  // used by default dispatch for local_fn_stmt
-    body_field:        "body",
+    name_field: "function_name", // used by default dispatch for local_fn_stmt
+    body_field: "body",
     methods_are_top_level: false,
     doc_comment_style: DocCommentStyle::PrecedingLineComment {
         node_kind: "comment",
@@ -254,12 +257,7 @@ fn extract_callee_name(invoked: &tree_sitter::Node, src: &[u8]) -> String {
 /// Emit a Method node for a `fn_stmt` table method/function.
 ///
 /// `receiver` = table name text, `method` = method/function name text.
-fn emit_method_node(
-    node: &tree_sitter::Node,
-    receiver: &str,
-    method: &str,
-    ctx: &mut ExtractCtx,
-) {
+fn emit_method_node(node: &tree_sitter::Node, receiver: &str, method: &str, ctx: &mut ExtractCtx) {
     if method.is_empty() {
         return;
     }
@@ -324,17 +322,11 @@ impl LanguageExtractor for LuauExtractor {
             "fn_stmt" => {
                 if let Some(table_name_node) = node.child_by_field_name("table_name") {
                     // Table method or table function.
-                    let receiver = table_name_node
-                        .utf8_text(src)
-                        .unwrap_or("")
-                        .to_string();
+                    let receiver = table_name_node.utf8_text(src).unwrap_or("").to_string();
 
                     if let Some(method_name_node) = node.child_by_field_name("method_name") {
                         // `function T:m()` — colon syntax.
-                        let method = method_name_node
-                            .utf8_text(src)
-                            .unwrap_or("")
-                            .to_string();
+                        let method = method_name_node.utf8_text(src).unwrap_or("").to_string();
                         emit_method_node(node, &receiver, &method, ctx);
                     } else {
                         // `function T.f()` — dot syntax via `key` children.
@@ -344,10 +336,7 @@ impl LanguageExtractor for LuauExtractor {
                         for child in node.named_children(&mut cursor) {
                             if child.kind() == "key" {
                                 if let Some(fn_node) = child.child_by_field_name("field_name") {
-                                    let method = fn_node
-                                        .utf8_text(src)
-                                        .unwrap_or("")
-                                        .to_string();
+                                    let method = fn_node.utf8_text(src).unwrap_or("").to_string();
                                     emit_method_node(node, &receiver, &method, ctx);
                                     found = true;
                                     break;
@@ -470,8 +459,8 @@ impl LanguageExtractor for LuauExtractor {
 
 #[cfg(all(test, feature = "wasmtime-grammars"))]
 mod tests {
-    use crate::wasm_parser::extract_wasm;
     use crate::wasm_grammars::WasmGrammar;
+    use crate::wasm_parser::extract_wasm;
     use codewiki_core::NodeKind;
     use std::io::Write;
 
@@ -548,51 +537,90 @@ greet("world")
         );
 
         // add — local function, not exported.
-        let add = batch.nodes.iter().find(|n| n.name == "add" && n.kind == NodeKind::Function);
+        let add = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "add" && n.kind == NodeKind::Function);
         assert!(add.is_some(), "expected Function 'add'; nodes: {names:?}");
         assert!(!add.unwrap().is_exported, "'add' should not be exported");
 
         // greet — global function, exported.
-        let greet = batch.nodes.iter().find(|n| n.name == "greet" && n.kind == NodeKind::Function);
-        assert!(greet.is_some(), "expected Function 'greet'; nodes: {names:?}");
+        let greet = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "greet" && n.kind == NodeKind::Function);
+        assert!(
+            greet.is_some(),
+            "expected Function 'greet'; nodes: {names:?}"
+        );
         assert!(greet.unwrap().is_exported, "'greet' should be exported");
 
         // init — table method (colon syntax).
         assert!(
-            batch.nodes.iter().any(|n| n.name == "init" && n.kind == NodeKind::Method),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "init" && n.kind == NodeKind::Method),
             "expected Method 'init'; nodes: {names:?}"
         );
 
         // helper — table function (dot syntax).
         assert!(
-            batch.nodes.iter().any(|n| n.name == "helper" && n.kind == NodeKind::Method),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "helper" && n.kind == NodeKind::Method),
             "expected Method 'helper'; nodes: {names:?}"
         );
 
         // PI — local variable.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "PI" && n.kind == NodeKind::Variable),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "PI" && n.kind == NodeKind::Variable),
             "expected Variable 'PI'; nodes: {names:?}"
         );
 
         // greeting — local variable.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "greeting" && n.kind == NodeKind::Variable),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "greeting" && n.kind == NodeKind::Variable),
             "expected Variable 'greeting'; nodes: {names:?}"
         );
 
         // double — anonymous function in local binding.
-        let double = batch.nodes.iter().find(|n| n.name == "double" && n.kind == NodeKind::Function);
-        assert!(double.is_some(), "expected Function 'double'; nodes: {names:?}");
-        assert!(!double.unwrap().is_exported, "'double' should not be exported");
+        let double = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "double" && n.kind == NodeKind::Function);
+        assert!(
+            double.is_some(),
+            "expected Function 'double'; nodes: {names:?}"
+        );
+        assert!(
+            !double.unwrap().is_exported,
+            "'double' should not be exported"
+        );
 
         // Point — type alias, not exported.
-        let point = batch.nodes.iter().find(|n| n.name == "Point" && n.kind == NodeKind::Type);
+        let point = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "Point" && n.kind == NodeKind::Type);
         assert!(point.is_some(), "expected Type 'Point'; nodes: {names:?}");
-        assert!(!point.unwrap().is_exported, "'Point' should not be exported");
+        assert!(
+            !point.unwrap().is_exported,
+            "'Point' should not be exported"
+        );
 
         // Color — exported type alias.
-        let color = batch.nodes.iter().find(|n| n.name == "Color" && n.kind == NodeKind::Type);
+        let color = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "Color" && n.kind == NodeKind::Type);
         assert!(color.is_some(), "expected Type 'Color'; nodes: {names:?}");
         assert!(color.unwrap().is_exported, "'Color' should be exported");
 
@@ -604,7 +632,11 @@ greet("world")
         assert!(
             import_utils,
             "expected import ref for 'utils.core'; refs: {:?}",
-            batch.unresolved_refs.iter().map(|r| (&r.reference_kind, &r.reference_name)).collect::<Vec<_>>()
+            batch
+                .unresolved_refs
+                .iter()
+                .map(|r| (&r.reference_kind, &r.reference_name))
+                .collect::<Vec<_>>()
         );
 
         // init — import ref from bare require("init").
@@ -615,7 +647,11 @@ greet("world")
         assert!(
             import_init,
             "expected import ref for 'init'; refs: {:?}",
-            batch.unresolved_refs.iter().map(|r| (&r.reference_kind, &r.reference_name)).collect::<Vec<_>>()
+            batch
+                .unresolved_refs
+                .iter()
+                .map(|r| (&r.reference_kind, &r.reference_name))
+                .collect::<Vec<_>>()
         );
 
         // greet call ref.
@@ -626,11 +662,19 @@ greet("world")
         assert!(
             call_greet,
             "expected call ref for 'greet'; refs: {:?}",
-            batch.unresolved_refs.iter().map(|r| (&r.reference_kind, &r.reference_name)).collect::<Vec<_>>()
+            batch
+                .unresolved_refs
+                .iter()
+                .map(|r| (&r.reference_kind, &r.reference_name))
+                .collect::<Vec<_>>()
         );
 
         // At least 10 non-file nodes.
-        let non_file = batch.nodes.iter().filter(|n| n.kind != NodeKind::File).count();
+        let non_file = batch
+            .nodes
+            .iter()
+            .filter(|n| n.kind != NodeKind::File)
+            .count();
         assert!(
             non_file >= 10,
             "expected >= 10 non-file nodes, got {non_file}; nodes: {names:?}"

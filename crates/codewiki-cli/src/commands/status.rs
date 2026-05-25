@@ -10,9 +10,7 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
     let root = resolve_root(path);
     let storage = open_storage(&root)?;
 
-    let stats = storage
-        .get_stats()
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let stats = storage.get_stats().map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let db_size_kb = stats.db_size_bytes / 1024;
 

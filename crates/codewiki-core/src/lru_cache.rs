@@ -30,7 +30,9 @@ where
     V: Clone + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 

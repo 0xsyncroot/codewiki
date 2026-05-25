@@ -34,7 +34,10 @@ pub async fn handle_node(
     let is_container = CONTAINER_NODE_KINDS.contains(&kind_str);
 
     let mut out = format!("## {} `{}`\n\n", kind_str, node.name);
-    out.push_str(&format!("**File:** `{}:{}`\n", node.file_path, node.start_line));
+    out.push_str(&format!(
+        "**File:** `{}:{}`\n",
+        node.file_path, node.start_line
+    ));
 
     if let Some(sig) = &node.signature {
         if !sig.is_empty() {

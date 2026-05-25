@@ -31,10 +31,12 @@ pub use coalesce::coalesce_events;
 pub use directory::walk_source_files;
 pub use directory_utils::{create_codewiki_dir, get_codewiki_dir, is_initialized};
 pub use edit_builder::try_build_file_edit;
-pub use events::{framework_config_channel, is_framework_config, FsChangeKind, FrameworkConfigChanged};
+pub use events::{
+    framework_config_channel, is_framework_config, FrameworkConfigChanged, FsChangeKind,
+};
 pub use git_hooks::{
-    install_git_sync_hook, is_git_repo, is_sync_hook_installed, remove_git_sync_hook,
-    GitHookName, GitHookResult, DEFAULT_SYNC_HOOKS,
+    install_git_sync_hook, is_git_repo, is_sync_hook_installed, remove_git_sync_hook, GitHookName,
+    GitHookResult, DEFAULT_SYNC_HOOKS,
 };
 pub use sync_loop::{run_sync_cycle, SyncResult};
 pub use tree_cache::TreeCache;

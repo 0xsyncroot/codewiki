@@ -5,5 +5,5 @@ pub mod sync;
 
 pub use extraction::{BulkStoreStats, ExtractionStore};
 pub use query::{FileFilter, FindOpts, QueryHandle, SearchOptions};
-pub use resolution::{ResolvedBy, ResolvedEdge, ResolvedFromRef, ResolutionStore};
+pub use resolution::{ResolutionStore, ResolvedBy, ResolvedEdge, ResolvedFromRef};
 pub use sync::SyncStore;

@@ -7,9 +7,7 @@ use codewiki_storage::QueryHandle;
 use std::sync::Arc;
 
 #[tracing::instrument(skip(handle))]
-pub async fn handle_status(
-    handle: Arc<dyn QueryHandle>,
-) -> Result<String, CodeWikiError> {
+pub async fn handle_status(handle: Arc<dyn QueryHandle>) -> Result<String, CodeWikiError> {
     let stats = handle.get_stats()?;
 
     let db_size_mb = stats.db_size_bytes as f64 / (1024.0 * 1024.0);

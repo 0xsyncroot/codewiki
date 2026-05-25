@@ -50,8 +50,7 @@ fn scan_require_calls(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
                             let frag: Option<String> = arg
                                 .named_children(&mut c2)
                                 .find(|c| {
-                                    c.kind() == "string_fragment"
-                                        || c.kind() == "template_chars"
+                                    c.kind() == "string_fragment" || c.kind() == "template_chars"
                                 })
                                 .and_then(|f| {
                                     f.utf8_text(ctx.source.as_bytes())
@@ -62,14 +61,11 @@ fn scan_require_calls(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
                             let module = frag.unwrap_or_else(|| {
                                 arg.utf8_text(ctx.source.as_bytes())
                                     .unwrap_or("")
-                                    .trim_matches(|c: char| {
-                                        c == '"' || c == '\'' || c == '`'
-                                    })
+                                    .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
                                     .to_string()
                             });
                             if !module.is_empty() {
-                                let from_id =
-                                    ctx.scope.last().cloned().unwrap_or_default();
+                                let from_id = ctx.scope.last().cloned().unwrap_or_default();
                                 let line = node.start_position().row as u32 + 1;
                                 ctx.emit_import(&from_id, &module, line);
                             }
@@ -134,8 +130,10 @@ function doStuff() {}
             .iter()
             .filter(|r| r.reference_kind == "imports")
             .collect();
-        let modules: Vec<&str> =
-            import_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        let modules: Vec<&str> = import_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
 
         assert!(
             modules.contains(&"fs"),

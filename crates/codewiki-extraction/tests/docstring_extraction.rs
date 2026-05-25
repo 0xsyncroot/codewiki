@@ -1,6 +1,6 @@
 /// T-DS-* docstring extraction tests as specified in DOCSTRING-SPEC §7
 /// and POLISH-IMPL-SPEC §4.
-use codewiki_extraction::ast_walker::{DocCommentStyle, extract_docstring};
+use codewiki_extraction::ast_walker::{extract_docstring, DocCommentStyle};
 use tree_sitter::Parser;
 
 // ── Helper: parse a snippet and find the first node of target_kind ──────────
@@ -56,7 +56,10 @@ fn t_ds_1_python_function_docstring() {
     let ds = result.expect("should have docstring");
     assert!(ds.contains("Say hello to the given name."), "got: {ds}");
     assert!(ds.contains("Returns a greeting string."), "got: {ds}");
-    assert!(!ds.contains("\"\"\""), "raw markers must be stripped, got: {ds}");
+    assert!(
+        !ds.contains("\"\"\""),
+        "raw markers must be stripped, got: {ds}"
+    );
 }
 
 // ── T-DS-2: TypeScript JSDoc ─────────────────────────────────────────────────
@@ -81,10 +84,16 @@ export function calculateTotal(amount) { return amount * 1.1; }
         &style,
     );
     let ds = result.expect("should have docstring");
-    assert!(ds.contains("Calculates the total price including tax."), "got: {ds}");
+    assert!(
+        ds.contains("Calculates the total price including tax."),
+        "got: {ds}"
+    );
     assert!(ds.contains("@param amount"), "got: {ds}");
     assert!(ds.contains("@returns total with tax"), "got: {ds}");
-    assert!(!ds.contains("/**"), "opening marker must be stripped, got: {ds}");
+    assert!(
+        !ds.contains("/**"),
+        "opening marker must be stripped, got: {ds}"
+    );
 }
 
 // ── T-DS-3: Rust /// line doc comments ───────────────────────────────────────
@@ -109,9 +118,18 @@ pub fn active_session_count() -> usize { 0 }
         &style,
     );
     let ds = result.expect("should have docstring");
-    assert!(ds.contains("Returns the number of active sessions."), "got: {ds}");
-    assert!(ds.contains("Does not include expired sessions."), "got: {ds}");
-    assert!(!ds.contains("///"), "raw markers must be stripped, got: {ds}");
+    assert!(
+        ds.contains("Returns the number of active sessions."),
+        "got: {ds}"
+    );
+    assert!(
+        ds.contains("Does not include expired sessions."),
+        "got: {ds}"
+    );
+    assert!(
+        !ds.contains("///"),
+        "raw markers must be stripped, got: {ds}"
+    );
 }
 
 // ── T-DS-4: Go godoc comment ─────────────────────────────────────────────────
@@ -135,9 +153,15 @@ func NewUser(name string) string { return name }
         &style,
     );
     let ds = result.expect("should have godoc");
-    assert!(ds.contains("NewUser creates a new User with the given name."), "got: {ds}");
+    assert!(
+        ds.contains("NewUser creates a new User with the given name."),
+        "got: {ds}"
+    );
     assert!(ds.contains("The name must not be empty."), "got: {ds}");
-    assert!(!ds.contains("//"), "raw markers must be stripped, got: {ds}");
+    assert!(
+        !ds.contains("//"),
+        "raw markers must be stripped, got: {ds}"
+    );
 }
 
 // ── T-DS-5: C# XML doc comment ───────────────────────────────────────────────
@@ -165,8 +189,14 @@ public void ProcessOrder() {}
     );
     let ds = result.expect("should have xml doc");
     assert!(ds.contains("<summary>"), "got: {ds}");
-    assert!(ds.contains("Processes the order asynchronously."), "got: {ds}");
-    assert!(!ds.contains("///"), "raw markers must be stripped, got: {ds}");
+    assert!(
+        ds.contains("Processes the order asynchronously."),
+        "got: {ds}"
+    );
+    assert!(
+        !ds.contains("///"),
+        "raw markers must be stripped, got: {ds}"
+    );
 }
 
 // ── T-DS-6: Rust blank-line gap → None ───────────────────────────────────────

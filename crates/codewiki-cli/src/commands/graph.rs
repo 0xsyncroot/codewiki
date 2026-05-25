@@ -6,7 +6,12 @@
 
 use std::path::PathBuf;
 
-pub fn run(port: u16, path: Option<PathBuf>, no_open: bool, max_nodes: usize) -> anyhow::Result<()> {
+pub fn run(
+    port: u16,
+    path: Option<PathBuf>,
+    no_open: bool,
+    max_nodes: usize,
+) -> anyhow::Result<()> {
     #[cfg(feature = "web")]
     {
         run_web(port, path, no_open, max_nodes)
@@ -22,7 +27,12 @@ pub fn run(port: u16, path: Option<PathBuf>, no_open: bool, max_nodes: usize) ->
 }
 
 #[cfg(feature = "web")]
-fn run_web(port: u16, path: Option<PathBuf>, no_open: bool, max_nodes: usize) -> anyhow::Result<()> {
+fn run_web(
+    port: u16,
+    path: Option<PathBuf>,
+    no_open: bool,
+    max_nodes: usize,
+) -> anyhow::Result<()> {
     let project_root = path
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("."));

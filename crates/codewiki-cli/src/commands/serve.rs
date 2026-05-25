@@ -2,10 +2,10 @@
 // --mcp: starts the MCP stdio server.
 // Without --mcp: prints setup instructions.
 
-use std::path::PathBuf;
-use std::sync::Arc;
 use anyhow::Result;
 use codewiki_storage::QueryHandle;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Run the `serve` subcommand.
 ///

@@ -12,8 +12,8 @@
 use crate::resolver::ReferenceResolver;
 use codewiki_core::{CodeWikiError, UnresolvedRef};
 use codewiki_storage::traits::{ResolutionStore, ResolvedEdge};
-use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 /// Number of unresolved refs fetched per batch in incremental (watch) mode.
@@ -86,7 +86,8 @@ impl ResolutionBatchRunner {
             iter_count += 1;
             if iter_count > MAX_ITERS {
                 tracing::warn!(
-                    offset, total_committed,
+                    offset,
+                    total_committed,
                     "resolution batch loop hit safety cap, aborting"
                 );
                 break;
@@ -100,26 +101,24 @@ impl ResolutionBatchRunner {
             // Resolve each ref; skip and log per-ref failures.
             let resolved: Vec<ResolvedEdge> = unresolved
                 .iter()
-                .filter_map(|uref| {
-                    match self.resolver.resolve_one(uref) {
-                        Ok(Some(edge)) => Some(edge),
-                        Ok(None) => {
-                            tracing::debug!(
-                                ref_name = %uref.reference_name,
-                                file = %uref.file_path,
-                                "unresolvable reference — skipped"
-                            );
-                            None
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                ref_name = %uref.reference_name,
-                                file = %uref.file_path,
-                                error = %e,
-                                "resolution error — skipped"
-                            );
-                            None
-                        }
+                .filter_map(|uref| match self.resolver.resolve_one(uref) {
+                    Ok(Some(edge)) => Some(edge),
+                    Ok(None) => {
+                        tracing::debug!(
+                            ref_name = %uref.reference_name,
+                            file = %uref.file_path,
+                            "unresolvable reference — skipped"
+                        );
+                        None
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            ref_name = %uref.reference_name,
+                            file = %uref.file_path,
+                            error = %e,
+                            "resolution error — skipped"
+                        );
+                        None
                     }
                 })
                 .collect();
@@ -324,7 +323,11 @@ impl ResolutionBatchRunner {
             .join()
             .map_err(|_| CodeWikiError::Other("W5 OPT-11: writer thread panicked".into()))??;
 
-        tracing::info!(total_committed, total_refs, "W5 OPT-11: parallel resolution complete");
+        tracing::info!(
+            total_committed,
+            total_refs,
+            "W5 OPT-11: parallel resolution complete"
+        );
         Ok(total_committed)
     }
 
@@ -348,26 +351,24 @@ impl ResolutionBatchRunner {
         for chunk in refs.chunks(self.batch_size) {
             let resolved: Vec<ResolvedEdge> = chunk
                 .iter()
-                .filter_map(|uref| {
-                    match self.resolver.resolve_one(uref) {
-                        Ok(Some(edge)) => Some(edge),
-                        Ok(None) => {
-                            tracing::debug!(
-                                ref_name = %uref.reference_name,
-                                file = %uref.file_path,
-                                "unresolvable reference — skipped"
-                            );
-                            None
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                ref_name = %uref.reference_name,
-                                file = %uref.file_path,
-                                error = %e,
-                                "resolution error — skipped"
-                            );
-                            None
-                        }
+                .filter_map(|uref| match self.resolver.resolve_one(uref) {
+                    Ok(Some(edge)) => Some(edge),
+                    Ok(None) => {
+                        tracing::debug!(
+                            ref_name = %uref.reference_name,
+                            file = %uref.file_path,
+                            "unresolvable reference — skipped"
+                        );
+                        None
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            ref_name = %uref.reference_name,
+                            file = %uref.file_path,
+                            error = %e,
+                            "resolution error — skipped"
+                        );
+                        None
                     }
                 })
                 .collect();
@@ -451,9 +452,9 @@ fn commit_chunk(
 mod tests {
     use super::*;
     use crate::resolver::{ReferenceResolver, ResolverQueryHandle};
-    use codewiki_core::{UnresolvedRef, Node};
-    use codewiki_storage::{open_in_memory, apply_schema, StorageImpl, ExtractionStore};
+    use codewiki_core::{Node, UnresolvedRef};
     use codewiki_storage::traits::ResolutionStore;
+    use codewiki_storage::{apply_schema, open_in_memory, ExtractionStore, StorageImpl};
     use std::sync::Arc;
 
     // -------------------------------------------------------------------------
@@ -462,14 +463,30 @@ mod tests {
     // -------------------------------------------------------------------------
     struct NullQueryHandle;
     impl ResolverQueryHandle for NullQueryHandle {
-        fn get_node_by_id(&self, _: &str) -> Option<Node> { None }
-        fn get_nodes_by_name(&self, _: &str) -> Vec<Node> { vec![] }
-        fn get_nodes_by_lower_name(&self, _: &str) -> Vec<Node> { vec![] }
-        fn get_nodes_by_qualified_name(&self, _: &str) -> Vec<Node> { vec![] }
-        fn get_nodes_in_file(&self, _: &str) -> Vec<Node> { vec![] }
-        fn get_all_node_names(&self) -> Vec<String> { vec![] }
-        fn get_all_file_paths(&self) -> Vec<String> { vec![] }
-        fn get_all_nodes(&self) -> Vec<Node> { vec![] }
+        fn get_node_by_id(&self, _: &str) -> Option<Node> {
+            None
+        }
+        fn get_nodes_by_name(&self, _: &str) -> Vec<Node> {
+            vec![]
+        }
+        fn get_nodes_by_lower_name(&self, _: &str) -> Vec<Node> {
+            vec![]
+        }
+        fn get_nodes_by_qualified_name(&self, _: &str) -> Vec<Node> {
+            vec![]
+        }
+        fn get_nodes_in_file(&self, _: &str) -> Vec<Node> {
+            vec![]
+        }
+        fn get_all_node_names(&self) -> Vec<String> {
+            vec![]
+        }
+        fn get_all_file_paths(&self) -> Vec<String> {
+            vec![]
+        }
+        fn get_all_nodes(&self) -> Vec<Node> {
+            vec![]
+        }
     }
 
     fn make_storage() -> Arc<StorageImpl> {
@@ -485,7 +502,7 @@ mod tests {
         n: usize,
         ref_name: Option<&str>,
     ) -> codewiki_core::ExtractionBatch {
-        use codewiki_core::{ExtractionBatch, FileRecord, NodeKind, Language};
+        use codewiki_core::{ExtractionBatch, FileRecord, Language, NodeKind};
         use std::path::PathBuf;
         let nodes: Vec<Node> = (0..n)
             .map(|i| Node {
@@ -499,16 +516,18 @@ mod tests {
             })
             .collect();
         let unresolved_refs = ref_name
-            .map(|name| vec![UnresolvedRef {
-                id: String::new(),
-                from_node_id: format!("{}-node0", path),
-                reference_name: name.to_string(),
-                reference_kind: "calls".to_string(),
-                file_path: path.to_string(),
-                line: Some(1),
-                col: Some(0),
-                metadata: None,
-            }])
+            .map(|name| {
+                vec![UnresolvedRef {
+                    id: String::new(),
+                    from_node_id: format!("{}-node0", path),
+                    reference_name: name.to_string(),
+                    reference_kind: "calls".to_string(),
+                    file_path: path.to_string(),
+                    line: Some(1),
+                    col: Some(0),
+                    metadata: None,
+                }]
+            })
             .unwrap_or_default();
         ExtractionBatch {
             file: FileRecord {
@@ -527,18 +546,13 @@ mod tests {
         }
     }
 
-    fn make_batch(path: &str, hash: &str, n: usize) -> codewiki_core::ExtractionBatch {
-        make_batch_with_ref(path, hash, n, None)
-    }
-
     fn make_runner(storage: Arc<StorageImpl>) -> ResolutionBatchRunner {
         let resolver = ReferenceResolver::new(
             std::path::PathBuf::from("/tmp"),
             Arc::new(NullQueryHandle),
             1_000,
         );
-        let store_arc: Arc<dyn ResolutionStore> =
-            Arc::clone(&storage) as Arc<dyn ResolutionStore>;
+        let store_arc: Arc<dyn ResolutionStore> = Arc::clone(&storage) as Arc<dyn ResolutionStore>;
         ResolutionBatchRunner::new(store_arc, resolver, false)
     }
 
@@ -555,19 +569,28 @@ mod tests {
         let storage = make_storage();
         // Embed unresolved refs directly in the extraction batch so FK constraints hold.
         storage
-            .store_extraction_batch(make_batch_with_ref("changed.ts", "hc", 1, Some("changedSymbol")))
+            .store_extraction_batch(make_batch_with_ref(
+                "changed.ts",
+                "hc",
+                1,
+                Some("changedSymbol"),
+            ))
             .unwrap();
         storage
-            .store_extraction_batch(make_batch_with_ref("other.ts", "ho", 1, Some("otherSymbol")))
+            .store_extraction_batch(make_batch_with_ref(
+                "other.ts",
+                "ho",
+                1,
+                Some("otherSymbol"),
+            ))
             .unwrap();
 
         assert_eq!(storage.get_unresolved_count().unwrap(), 2);
 
         // Fetch only the changed.ts ref.
-        let changed_refs = ResolutionStore::get_unresolved_by_files(
-            storage.as_ref(),
-            &["changed.ts".to_string()],
-        ).unwrap();
+        let changed_refs =
+            ResolutionStore::get_unresolved_by_files(storage.as_ref(), &["changed.ts".to_string()])
+                .unwrap();
         assert_eq!(changed_refs.len(), 1);
 
         let runner = make_runner(Arc::clone(&storage));
@@ -576,12 +599,12 @@ mod tests {
         assert_eq!(committed, 0);
 
         // other.ts ref must still be present.
-        let other_refs = ResolutionStore::get_unresolved_by_files(
-            storage.as_ref(),
-            &["other.ts".to_string()],
-        ).unwrap();
+        let other_refs =
+            ResolutionStore::get_unresolved_by_files(storage.as_ref(), &["other.ts".to_string()])
+                .unwrap();
         assert_eq!(
-            other_refs.len(), 1,
+            other_refs.len(),
+            1,
             "other.ts ref must remain after run_for_refs scoped to changed.ts"
         );
     }

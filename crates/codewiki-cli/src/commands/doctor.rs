@@ -34,7 +34,12 @@ pub struct CheckResult {
 
 impl CheckResult {
     fn ok(label: &'static str, detail: impl Into<String>) -> Self {
-        Self { status: CheckStatus::Ok, label, detail: detail.into(), hint: None }
+        Self {
+            status: CheckStatus::Ok,
+            label,
+            detail: detail.into(),
+            hint: None,
+        }
     }
     fn warn(label: &'static str, detail: impl Into<String>, hint: impl Into<String>) -> Self {
         Self {
@@ -57,9 +62,8 @@ impl CheckResult {
 // ── Entry-point ───────────────────────────────────────────────────────────────
 
 pub fn run(path: Option<PathBuf>, strict: bool) -> Result<()> {
-    let root = path.unwrap_or_else(|| {
-        std::env::current_dir().expect("cannot determine working directory")
-    });
+    let root = path
+        .unwrap_or_else(|| std::env::current_dir().expect("cannot determine working directory"));
 
     let g = glyphs::glyphs();
 
@@ -88,16 +92,34 @@ pub fn run(path: Option<PathBuf>, strict: bool) -> Result<()> {
     }
 
     // Tally.
-    let warns = checks.iter().filter(|c| c.status == CheckStatus::Warn).count();
-    let fails = checks.iter().filter(|c| c.status == CheckStatus::Fail).count();
+    let warns = checks
+        .iter()
+        .filter(|c| c.status == CheckStatus::Warn)
+        .count();
+    let fails = checks
+        .iter()
+        .filter(|c| c.status == CheckStatus::Fail)
+        .count();
 
     println!();
     if warns == 0 && fails == 0 {
         println!("  All checks passed.");
     } else {
         let mut parts = Vec::new();
-        if warns > 0 { parts.push(format!("{} warning{}", warns, if warns == 1 { "" } else { "s" })); }
-        if fails > 0 { parts.push(format!("{} error{}", fails, if fails == 1 { "" } else { "s" })); }
+        if warns > 0 {
+            parts.push(format!(
+                "{} warning{}",
+                warns,
+                if warns == 1 { "" } else { "s" }
+            ));
+        }
+        if fails > 0 {
+            parts.push(format!(
+                "{} error{}",
+                fails,
+                if fails == 1 { "" } else { "s" }
+            ));
+        }
         println!("  {}", parts.join(" · "));
         println!("  Run `codewiki setup` to fix automatically.");
     }
@@ -127,11 +149,13 @@ fn run_all_checks(root: &Path) -> Vec<CheckResult> {
 fn check_binary_on_path() -> CheckResult {
     let self_path = match std::env::current_exe().ok() {
         Some(p) => p,
-        None => return CheckResult::fail(
-            "binary on PATH",
-            "cannot determine running binary path",
-            "export PATH=\"$HOME/.cargo/bin:$PATH\"",
-        ),
+        None => {
+            return CheckResult::fail(
+                "binary on PATH",
+                "cannot determine running binary path",
+                "export PATH=\"$HOME/.cargo/bin:$PATH\"",
+            )
+        }
     };
 
     // Walk PATH to find `codewiki`.
@@ -144,8 +168,18 @@ fn check_binary_on_path() -> CheckResult {
         // Found but points to a different binary.
         return CheckResult::warn(
             "binary on PATH",
-            format!("PATH has {} but running binary is {}", found.display(), self_path.display()),
-            format!("export PATH=\"{}:$PATH\"", self_path.parent().map(|p| p.display().to_string()).unwrap_or_default()),
+            format!(
+                "PATH has {} but running binary is {}",
+                found.display(),
+                self_path.display()
+            ),
+            format!(
+                "export PATH=\"{}:$PATH\"",
+                self_path
+                    .parent()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default()
+            ),
         );
     }
 
@@ -199,25 +233,21 @@ fn check_index_non_empty(root: &Path) -> CheckResult {
     use codewiki_storage::QueryHandle;
 
     match open_storage(root) {
-        Err(_) => CheckResult::fail(
-            "files indexed",
-            "index not readable",
-            "codewiki setup",
-        ),
-        Ok(storage) => {
-            match storage.get_stats() {
-                Err(e) => CheckResult::fail("files indexed", format!("stats error: {}", e), "codewiki index"),
-                Ok(stats) if stats.file_count == 0 => {
-                    CheckResult::fail("files indexed", "0 files in index", "codewiki index")
-                }
-                Ok(stats) => {
-                    CheckResult::ok(
-                        "files indexed",
-                        format!("{} files · {} nodes", stats.file_count, stats.node_count),
-                    )
-                }
+        Err(_) => CheckResult::fail("files indexed", "index not readable", "codewiki setup"),
+        Ok(storage) => match storage.get_stats() {
+            Err(e) => CheckResult::fail(
+                "files indexed",
+                format!("stats error: {}", e),
+                "codewiki index",
+            ),
+            Ok(stats) if stats.file_count == 0 => {
+                CheckResult::fail("files indexed", "0 files in index", "codewiki index")
             }
-        }
+            Ok(stats) => CheckResult::ok(
+                "files indexed",
+                format!("{} files · {} nodes", stats.file_count, stats.node_count),
+            ),
+        },
     }
 }
 
@@ -231,7 +261,11 @@ fn check_index_freshness(root: &Path) -> CheckResult {
     let metadata = match std::fs::metadata(&db) {
         Ok(m) => m,
         Err(e) => {
-            return CheckResult::warn("index fresh", format!("cannot stat DB: {}", e), "codewiki sync");
+            return CheckResult::warn(
+                "index fresh",
+                format!("cannot stat DB: {}", e),
+                "codewiki sync",
+            );
         }
     };
 
@@ -341,7 +375,10 @@ mod tests {
         let checks = run_all_checks(project.path());
 
         // Check 2: index initialized → must be Fail.
-        let index_check = checks.iter().find(|c| c.label == "index initialized").unwrap();
+        let index_check = checks
+            .iter()
+            .find(|c| c.label == "index initialized")
+            .unwrap();
         assert_eq!(
             index_check.status,
             CheckStatus::Fail,

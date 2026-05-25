@@ -30,9 +30,8 @@ pub fn run(yes: bool, target: String, path: Option<PathBuf>, ascii: bool) -> Res
 
     let g = glyphs::glyphs();
 
-    let root = path.unwrap_or_else(|| {
-        std::env::current_dir().expect("cannot determine working directory")
-    });
+    let root = path
+        .unwrap_or_else(|| std::env::current_dir().expect("cannot determine working directory"));
 
     // ── Step 0: binary on PATH check ──────────────────────────────────────────
     let path_warning = check_binary_on_path();
@@ -47,7 +46,10 @@ pub fn run(yes: bool, target: String, path: Option<PathBuf>, ascii: bool) -> Res
 
     let display_root = abbreviate_home(&root);
     if already {
-        println!("{}  Detected project: {}  (already initialized)", g.bullet, display_root);
+        println!(
+            "{}  Detected project: {}  (already initialized)",
+            g.bullet, display_root
+        );
     } else {
         println!("{}  Detected project: {}", g.bullet, display_root);
     }
@@ -109,7 +111,12 @@ pub fn run(yes: bool, target: String, path: Option<PathBuf>, ascii: bool) -> Res
     // ── Step 6: summary ───────────────────────────────────────────────────────
     print_summary(
         already,
-        IndexStats { files: files_indexed, nodes: nodes_count, edges: edges_count, elapsed_s },
+        IndexStats {
+            files: files_indexed,
+            nodes: nodes_count,
+            edges: edges_count,
+            elapsed_s,
+        },
         &path_warning,
         g,
         ascii,
@@ -145,7 +152,11 @@ fn pick_agents_interactive(target: &str, _ascii: bool) -> Result<String> {
     // Determine initial selection.
     let detected: Vec<&'static str> = crate::installer::detect_installed_agents(loc);
     let initial: Vec<&str> = if target == "auto" {
-        if detected.is_empty() { vec!["claude"] } else { detected.to_vec() }
+        if detected.is_empty() {
+            vec!["claude"]
+        } else {
+            detected.to_vec()
+        }
     } else {
         target.split(',').map(|s| s.trim()).collect()
     };
@@ -201,7 +212,12 @@ fn print_summary(
     println!("  {}  CodeWiki is ready.", g.success);
     println!();
 
-    let IndexStats { files, nodes, edges, elapsed_s } = stats;
+    let IndexStats {
+        files,
+        nodes,
+        edges,
+        elapsed_s,
+    } = stats;
     if already {
         println!(
             "  Synced {} files — {} nodes, {} edges ({:.1}s).",
@@ -329,7 +345,11 @@ fn get_stats(root: &Path) -> (usize, usize, usize) {
     match open_storage(root) {
         Ok(storage) => {
             if let Ok(stats) = storage.get_stats() {
-                return (stats.file_count as usize, stats.node_count as usize, stats.edge_count as usize);
+                return (
+                    stats.file_count as usize,
+                    stats.node_count as usize,
+                    stats.edge_count as usize,
+                );
             }
             (0, 0, 0)
         }
@@ -378,10 +398,10 @@ mod tests {
         std::env::set_var("HOME", home_dir.path());
 
         let result = run(
-            true,                            // yes = true (no prompts)
+            true, // yes = true (no prompts)
             "auto".to_string(),
             Some(project.path().to_path_buf()),
-            true,                            // ascii = true (no unicode issues in CI)
+            true, // ascii = true (no unicode issues in CI)
         );
 
         // Restore HOME.
@@ -420,9 +440,19 @@ mod tests {
         std::env::set_var("HOME", home_dir.path());
 
         // First run.
-        let r1 = run(true, "auto".to_string(), Some(project.path().to_path_buf()), true);
+        let r1 = run(
+            true,
+            "auto".to_string(),
+            Some(project.path().to_path_buf()),
+            true,
+        );
         // Second run on already-initialized project.
-        let r2 = run(true, "auto".to_string(), Some(project.path().to_path_buf()), true);
+        let r2 = run(
+            true,
+            "auto".to_string(),
+            Some(project.path().to_path_buf()),
+            true,
+        );
 
         match original_home {
             Some(h) => std::env::set_var("HOME", h),

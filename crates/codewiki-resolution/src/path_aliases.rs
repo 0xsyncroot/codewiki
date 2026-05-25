@@ -185,7 +185,9 @@ fn remove_trailing_commas(src: &str) -> String {
         if c == ',' {
             // Look ahead: skip whitespace, check next non-whitespace char
             let mut j = i + 1;
-            while j < n && (chars[j] == ' ' || chars[j] == '\t' || chars[j] == '\n' || chars[j] == '\r') {
+            while j < n
+                && (chars[j] == ' ' || chars[j] == '\t' || chars[j] == '\n' || chars[j] == '\r')
+            {
                 j += 1;
             }
             if j < n && (chars[j] == '}' || chars[j] == ']') {
@@ -253,20 +255,14 @@ fn parse_tsconfig(stripped: &str, project_root: &Path) -> Option<PathAliasMap> {
             .then(a.is_wildcard.cmp(&b.is_wildcard))
     });
 
-    Some(PathAliasMap {
-        base_url,
-        entries,
-    })
+    Some(PathAliasMap { base_url, entries })
 }
 
 // ─── Convenience HashMap API ─────────────────────────────────────────────────
 
 /// Build a simple alias map from a raw `HashMap<pattern, Vec<replacement>>`.
 /// Used in tests.
-pub fn from_raw(
-    base_url: Option<PathBuf>,
-    raw: HashMap<String, Vec<String>>,
-) -> PathAliasMap {
+pub fn from_raw(base_url: Option<PathBuf>, raw: HashMap<String, Vec<String>>) -> PathAliasMap {
     let mut entries: Vec<AliasEntry> = raw
         .into_iter()
         .map(|(pattern, replacements)| {
@@ -340,7 +336,10 @@ mod tests {
     fn specificity_sort_longer_prefix_wins() {
         let mut raw: HashMap<String, Vec<String>> = HashMap::new();
         raw.insert("@/*".to_string(), vec!["src/*".to_string()]);
-        raw.insert("@components/*".to_string(), vec!["src/components/*".to_string()]);
+        raw.insert(
+            "@components/*".to_string(),
+            vec!["src/components/*".to_string()],
+        );
         let map = from_raw(Some(PathBuf::from(".")), raw);
         // @components/* has a longer prefix so it should come first
         assert!(map.entries[0].prefix.len() > map.entries[1].prefix.len());

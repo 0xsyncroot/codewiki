@@ -38,7 +38,6 @@ pub fn instructions_template() -> &'static str {
     INSTRUCTIONS_TEMPLATE_RAW.trim_end()
 }
 
-
 // ── Atomic file write ────────────────────────────────────────────────────────
 
 /// Write `content` to `path` atomically via a `.tmp.<pid>` sibling + rename.
@@ -50,10 +49,7 @@ pub fn atomic_write(path: &Path, content: &str) -> io::Result<()> {
     let dir = path.parent().unwrap_or(Path::new("."));
     fs::create_dir_all(dir)?;
 
-    let tmp_path = path.with_extension(format!(
-        "tmp.{}",
-        std::process::id()
-    ));
+    let tmp_path = path.with_extension(format!("tmp.{}", std::process::id()));
 
     let write_result = fs::write(&tmp_path, content);
     if let Err(e) = write_result {
@@ -125,9 +121,8 @@ pub fn json_deep_equal(a: &Value, b: &Value) -> bool {
             if ak != bk {
                 return false;
             }
-            ak.iter().all(|k| {
-                json_deep_equal(x.get(*k).unwrap(), y.get(*k).unwrap())
-            })
+            ak.iter()
+                .all(|k| json_deep_equal(x.get(*k).unwrap(), y.get(*k).unwrap()))
         }
         _ => false,
     }
@@ -279,7 +274,10 @@ impl WriteResult {
     }
 
     pub fn push(&mut self, path: impl Into<std::path::PathBuf>, action: FileAction) {
-        self.files.push(FileResult { path: path.into(), action });
+        self.files.push(FileResult {
+            path: path.into(),
+            action,
+        });
     }
 }
 
@@ -324,9 +322,13 @@ mod tests {
     fn replace_or_append_creates_file() {
         let dir = tmp();
         let p = dir.path().join("CLAUDE.md");
-        let action =
-            replace_or_append_marked_section(&p, "<!-- CODEWIKI_START -->\nhi\n<!-- CODEWIKI_END -->",
-            CODEWIKI_SECTION_START, CODEWIKI_SECTION_END).unwrap();
+        let action = replace_or_append_marked_section(
+            &p,
+            "<!-- CODEWIKI_START -->\nhi\n<!-- CODEWIKI_END -->",
+            CODEWIKI_SECTION_START,
+            CODEWIKI_SECTION_END,
+        )
+        .unwrap();
         assert_eq!(action, SectionAction::Created);
     }
 
@@ -335,9 +337,15 @@ mod tests {
         let dir = tmp();
         let p = dir.path().join("CLAUDE.md");
         let body = format!("{}\nhi\n{}", CODEWIKI_SECTION_START, CODEWIKI_SECTION_END);
-        replace_or_append_marked_section(&p, &body, CODEWIKI_SECTION_START, CODEWIKI_SECTION_END).unwrap();
-        let action =
-            replace_or_append_marked_section(&p, &body, CODEWIKI_SECTION_START, CODEWIKI_SECTION_END).unwrap();
+        replace_or_append_marked_section(&p, &body, CODEWIKI_SECTION_START, CODEWIKI_SECTION_END)
+            .unwrap();
+        let action = replace_or_append_marked_section(
+            &p,
+            &body,
+            CODEWIKI_SECTION_START,
+            CODEWIKI_SECTION_END,
+        )
+        .unwrap();
         assert_eq!(action, SectionAction::Unchanged);
     }
 
@@ -347,7 +355,8 @@ mod tests {
         let p = dir.path().join("CLAUDE.md");
         let body = format!("{}\nhi\n{}", CODEWIKI_SECTION_START, CODEWIKI_SECTION_END);
         atomic_write(&p, &format!("{body}\n")).unwrap();
-        let action = remove_marked_section(&p, CODEWIKI_SECTION_START, CODEWIKI_SECTION_END).unwrap();
+        let action =
+            remove_marked_section(&p, CODEWIKI_SECTION_START, CODEWIKI_SECTION_END).unwrap();
         assert_eq!(action, RemoveAction::Removed);
         assert!(!p.exists(), "empty file should be deleted");
     }

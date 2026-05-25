@@ -8,20 +8,16 @@
 //! logs a `tracing::warn!` so callers know to skip those languages.
 
 #[cfg(feature = "wasmtime-grammars")]
-pub static LUA_WASM: &[u8] =
-    include_bytes!("../grammars/tree-sitter-lua.wasm");
+pub static LUA_WASM: &[u8] = include_bytes!("../grammars/tree-sitter-lua.wasm");
 
 #[cfg(feature = "wasmtime-grammars")]
-pub static LUAU_WASM: &[u8] =
-    include_bytes!("../grammars/tree-sitter-luau.wasm");
+pub static LUAU_WASM: &[u8] = include_bytes!("../grammars/tree-sitter-luau.wasm");
 
 #[cfg(feature = "wasmtime-grammars")]
-pub static PASCAL_WASM: &[u8] =
-    include_bytes!("../grammars/tree-sitter-pascal.wasm");
+pub static PASCAL_WASM: &[u8] = include_bytes!("../grammars/tree-sitter-pascal.wasm");
 
 #[cfg(feature = "wasmtime-grammars")]
-pub static SCALA_WASM: &[u8] =
-    include_bytes!("../grammars/tree-sitter-scala.wasm");
+pub static SCALA_WASM: &[u8] = include_bytes!("../grammars/tree-sitter-scala.wasm");
 
 /// Identify which WASM grammar to load.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,10 +33,10 @@ impl WasmGrammar {
     /// Returns `None` for all non-WASM languages.
     pub fn from_language(lang: &codewiki_core::Language) -> Option<Self> {
         match lang {
-            codewiki_core::Language::Lua    => Some(Self::Lua),
-            codewiki_core::Language::Luau   => Some(Self::Luau),
+            codewiki_core::Language::Lua => Some(Self::Lua),
+            codewiki_core::Language::Luau => Some(Self::Luau),
             codewiki_core::Language::Pascal => Some(Self::Pascal),
-            codewiki_core::Language::Scala  => Some(Self::Scala),
+            codewiki_core::Language::Scala => Some(Self::Scala),
             _ => None,
         }
     }
@@ -49,10 +45,10 @@ impl WasmGrammar {
     /// Must match the exported symbol name in the `.wasm` binary.
     pub fn grammar_name(self) -> &'static str {
         match self {
-            Self::Lua    => "lua",
-            Self::Luau   => "luau",
+            Self::Lua => "lua",
+            Self::Luau => "luau",
             Self::Pascal => "pascal",
-            Self::Scala  => "scala",
+            Self::Scala => "scala",
         }
     }
 }

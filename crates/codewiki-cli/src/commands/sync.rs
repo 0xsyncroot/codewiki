@@ -16,8 +16,7 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
 
     // Open a single StorageImpl and share it for both sync and resolution.
     let store_impl = Arc::new(open_storage(&root)?);
-    let sync_storage: Arc<dyn SyncStore> =
-        Arc::clone(&store_impl) as Arc<dyn SyncStore>;
+    let sync_storage: Arc<dyn SyncStore> = Arc::clone(&store_impl) as Arc<dyn SyncStore>;
     let store_adapter = Arc::new(StorageAdapter(Arc::clone(&store_impl)));
     let extractor = Arc::new(ExtractionOrchestratorImpl::new(store_adapter));
     let tree_cache = TreeCache::new(128);
@@ -39,10 +38,7 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
 
     println!(
         "Sync complete: {} added, {} modified, {} removed ({} ms)",
-        result.files_added,
-        result.files_modified,
-        result.files_removed,
-        result.duration_ms
+        result.files_added, result.files_modified, result.files_removed, result.duration_ms
     );
 
     // OPT-9: Use incremental resolution to scope the resolution pass to only
@@ -51,8 +47,7 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
     // Framework extraction (OPT-10) is still skipped via `run_resolution`
     // when it is called as the fallback, because `run_resolution_incremental`
     // delegates to `run_resolution(…, Some(changed_paths))` in that case.
-    let resolved_count =
-        run_resolution_incremental(&store_impl, &root, &result.changed_paths)?;
+    let resolved_count = run_resolution_incremental(&store_impl, &root, &result.changed_paths)?;
     if resolved_count > 0 {
         println!("Resolved {} references", resolved_count);
     }

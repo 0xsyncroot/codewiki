@@ -102,13 +102,25 @@ struct CheckResult {
 
 impl CheckResult {
     fn pass(name: impl Into<String>) -> Self {
-        CheckResult { name: name.into(), status: CheckStatus::Pass, details: None }
+        CheckResult {
+            name: name.into(),
+            status: CheckStatus::Pass,
+            details: None,
+        }
     }
     fn fail(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        CheckResult { name: name.into(), status: CheckStatus::Fail(reason.into()), details: None }
+        CheckResult {
+            name: name.into(),
+            status: CheckStatus::Fail(reason.into()),
+            details: None,
+        }
     }
     fn skip(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        CheckResult { name: name.into(), status: CheckStatus::Skip(reason.into()), details: None }
+        CheckResult {
+            name: name.into(),
+            status: CheckStatus::Skip(reason.into()),
+            details: None,
+        }
     }
     fn is_fail(&self) -> bool {
         matches!(self.status, CheckStatus::Fail(_))
@@ -129,7 +141,10 @@ fn load_thresholds(golden_dir: &Path) -> Thresholds {
     // Try parity/thresholds.toml (relative to CWD), then golden_dir/../thresholds.toml
     let candidates = [
         PathBuf::from("parity/thresholds.toml"),
-        golden_dir.parent().map(|p| p.join("thresholds.toml")).unwrap_or_default(),
+        golden_dir
+            .parent()
+            .map(|p| p.join("thresholds.toml"))
+            .unwrap_or_default(),
     ];
 
     for path in &candidates {
@@ -226,7 +241,12 @@ fn check_node_count(golden_subdir: &Path, threshold: f64, tag: &str) -> CheckRes
     };
     let node_count = match json.as_array() {
         Some(a) => a.len(),
-        None => return CheckResult::fail(format!("node_count/{}", tag), "nodes-full.json is not a JSON array"),
+        None => {
+            return CheckResult::fail(
+                format!("node_count/{}", tag),
+                "nodes-full.json is not a JSON array",
+            )
+        }
     };
 
     // For rust-baseline, there is no TS reference count to compare against.
@@ -264,12 +284,18 @@ fn check_node_count(golden_subdir: &Path, threshold: f64, tag: &str) -> CheckRes
                         ),
                     );
                 }
-                return CheckResult::pass(format!("node_count/{} ({}/{})", tag, node_count, expected));
+                return CheckResult::pass(format!(
+                    "node_count/{} ({}/{})",
+                    tag, node_count, expected
+                ));
             }
         }
     }
 
-    CheckResult::pass(format!("node_count/{} ({} nodes, no reference count)", tag, node_count))
+    CheckResult::pass(format!(
+        "node_count/{} ({} nodes, no reference count)",
+        tag, node_count
+    ))
 }
 
 /// Check edge count from edges-full.json.
@@ -287,7 +313,12 @@ fn check_edge_count(golden_subdir: &Path, _threshold: f64, tag: &str) -> CheckRe
     };
     let edge_count = match json.as_array() {
         Some(a) => a.len(),
-        None => return CheckResult::fail(format!("edge_count/{}", tag), "edges-full.json is not a JSON array"),
+        None => {
+            return CheckResult::fail(
+                format!("edge_count/{}", tag),
+                "edges-full.json is not a JSON array",
+            )
+        }
     };
 
     if edge_count == 0 {
@@ -315,7 +346,12 @@ fn check_edge_kinds(golden_subdir: &Path, tag: &str) -> CheckResult {
     };
     let edges = match json.as_array() {
         Some(a) => a,
-        None => return CheckResult::fail(format!("edge_kinds/{}", tag), "edges-full.json is not a JSON array"),
+        None => {
+            return CheckResult::fail(
+                format!("edge_kinds/{}", tag),
+                "edges-full.json is not a JSON array",
+            )
+        }
     };
 
     let mut kinds_found: HashMap<String, usize> = HashMap::new();
@@ -343,7 +379,10 @@ fn check_edge_kinds(golden_subdir: &Path, tag: &str) -> CheckResult {
         // For synthetic-120 which may not have all edge kinds, treat as skip.
         CheckResult::skip(
             format!("edge_kinds/{}", tag),
-            format!("missing edge kinds: {} (may be expected for this corpus)", missing.join(", ")),
+            format!(
+                "missing edge kinds: {} (may be expected for this corpus)",
+                missing.join(", ")
+            ),
         )
     }
 }
@@ -375,12 +414,17 @@ fn check_search_results(golden_subdir: &Path, tag: &str) -> CheckResult {
         );
     }
 
-    CheckResult::pass(format!("search_results/{} ({} results)", tag, results_count))
+    CheckResult::pass(format!(
+        "search_results/{} ({} results)",
+        tag, results_count
+    ))
 }
 
 /// Check that installer-configs.json exists and has entries.
 fn check_installer_configs(golden_dir: &Path) -> CheckResult {
-    let p = golden_dir.join("elasticsearch").join("installer-configs.json");
+    let p = golden_dir
+        .join("elasticsearch")
+        .join("installer-configs.json");
     if !p.exists() {
         return CheckResult::fail(
             "installer_configs",
@@ -421,7 +465,11 @@ fn check_installer_configs(golden_dir: &Path) -> CheckResult {
 
 fn write_report(output_dir: &Path, baseline_tag: &str, results: &[CheckResult]) {
     if let Err(e) = fs::create_dir_all(output_dir) {
-        eprintln!("parity-runner: could not create output dir {}: {}", output_dir.display(), e);
+        eprintln!(
+            "parity-runner: could not create output dir {}: {}",
+            output_dir.display(),
+            e
+        );
         return;
     }
 
@@ -430,9 +478,15 @@ fn write_report(output_dir: &Path, baseline_tag: &str, results: &[CheckResult]) 
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    let passed: Vec<_> = results.iter().filter(|r| matches!(r.status, CheckStatus::Pass)).collect();
+    let passed: Vec<_> = results
+        .iter()
+        .filter(|r| matches!(r.status, CheckStatus::Pass))
+        .collect();
     let failed: Vec<_> = results.iter().filter(|r| r.is_fail()).collect();
-    let skipped: Vec<_> = results.iter().filter(|r| matches!(r.status, CheckStatus::Skip(_))).collect();
+    let skipped: Vec<_> = results
+        .iter()
+        .filter(|r| matches!(r.status, CheckStatus::Skip(_)))
+        .collect();
 
     let report = serde_json::json!({
         "generated_at": ts,
@@ -459,7 +513,10 @@ fn write_report(output_dir: &Path, baseline_tag: &str, results: &[CheckResult]) 
     });
 
     let report_path = output_dir.join(format!("parity-{}.json", ts));
-    match fs::write(&report_path, serde_json::to_string_pretty(&report).unwrap_or_default()) {
+    match fs::write(
+        &report_path,
+        serde_json::to_string_pretty(&report).unwrap_or_default(),
+    ) {
         Ok(()) => eprintln!("parity-runner: report written to {}", report_path.display()),
         Err(e) => eprintln!("parity-runner: could not write report: {}", e),
     }
@@ -511,7 +568,10 @@ fn main() {
     // We detect (b) by checking if golden_dir itself contains nodes-full.json.
     let (s120, elastic_parent) = if golden_dir.join("nodes-full.json").exists() {
         // Case (b): golden_dir IS synthetic-120.
-        (golden_dir.to_path_buf(), golden_dir.parent().unwrap_or(golden_dir).to_path_buf())
+        (
+            golden_dir.to_path_buf(),
+            golden_dir.parent().unwrap_or(golden_dir).to_path_buf(),
+        )
     } else {
         // Case (a): golden_dir is the parent.
         (golden_dir.join("synthetic-120"), golden_dir.to_path_buf())
@@ -525,7 +585,10 @@ fn main() {
         results.push(check_edge_kinds(&s120, tag));
         results.push(check_search_results(&s120, tag));
     } else {
-        eprintln!("parity-runner: warning: synthetic-120/ not found under {}", golden_dir.display());
+        eprintln!(
+            "parity-runner: warning: synthetic-120/ not found under {}",
+            golden_dir.display()
+        );
         missing_critical = true;
     }
 
@@ -539,8 +602,14 @@ fn main() {
     write_report(&args.output_dir, tag, &results);
 
     let failed: Vec<_> = results.iter().filter(|r| r.is_fail()).collect();
-    let skipped: Vec<_> = results.iter().filter(|r| matches!(r.status, CheckStatus::Skip(_))).collect();
-    let passed: Vec<_> = results.iter().filter(|r| matches!(r.status, CheckStatus::Pass)).collect();
+    let skipped: Vec<_> = results
+        .iter()
+        .filter(|r| matches!(r.status, CheckStatus::Skip(_)))
+        .collect();
+    let passed: Vec<_> = results
+        .iter()
+        .filter(|r| matches!(r.status, CheckStatus::Pass))
+        .collect();
 
     println!("\nparity-runner summary (baseline: {tag})");
     println!("  passed:  {}", passed.len());
@@ -564,6 +633,10 @@ fn main() {
         process::exit(2);
     }
 
-    println!("Result: PASS — all {} checks passed ({} skipped)", passed.len(), skipped.len());
+    println!(
+        "Result: PASS — all {} checks passed ({} skipped)",
+        passed.len(),
+        skipped.len()
+    );
     process::exit(0);
 }

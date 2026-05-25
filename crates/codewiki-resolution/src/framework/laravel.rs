@@ -31,10 +31,8 @@ fn route_regex() -> &'static Regex {
 fn resource_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(
-            r#"Route::(resource|apiResource)\s*\(\s*['"]([^'"]+)['"]\s*(?:,\s*([^)]+))?\)"#,
-        )
-        .expect("laravel resource_regex")
+        Regex::new(r#"Route::(resource|apiResource)\s*\(\s*['"]([^'"]+)['"]\s*(?:,\s*([^)]+))?\)"#)
+            .expect("laravel resource_regex")
     })
 }
 
@@ -78,9 +76,8 @@ fn extract_laravel_handler(expr: &str) -> Option<(String, &'static str)> {
 
     // 'Controller@method' or "Controller@method"
     static AT_RE: OnceLock<Regex> = OnceLock::new();
-    let at_re = AT_RE.get_or_init(|| {
-        Regex::new(r#"^['"][^'"@]+@([^'"]+)['"]$"#).expect("laravel at_re")
-    });
+    let at_re =
+        AT_RE.get_or_init(|| Regex::new(r#"^['"][^'"@]+@([^'"]+)['"]$"#).expect("laravel at_re"));
     if let Some(cap) = at_re.captures(trimmed) {
         return Some((cap[1].to_string(), "references"));
     }
@@ -265,13 +262,13 @@ impl FrameworkResolver for LaravelResolver {
         // Pattern B: Route::resource/apiResource
         for cap in resource_regex().captures_iter(&safe) {
             let resource_name = &cap[2];
-            let handler_expr = cap.get(3).map(|m| m.as_str().to_string()).unwrap_or_default();
+            let handler_expr = cap
+                .get(3)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default();
             let line = safe[..cap.get(0).unwrap().start()].lines().count() as u32 + 1;
 
-            let route_id = format!(
-                "route:{}:{}:RESOURCE:{}",
-                file_str, line, resource_name
-            );
+            let route_id = format!("route:{}:{}:RESOURCE:{}", file_str, line, resource_name);
 
             let route_node = Node {
                 id: route_id.clone(),
@@ -345,10 +342,7 @@ mod tests {
 
         assert_eq!(result.nodes.len(), 1, "one route node");
         assert_eq!(result.nodes[0].name, "GET /users");
-        assert_eq!(
-            result.nodes[0].qualified_name,
-            "routes/web.php::GET:/users"
-        );
+        assert_eq!(result.nodes[0].qualified_name, "routes/web.php::GET:/users");
         assert_eq!(result.unresolved_refs.len(), 1, "one handler ref");
         assert_eq!(result.unresolved_refs[0].reference_name, "index");
         assert_eq!(result.unresolved_refs[0].reference_kind, "references");
@@ -434,7 +428,10 @@ mod tests {
             .extract(Path::new("routes/web.js"), content, &ctx)
             .expect("extract ok");
 
-        assert!(result.nodes.is_empty(), "non-PHP file must produce no nodes");
+        assert!(
+            result.nodes.is_empty(),
+            "non-PHP file must produce no nodes"
+        );
     }
 
     #[test]

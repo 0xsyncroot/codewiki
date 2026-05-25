@@ -2,7 +2,9 @@
 
 use crate::ast_walker::{generate_node_id, LanguageConfig, LanguageExtractor};
 use crate::languages::svelte::EMPTY_CONFIG;
-use codewiki_core::{EdgeKind, ExtractionBatch, FileRecord, Language, Node, NodeKind, UnresolvedRef};
+use codewiki_core::{
+    EdgeKind, ExtractionBatch, FileRecord, Language, Node, NodeKind, UnresolvedRef,
+};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -41,7 +43,11 @@ pub fn extract_special(source: &str, file_path: &Path) -> ExtractionBatch {
 
     nodes.push(Node {
         id: file_id.clone(),
-        name: file_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+        name: file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string(),
         qualified_name: file_path_str.clone(),
         kind: NodeKind::File,
         language: Language::Liquid,
@@ -184,7 +190,13 @@ mod tests {
             "expected title variable"
         );
         // Unresolved refs for render and section
-        assert!(batch.unresolved_refs.iter().any(|r| r.reference_name == "header"));
-        assert!(batch.unresolved_refs.iter().any(|r| r.reference_name == "footer"));
+        assert!(batch
+            .unresolved_refs
+            .iter()
+            .any(|r| r.reference_name == "header"));
+        assert!(batch
+            .unresolved_refs
+            .iter()
+            .any(|r| r.reference_name == "footer"));
     }
 }

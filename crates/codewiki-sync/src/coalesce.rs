@@ -58,7 +58,9 @@ pub fn coalesce_events(
         .chain(
             // Rule 1: added ∩ removed → treat as modified (but removed wins; we
             // re-add them as modified only if they are NOT in removed).
-            raw_added.iter().filter(|p| raw_removed.contains(*p) && !removed_set.contains(p)),
+            raw_added
+                .iter()
+                .filter(|p| raw_removed.contains(*p) && !removed_set.contains(p)),
         )
         .filter(|p| !removed_set.contains(p))
         .map(|p| {
@@ -73,18 +75,18 @@ pub fn coalesce_events(
         .filter(|p| !removed_set.contains(p) && !modified_set.contains(p))
         .collect();
 
-    ChangedFiles { added, modified, removed }
+    ChangedFiles {
+        added,
+        modified,
+        removed,
+    }
 }
 
 /// Remove any path containing a `.codewiki` component.
 fn strip_codewiki(paths: HashSet<PathBuf>) -> HashSet<PathBuf> {
     paths
         .into_iter()
-        .filter(|p| {
-            !p.components().any(|c| {
-                c.as_os_str() == ".codewiki"
-            })
-        })
+        .filter(|p| !p.components().any(|c| c.as_os_str() == ".codewiki"))
         .collect()
 }
 
@@ -111,7 +113,11 @@ mod tests {
     }
 
     fn modified_paths(cf: &ChangedFiles) -> Vec<String> {
-        let mut v: Vec<String> = cf.modified.iter().map(|(p, _)| p.to_string_lossy().to_string()).collect();
+        let mut v: Vec<String> = cf
+            .modified
+            .iter()
+            .map(|(p, _)| p.to_string_lossy().to_string())
+            .collect();
         v.sort();
         v
     }
@@ -140,12 +146,7 @@ mod tests {
         let p = path("/project/bar.ts");
         // HashSet ensures dedup.
         let modified: HashSet<PathBuf> = [p.clone(), p.clone()].into();
-        let result = coalesce_events(
-            HashSet::new(),
-            modified,
-            HashSet::new(),
-            &empty_cache(),
-        );
+        let result = coalesce_events(HashSet::new(), modified, HashSet::new(), &empty_cache());
         assert_eq!(result.modified.len(), 1);
         assert_eq!(result.modified[0].0, p);
     }
@@ -157,14 +158,12 @@ mod tests {
         let modified: HashSet<PathBuf> = [p.clone()].into();
         let removed: HashSet<PathBuf> = [p.clone()].into();
 
-        let result = coalesce_events(
-            HashSet::new(),
-            modified,
-            removed,
-            &empty_cache(),
-        );
+        let result = coalesce_events(HashSet::new(), modified, removed, &empty_cache());
 
-        assert!(modified_paths(&result).is_empty(), "modified should be empty");
+        assert!(
+            modified_paths(&result).is_empty(),
+            "modified should be empty"
+        );
         assert!(removed_paths(&result).contains(&p.to_string_lossy().to_string()));
     }
 
@@ -175,12 +174,7 @@ mod tests {
         let real = path("/project/index.ts");
 
         let added: HashSet<PathBuf> = [db.clone(), real.clone()].into();
-        let result = coalesce_events(
-            added,
-            HashSet::new(),
-            HashSet::new(),
-            &empty_cache(),
-        );
+        let result = coalesce_events(added, HashSet::new(), HashSet::new(), &empty_cache());
 
         let a = added_paths(&result);
         assert!(!a.iter().any(|s| s.contains(".codewiki")));
@@ -202,7 +196,13 @@ mod tests {
         );
 
         assert_eq!(added_paths(&result), vec![a.to_string_lossy().to_string()]);
-        assert_eq!(modified_paths(&result), vec![m.to_string_lossy().to_string()]);
-        assert_eq!(removed_paths(&result), vec![r.to_string_lossy().to_string()]);
+        assert_eq!(
+            modified_paths(&result),
+            vec![m.to_string_lossy().to_string()]
+        );
+        assert_eq!(
+            removed_paths(&result),
+            vec![r.to_string_lossy().to_string()]
+        );
     }
 }

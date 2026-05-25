@@ -6,7 +6,11 @@ pub struct PhpExtractor;
 
 static CONFIG: LanguageConfig = LanguageConfig {
     function_types: &["function_definition"],
-    class_types: &["class_declaration", "interface_declaration", "trait_declaration"],
+    class_types: &[
+        "class_declaration",
+        "interface_declaration",
+        "trait_declaration",
+    ],
     method_types: &["method_declaration"],
     interface_types: &[],
     struct_types: &[],

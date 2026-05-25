@@ -9,10 +9,14 @@
 //!
 //! Design reference: gaps/DESIGN-B-blazor.md
 
-use crate::ast_walker::{extract_file, generate_node_id, timestamps_for_file, LanguageConfig, LanguageExtractor};
+use crate::ast_walker::{
+    extract_file, generate_node_id, timestamps_for_file, LanguageConfig, LanguageExtractor,
+};
 // Re-use the EMPTY_CONFIG defined in svelte.rs to avoid duplication.
 use crate::languages::svelte::EMPTY_CONFIG;
-use codewiki_core::{EdgeKind, ExtractionBatch, FileRecord, Language, Node, NodeKind, UnresolvedRef};
+use codewiki_core::{
+    EdgeKind, ExtractionBatch, FileRecord, Language, Node, NodeKind, UnresolvedRef,
+};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -33,9 +37,7 @@ impl LanguageExtractor for RazorExtractor {
 
 fn page_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r#"(?m)^@page\s+"([^"]+)""#).unwrap()
-    })
+    RE.get_or_init(|| Regex::new(r#"(?m)^@page\s+"([^"]+)""#).unwrap())
 }
 
 /// Captures the interior of an `@code { }` or `@functions { }` block.
@@ -45,31 +47,26 @@ fn page_re() -> &'static Regex {
 /// of real Blazor files). Deeply nested braces may terminate the match early.
 fn code_block_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"(?s)@(?:code|functions)\s*\{(.*?)\n\}").unwrap()
-    })
+    RE.get_or_init(|| Regex::new(r"(?s)@(?:code|functions)\s*\{(.*?)\n\}").unwrap())
 }
 
 fn inject_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?m)^@inject\s+([A-Za-z_][A-Za-z0-9_<>, ]*)\s+([A-Za-z_][A-Za-z0-9_]*)").unwrap()
+        Regex::new(r"(?m)^@inject\s+([A-Za-z_][A-Za-z0-9_<>, ]*)\s+([A-Za-z_][A-Za-z0-9_]*)")
+            .unwrap()
     })
 }
 
 fn using_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"(?m)^@using\s+([A-Za-z_][A-Za-z0-9_.]*)").unwrap()
-    })
+    RE.get_or_init(|| Regex::new(r"(?m)^@using\s+([A-Za-z_][A-Za-z0-9_.]*)").unwrap())
 }
 
 /// Matches self-closing PascalCase component tags: `<MyFoo ... />` or `<MyFoo/>`.
 fn component_self_closing_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"<([A-Z][A-Za-z0-9]*)(?:\s[^>]*)?\s*/>").unwrap()
-    })
+    RE.get_or_init(|| Regex::new(r"<([A-Z][A-Za-z0-9]*)(?:\s[^>]*)?\s*/>").unwrap())
 }
 
 /// Matches opening (non-self-closing) PascalCase component tags: `<MyFoo ...>` or `<MyFoo>`.
@@ -80,9 +77,7 @@ fn component_self_closing_re() -> &'static Regex {
 /// deduplicate by component name, as required by B-MUST-3.
 fn component_open_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"<([A-Z][A-Za-z0-9]*)(?:\s[^>]*)?>").unwrap()
-    })
+    RE.get_or_init(|| Regex::new(r"<([A-Z][A-Za-z0-9]*)(?:\s[^>]*)?>").unwrap())
 }
 
 // ─── Blazor built-in component exclusion list ─────────────────────────────────
@@ -171,8 +166,7 @@ pub fn extract_special(source: &str, file_path: &Path) -> ExtractionBatch {
     });
 
     // ── Step 1: Component node (file-as-component) ────────────────────────────
-    let component_id =
-        generate_node_id(&file_path_str, &NodeKind::Component, &component_name, 1);
+    let component_id = generate_node_id(&file_path_str, &NodeKind::Component, &component_name, 1);
     nodes.push(Node {
         id: component_id.clone(),
         name: component_name.clone(),
@@ -290,15 +284,18 @@ pub fn extract_special(source: &str, file_path: &Path) -> ExtractionBatch {
         // so we subtract 1 from the offset: razor_line = sub_line - 1 + code_start_line.
         // Implemented as: node.start_line += (code_start_line - 1).
         let wrapped = format!("class __RazorCodeBlock__ {{{code_body}\n}}");
-        let wrapper_offset = if code_start_line > 0 { code_start_line - 1 } else { 0 };
+        let wrapper_offset = if code_start_line > 0 {
+            code_start_line - 1
+        } else {
+            0
+        };
 
         let sub_batch = extract_file(&virtual_path, &wrapped);
         let virtual_file_id = format!("file:{}", virtual_path.to_string_lossy());
 
         // Collect IDs added so far plus the ones we're about to add so that
         // edge-FK pruning works correctly in a single pass.
-        let mut added_ids: HashSet<String> =
-            nodes.iter().map(|n| n.id.clone()).collect();
+        let mut added_ids: HashSet<String> = nodes.iter().map(|n| n.id.clone()).collect();
 
         for mut node in sub_batch.nodes {
             if matches!(node.kind, NodeKind::File) {
@@ -512,7 +509,10 @@ mod tests {
             batch.nodes.iter().map(|n| &n.name).collect::<Vec<_>>()
         );
         assert!(
-            batch.nodes.iter().any(|n| matches!(n.kind, NodeKind::Component)),
+            batch
+                .nodes
+                .iter()
+                .any(|n| matches!(n.kind, NodeKind::Component)),
             "no component node"
         );
     }
@@ -528,7 +528,12 @@ mod tests {
             .filter(|n| matches!(n.kind, NodeKind::Route))
             .collect();
 
-        assert_eq!(routes.len(), 2, "expected 2 route nodes; got {:?}", routes.iter().map(|r| &r.name).collect::<Vec<_>>());
+        assert_eq!(
+            routes.len(),
+            2,
+            "expected 2 route nodes; got {:?}",
+            routes.iter().map(|r| &r.name).collect::<Vec<_>>()
+        );
 
         let names: Vec<&str> = routes.iter().map(|r| r.name.as_str()).collect();
         assert!(names.contains(&"GET /counter"), "missing GET /counter");
@@ -560,12 +565,14 @@ mod tests {
 
         // The @code block contains IncrementCount (method) and currentCount / message (fields/variables).
         assert!(
+            batch.nodes.iter().any(|n| n.name == "IncrementCount"
+                && matches!(n.kind, NodeKind::Method | NodeKind::Function)),
+            "no IncrementCount method; nodes: {:?}",
             batch
                 .nodes
                 .iter()
-                .any(|n| n.name == "IncrementCount" && matches!(n.kind, NodeKind::Method | NodeKind::Function)),
-            "no IncrementCount method; nodes: {:?}",
-            batch.nodes.iter().map(|n| (&n.name, &n.kind)).collect::<Vec<_>>()
+                .map(|n| (&n.name, &n.kind))
+                .collect::<Vec<_>>()
         );
 
         // All delegated nodes must reference the real .razor path, not the virtual .cs path.
@@ -578,7 +585,10 @@ mod tests {
                 node.file_path
             );
             if node.name == "IncrementCount" {
-                assert_eq!(node.file_path, file_str, "wrong file_path on IncrementCount");
+                assert_eq!(
+                    node.file_path, file_str,
+                    "wrong file_path on IncrementCount"
+                );
                 // IncrementCount must be on or after the @code line (line 11 in fixture).
                 assert!(
                     node.start_line >= 11,
@@ -600,9 +610,20 @@ mod tests {
             .filter(|r| r.reference_kind == "uses")
             .collect();
 
-        assert_eq!(inject_refs.len(), 2, "expected 2 @inject refs; got {:?}", inject_refs.iter().map(|r| &r.reference_name).collect::<Vec<_>>());
+        assert_eq!(
+            inject_refs.len(),
+            2,
+            "expected 2 @inject refs; got {:?}",
+            inject_refs
+                .iter()
+                .map(|r| &r.reference_name)
+                .collect::<Vec<_>>()
+        );
 
-        let names: Vec<&str> = inject_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        let names: Vec<&str> = inject_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
         assert!(names.contains(&"WeatherService"), "missing WeatherService");
         assert!(names.contains(&"Nav"), "missing Nav");
     }
@@ -634,7 +655,10 @@ mod tests {
 
         let names: Vec<&str> = renders.iter().map(|r| r.reference_name.as_str()).collect();
 
-        assert!(names.contains(&"MyAlert"), "missing renders ref for MyAlert");
+        assert!(
+            names.contains(&"MyAlert"),
+            "missing renders ref for MyAlert"
+        );
         assert!(
             names.contains(&"AnotherComponent"),
             "missing renders ref for AnotherComponent"

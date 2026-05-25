@@ -1,6 +1,6 @@
 /// Prepared-statement helpers for file record operations.
 use codewiki_core::{CodeWikiError, FileRecord};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------
@@ -83,7 +83,9 @@ pub fn get_file_by_path(
     let mut stmt = conn.prepare_cached("SELECT * FROM files WHERE path = ?1")?;
     let mut rows = stmt.query(params![path])?;
     if let Some(row) = rows.next()? {
-        Ok(Some(row_to_file_record(row).map_err(CodeWikiError::Sqlite)?))
+        Ok(Some(
+            row_to_file_record(row).map_err(CodeWikiError::Sqlite)?,
+        ))
     } else {
         Ok(None)
     }
@@ -106,9 +108,7 @@ pub fn get_all_file_paths(conn: &Connection) -> Result<Vec<String>, CodeWikiErro
 /// Return all tracked file records ordered by modified_at so A5 can compare
 /// against live FS metadata.  A5 owns the "is this stale?" decision.
 pub fn get_stale_files(conn: &Connection) -> Result<Vec<FileRecord>, CodeWikiError> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT * FROM files ORDER BY modified_at ASC",
-    )?;
+    let mut stmt = conn.prepare_cached("SELECT * FROM files ORDER BY modified_at ASC")?;
     let rows = stmt.query_map([], row_to_file_record)?;
     rows.map(|r| r.map_err(CodeWikiError::Sqlite))
         .collect::<Result<Vec<_>, _>>()

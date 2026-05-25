@@ -198,11 +198,13 @@ fn try_method_call_match(
     // 3a: Direct class match — find method in same file as class
     let class_candidates = ctx.get_nodes_by_name(receiver);
     for class_node in &class_candidates {
-        if matches!(class_node.kind, NodeKind::Class | NodeKind::Struct | NodeKind::Interface) {
+        if matches!(
+            class_node.kind,
+            NodeKind::Class | NodeKind::Struct | NodeKind::Interface
+        ) {
             let file_nodes = ctx.get_nodes_in_file(&class_node.file_path);
             for node in file_nodes {
-                if node.name == method
-                    && matches!(node.kind, NodeKind::Method | NodeKind::Function)
+                if node.name == method && matches!(node.kind, NodeKind::Method | NodeKind::Function)
                 {
                     return Some(MatchResult {
                         node,
@@ -227,8 +229,7 @@ fn try_method_call_match(
         for class_node in &cap_candidates {
             let file_nodes = ctx.get_nodes_in_file(&class_node.file_path);
             for node in file_nodes {
-                if node.name == method
-                    && matches!(node.kind, NodeKind::Method | NodeKind::Function)
+                if node.name == method && matches!(node.kind, NodeKind::Method | NodeKind::Function)
                 {
                     return Some(MatchResult {
                         node,
@@ -458,7 +459,10 @@ fn language_group_from_file(file_path: &str) -> u8 {
 pub struct NameMatcher;
 
 impl NameMatcher {
-    pub fn match_reference(uref: &UnresolvedRef, ctx: &dyn NameMatchContext) -> Option<MatchResult> {
+    pub fn match_reference(
+        uref: &UnresolvedRef,
+        ctx: &dyn NameMatchContext,
+    ) -> Option<MatchResult> {
         match_reference(uref, ctx)
     }
 }
@@ -477,7 +481,11 @@ mod tests {
 
     impl NameMatchContext for MockCtx {
         fn get_nodes_by_name(&self, name: &str) -> Vec<Node> {
-            self.nodes.iter().filter(|n| n.name == name).cloned().collect()
+            self.nodes
+                .iter()
+                .filter(|n| n.name == name)
+                .cloned()
+                .collect()
         }
         fn get_nodes_by_lower_name(&self, lower: &str) -> Vec<Node> {
             self.nodes
@@ -538,7 +546,13 @@ mod tests {
     #[test]
     fn exact_name_match_returns_high_confidence() {
         // T-311: name_matcher exact match returns score 0.95+
-        let node = make_node("n1", "TransportService", NodeKind::Class, "src/transport.ts", Language::TypeScript);
+        let node = make_node(
+            "n1",
+            "TransportService",
+            NodeKind::Class,
+            "src/transport.ts",
+            Language::TypeScript,
+        );
         let ctx = MockCtx {
             nodes: vec![node],
             files: vec!["src/transport.ts".to_string()],

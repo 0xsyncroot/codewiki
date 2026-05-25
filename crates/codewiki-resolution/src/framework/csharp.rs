@@ -204,9 +204,7 @@ fn http_attr_to_method(attr: &str) -> &'static str {
 /// e.g. template `"api/[controller]"` + class `"UsersController"` → `"api/users"`.
 fn expand_controller_token(template: &str, class_name: &str) -> String {
     // Strip "Controller" suffix from class name
-    let base = class_name
-        .strip_suffix("Controller")
-        .unwrap_or(class_name);
+    let base = class_name.strip_suffix("Controller").unwrap_or(class_name);
     // ASP.NET convention: lowercase the base name
     let lower = base.to_lowercase();
     template.replace("[controller]", &lower)
@@ -339,10 +337,7 @@ fn collect_class_route_prefixes(safe: &str) -> Vec<(usize, usize, String)> {
 }
 
 /// Find the class-level route prefix that contains `byte_pos`, if any.
-fn prefix_for_byte(
-    class_prefixes: &[(usize, usize, String)],
-    byte_pos: usize,
-) -> Option<&str> {
+fn prefix_for_byte(class_prefixes: &[(usize, usize, String)], byte_pos: usize) -> Option<&str> {
     class_prefixes
         .iter()
         .rfind(|(start, end, _)| *start <= byte_pos && byte_pos < *end)
@@ -419,7 +414,11 @@ impl FrameworkResolver for AspNetResolver {
         // Service / Interface (starts with I + uppercase = interface)
         let is_interface = name.starts_with('I')
             && name.len() > 1
-            && name.chars().nth(1).map(|c| c.is_uppercase()).unwrap_or(false);
+            && name
+                .chars()
+                .nth(1)
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false);
         if name.ends_with("Service") || is_interface {
             if let Some(id) = resolve_by_name_kind(
                 name,
@@ -498,7 +497,11 @@ impl FrameworkResolver for AspNetResolver {
         }
 
         // PascalCase model / entity (lower confidence)
-        let is_pascal = name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+        let is_pascal = name
+            .chars()
+            .next()
+            .map(|c| c.is_uppercase())
+            .unwrap_or(false)
             && name.chars().all(|c| c.is_alphanumeric());
         if is_pascal {
             if let Some(id) = resolve_by_name_kind(
@@ -564,8 +567,7 @@ impl FrameworkResolver for AspNetResolver {
             // Capture the method declaration that immediately follows the attribute
             // (needed before path expansion so we can resolve [action])
             let tail = &safe[match_end..];
-            let handler_name_opt = method_decl_regex().captures(tail)
-                .map(|c| c[1].to_string());
+            let handler_name_opt = method_decl_regex().captures(tail).map(|c| c[1].to_string());
 
             // GAP-6: Expand [action] token using the handler method name
             let method_path_expanded = if let Some(ref h) = handler_name_opt {
@@ -1007,7 +1009,10 @@ mod tests {
             .extract(Path::new("Program.cs"), content, &ctx)
             .expect("extract ok");
         assert_eq!(result.nodes[0].name, "POST /users");
-        assert_eq!(result.unresolved_refs[0].reference_name, "CreateUserHandler");
+        assert_eq!(
+            result.unresolved_refs[0].reference_name,
+            "CreateUserHandler"
+        );
     }
 
     #[test]
@@ -1076,7 +1081,10 @@ mod tests {
         let result = AspNetResolver
             .extract(Path::new("UserController.vb"), content, &ctx)
             .expect("extract ok");
-        assert!(result.nodes.is_empty(), "non-.cs file must produce no nodes");
+        assert!(
+            result.nodes.is_empty(),
+            "non-.cs file must produce no nodes"
+        );
     }
 
     #[test]
@@ -1170,7 +1178,11 @@ public class ProductsController : ControllerBase
         let aliases = PathAliasMap::default();
         let ctx = make_ctx(&caches, &aliases, &[]);
         let result = AspNetResolver
-            .extract(Path::new("Controllers/ProductsController.cs"), content, &ctx)
+            .extract(
+                Path::new("Controllers/ProductsController.cs"),
+                content,
+                &ctx,
+            )
             .expect("extract ok");
 
         let names: Vec<_> = result.nodes.iter().map(|n| n.name.as_str()).collect();
@@ -1351,7 +1363,10 @@ builder.Services.AddSingleton<ILogger, ConsoleLogger>();
             .filter(|r| r.reference_kind == "implements")
             .collect();
         assert_eq!(impl_refs.len(), 2, "two DI refs: {:?}", impl_refs);
-        let impl_names: Vec<_> = impl_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        let impl_names: Vec<_> = impl_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
         assert!(impl_names.contains(&"UserService"));
         assert!(impl_names.contains(&"ConsoleLogger"));
     }
@@ -1377,8 +1392,16 @@ services.AddTransient<IBar, BarImpl>();
             .iter()
             .filter(|r| r.reference_kind == "implements")
             .collect();
-        assert_eq!(impl_refs.len(), 2, "both AddScoped and AddTransient must produce refs: {:?}", impl_refs);
-        let names: Vec<_> = impl_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        assert_eq!(
+            impl_refs.len(),
+            2,
+            "both AddScoped and AddTransient must produce refs: {:?}",
+            impl_refs
+        );
+        let names: Vec<_> = impl_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
         assert!(names.contains(&"FooImpl"), "FooImpl missing: {:?}", names);
         assert!(names.contains(&"BarImpl"), "BarImpl missing: {:?}", names);
     }
@@ -1403,10 +1426,22 @@ services.AddScoped<HttpService>();
             .filter(|r| r.reference_kind == "references")
             .collect();
         // Should have at least the two self-registrations (may also have route refs = 0 here)
-        assert!(refs.len() >= 2, "single-arg DI must produce references refs: {:?}", refs);
+        assert!(
+            refs.len() >= 2,
+            "single-arg DI must produce references refs: {:?}",
+            refs
+        );
         let names: Vec<_> = refs.iter().map(|r| r.reference_name.as_str()).collect();
-        assert!(names.contains(&"ToastService"), "ToastService missing: {:?}", names);
-        assert!(names.contains(&"HttpService"), "HttpService missing: {:?}", names);
+        assert!(
+            names.contains(&"ToastService"),
+            "ToastService missing: {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"HttpService"),
+            "HttpService missing: {:?}",
+            names
+        );
     }
 
     #[test]
@@ -1429,11 +1464,31 @@ services.TryAddSingleton<IConfig, ConfigImpl>();
             .iter()
             .filter(|r| r.reference_kind == "implements")
             .collect();
-        assert_eq!(impl_refs.len(), 3, "all three TryAdd* lifetimes must produce refs: {:?}", impl_refs);
-        let names: Vec<_> = impl_refs.iter().map(|r| r.reference_name.as_str()).collect();
-        assert!(names.contains(&"MemoryCache"), "MemoryCache missing: {:?}", names);
-        assert!(names.contains(&"BackgroundWorker"), "BackgroundWorker missing: {:?}", names);
-        assert!(names.contains(&"ConfigImpl"), "ConfigImpl missing: {:?}", names);
+        assert_eq!(
+            impl_refs.len(),
+            3,
+            "all three TryAdd* lifetimes must produce refs: {:?}",
+            impl_refs
+        );
+        let names: Vec<_> = impl_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
+        assert!(
+            names.contains(&"MemoryCache"),
+            "MemoryCache missing: {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"BackgroundWorker"),
+            "BackgroundWorker missing: {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"ConfigImpl"),
+            "ConfigImpl missing: {:?}",
+            names
+        );
     }
 
     #[test]
@@ -1455,8 +1510,16 @@ services.AddScoped<ICatalogLookupDataService<CatalogBrand>, CachedCatalogLookupD
             .iter()
             .filter(|r| r.reference_kind == "implements")
             .collect();
-        assert_eq!(impl_refs.len(), 1, "one nested-generic DI ref: {:?}", impl_refs);
-        assert_eq!(impl_refs[0].reference_name, "CachedCatalogLookupDataServiceDecorator");
+        assert_eq!(
+            impl_refs.len(),
+            1,
+            "one nested-generic DI ref: {:?}",
+            impl_refs
+        );
+        assert_eq!(
+            impl_refs[0].reference_name,
+            "CachedCatalogLookupDataServiceDecorator"
+        );
     }
 
     #[test]
@@ -1502,7 +1565,10 @@ services.AddScoped<Bar>();
             .extract(Path::new("Program.cs"), content, &ctx)
             .unwrap();
         assert_eq!(result.nodes[0].name, "DELETE /users/{id}");
-        assert_eq!(result.unresolved_refs[0].reference_name, "DeleteUserHandler");
+        assert_eq!(
+            result.unresolved_refs[0].reference_name,
+            "DeleteUserHandler"
+        );
     }
 
     #[test]

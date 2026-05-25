@@ -16,7 +16,7 @@ mod ui;
     about = "CodeWiki — tree-sitter knowledge graph for AI coding agents",
     long_about = "CodeWiki — tree-sitter knowledge graph for AI coding agents\n\nRun `codewiki <COMMAND> --help` for command-specific help.",
     after_help = "Run `codewiki <COMMAND> --help` for command-specific help.",
-    disable_help_subcommand = true,
+    disable_help_subcommand = true
 )]
 struct Cli {
     /// Reduce output to errors only
@@ -34,7 +34,6 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     // ── Common ────────────────────────────────────────────────────────────────
-
     /// Set up CodeWiki for this project and your AI agents  [START HERE]
     #[command(next_help_heading = "Common")]
     Setup {
@@ -99,7 +98,6 @@ enum Commands {
     },
 
     // ── Advanced ──────────────────────────────────────────────────────────────
-
     /// Initialize CodeWiki index for this project
     #[command(next_help_heading = "Advanced")]
     Init {
@@ -209,7 +207,6 @@ enum Commands {
     },
 
     // ── Management ────────────────────────────────────────────────────────────
-
     /// Wire CodeWiki into AI agent configs (subset of setup)
     #[command(next_help_heading = "Management")]
     Install {
@@ -258,7 +255,6 @@ enum Commands {
     },
 
     // ── Graph UI ──────────────────────────────────────────────────────────────
-
     /// Launch the interactive graph web UI
     #[command(next_help_heading = "Advanced")]
     Graph {
@@ -322,16 +318,24 @@ fn main() {
 
 fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
-        Commands::Setup { yes, target, path, ascii } => {
-            commands::setup::run(yes, target, path, ascii)
-        }
-        Commands::Doctor { path, strict } => {
-            commands::doctor::run(path, strict)
-        }
-        Commands::Serve { mcp, path, no_watch } => {
-            commands::serve::run(mcp, path, no_watch)
-        }
-        Commands::Install { yes, target, location, ascii } => {
+        Commands::Setup {
+            yes,
+            target,
+            path,
+            ascii,
+        } => commands::setup::run(yes, target, path, ascii),
+        Commands::Doctor { path, strict } => commands::doctor::run(path, strict),
+        Commands::Serve {
+            mcp,
+            path,
+            no_watch,
+        } => commands::serve::run(mcp, path, no_watch),
+        Commands::Install {
+            yes,
+            target,
+            location,
+            ascii,
+        } => {
             let opts = installer::InstallerOpts {
                 yes,
                 target: target.unwrap_or_else(|| "auto".to_string()),
@@ -341,7 +345,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             };
             installer::run_installer(opts)
         }
-        Commands::Uninstall { yes, target, location } => {
+        Commands::Uninstall {
+            yes,
+            target,
+            location,
+        } => {
             let opts = installer::UninstallOpts {
                 yes,
                 target: target.unwrap_or_else(|| "all".to_string()),
@@ -349,50 +357,25 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             };
             installer::run_uninstaller(opts)
         }
-        Commands::Init { path, no_index, .. } => {
-            commands::init::run(path, no_index)
-        }
-        Commands::Uninit { force, path } => {
-            commands::uninit::run(force, path)
-        }
-        Commands::Index { path } => {
-            commands::index::run(path)
-        }
-        Commands::Sync { path } => {
-            commands::sync::run(path)
-        }
-        Commands::Query { query, limit, path } => {
-            commands::query::run(query, limit, path)
-        }
-        Commands::Context { task, path } => {
-            commands::context::run(task, path)
-        }
-        Commands::Callers { name, depth, path } => {
-            commands::callers::run(name, depth, path)
-        }
-        Commands::Callees { name, depth, path } => {
-            commands::callees::run(name, depth, path)
-        }
-        Commands::Impact { name, depth, path } => {
-            commands::impact::run(name, depth, path)
-        }
-        Commands::Affected { files, path } => {
-            commands::affected::run(files, path)
-        }
-        Commands::Files { prefix, path } => {
-            commands::files::run(prefix, path)
-        }
-        Commands::Status { path } => {
-            commands::status::run(path)
-        }
-        Commands::Snapshot { output, path } => {
-            commands::snapshot::run_snapshot(output, path)
-        }
-        Commands::Restore { file, path } => {
-            commands::snapshot::run_restore(file, path)
-        }
-        Commands::Graph { port, path, no_open, max_nodes } => {
-            commands::graph::run(port, path, no_open, max_nodes)
-        }
+        Commands::Init { path, no_index, .. } => commands::init::run(path, no_index),
+        Commands::Uninit { force, path } => commands::uninit::run(force, path),
+        Commands::Index { path } => commands::index::run(path),
+        Commands::Sync { path } => commands::sync::run(path),
+        Commands::Query { query, limit, path } => commands::query::run(query, limit, path),
+        Commands::Context { task, path } => commands::context::run(task, path),
+        Commands::Callers { name, depth, path } => commands::callers::run(name, depth, path),
+        Commands::Callees { name, depth, path } => commands::callees::run(name, depth, path),
+        Commands::Impact { name, depth, path } => commands::impact::run(name, depth, path),
+        Commands::Affected { files, path } => commands::affected::run(files, path),
+        Commands::Files { prefix, path } => commands::files::run(prefix, path),
+        Commands::Status { path } => commands::status::run(path),
+        Commands::Snapshot { output, path } => commands::snapshot::run_snapshot(output, path),
+        Commands::Restore { file, path } => commands::snapshot::run_restore(file, path),
+        Commands::Graph {
+            port,
+            path,
+            no_open,
+            max_nodes,
+        } => commands::graph::run(port, path, no_open, max_nodes),
     }
 }

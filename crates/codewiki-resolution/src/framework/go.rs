@@ -23,7 +23,14 @@ use std::sync::OnceLock;
 
 // ─── Directory constants ───────────────────────────────────────────────────────
 
-const HANDLER_DIRS: &[&str] = &["handler", "handlers", "api", "routes", "controller", "controllers"];
+const HANDLER_DIRS: &[&str] = &[
+    "handler",
+    "handlers",
+    "api",
+    "routes",
+    "controller",
+    "controllers",
+];
 const SERVICE_DIRS: &[&str] = &["service", "services", "repository", "store", "pkg"];
 const MIDDLEWARE_DIRS: &[&str] = &["middleware", "middlewares"];
 const MODEL_DIRS: &[&str] = &["model", "models", "entity", "entities", "domain", "pkg"];
@@ -73,7 +80,10 @@ fn group_regex() -> &'static Regex {
 /// Handles dotted paths: `pkg.Handler`, `UserController.Create` → last segment.
 /// Handles trailing `()`: `h.ServeHTTP()` → `ServeHTTP`.
 fn extract_go_tail_ident(expr: &str) -> Option<String> {
-    let cleaned = expr.trim().trim_end_matches("()").replace(char::is_whitespace, "");
+    let cleaned = expr
+        .trim()
+        .trim_end_matches("()")
+        .replace(char::is_whitespace, "");
     static RE: OnceLock<Regex> = OnceLock::new();
     let re = RE.get_or_init(|| Regex::new(r"(?:\.|^)([A-Za-z_][A-Za-z0-9_]*)$").unwrap());
     re.captures(&cleaned).map(|c| c[1].to_string())
@@ -118,7 +128,10 @@ impl FrameworkResolver for GinResolver {
             return true;
         }
         // Fallback: project has .go files at all (F3: known_files elements are &String).
-        context.known_files.iter().any(|f: &String| f.ends_with(".go"))
+        context
+            .known_files
+            .iter()
+            .any(|f: &String| f.ends_with(".go"))
     }
 
     fn resolve(
@@ -141,10 +154,7 @@ impl FrameworkResolver for GinResolver {
         }
 
         // P2: *Service / *Repository / *Store → struct/interface in service dirs
-        if name.ends_with("Service")
-            || name.ends_with("Repository")
-            || name.ends_with("Store")
-        {
+        if name.ends_with("Service") || name.ends_with("Repository") || name.ends_with("Store") {
             if let Some(id) = super::django::resolve_by_name_kind(
                 name,
                 &[NodeKind::Struct, NodeKind::Interface, NodeKind::Function],
@@ -156,10 +166,7 @@ impl FrameworkResolver for GinResolver {
         }
 
         // P3: *Middleware / Auth* / Log* → function in middleware dirs
-        if name.ends_with("Middleware")
-            || name.starts_with("Auth")
-            || name.starts_with("Log")
-        {
+        if name.ends_with("Middleware") || name.starts_with("Auth") || name.starts_with("Log") {
             if let Some(id) = super::django::resolve_by_name_kind(
                 name,
                 &[NodeKind::Function, NodeKind::Method],
@@ -248,7 +255,11 @@ impl FrameworkResolver for GinResolver {
 
             // Extract handler tail ident for unresolved ref.
             // Use last comma-separated argument (may be multiple middleware + final handler).
-            let last_arg = handler_raw.split(',').next_back().unwrap_or(handler_raw).trim();
+            let last_arg = handler_raw
+                .split(',')
+                .next_back()
+                .unwrap_or(handler_raw)
+                .trim();
             if let Some(handler_name) = extract_go_tail_ident(last_arg) {
                 unresolved_refs.push(UnresolvedRef {
                     // F7: id follows express.rs convention.
@@ -371,7 +382,11 @@ v1 := r.Group("/api", func(v1 *gin.RouterGroup) {
         use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("go.mod"), b"module example.com/myapp\n\ngo 1.21\n").unwrap();
+        fs::write(
+            dir.path().join("go.mod"),
+            b"module example.com/myapp\n\ngo 1.21\n",
+        )
+        .unwrap();
 
         let caches = ResolverCaches::default_capacity();
         let aliases = PathAliasMap::default();
@@ -422,7 +437,11 @@ v1 := r.Group("/api", func(v1 *gin.RouterGroup) {
             .expect("extract ok");
 
         assert_eq!(result.nodes.len(), 3, "three route nodes");
-        let methods: Vec<_> = result.nodes.iter().map(|n| n.name.split_whitespace().next().unwrap()).collect();
+        let methods: Vec<_> = result
+            .nodes
+            .iter()
+            .map(|n| n.name.split_whitespace().next().unwrap())
+            .collect();
         assert!(methods.contains(&"GET"));
         assert!(methods.contains(&"POST"));
         assert!(methods.contains(&"DELETE"));

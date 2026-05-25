@@ -12,10 +12,8 @@ fn decorator_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         // @x.get/post/put/patch/delete/options/head('/path')
-        Regex::new(
-            r#"@(\w+)\.(get|post|put|patch|delete|options|head)\s*\(\s*['"]([^'"]+)['"]"#,
-        )
-        .expect("fastapi decorator_regex")
+        Regex::new(r#"@(\w+)\.(get|post|put|patch|delete|options|head)\s*\(\s*['"]([^'"]+)['"]"#)
+            .expect("fastapi decorator_regex")
     })
 }
 
@@ -27,7 +25,9 @@ fn next_def_regex() -> &'static Regex {
 pub struct FastApiResolver;
 
 impl FrameworkResolver for FastApiResolver {
-    fn name(&self) -> &'static str { "fastapi" }
+    fn name(&self) -> &'static str {
+        "fastapi"
+    }
     fn languages(&self) -> Option<&'static [Language]> {
         static LANGS: &[Language] = &[Language::Python];
         Some(LANGS)
@@ -36,12 +36,16 @@ impl FrameworkResolver for FastApiResolver {
     fn detect(&self, context: &ResolutionContext<'_>) -> bool {
         for f in &["requirements.txt", "pyproject.toml"] {
             if let Some(c) = context.read_file(f) {
-                if c.to_lowercase().contains("fastapi") { return true; }
+                if c.to_lowercase().contains("fastapi") {
+                    return true;
+                }
             }
         }
         for f in &["app.py", "main.py", "api.py"] {
             if let Some(c) = context.read_file(f) {
-                if c.contains("FastAPI(") { return true; }
+                if c.contains("FastAPI(") {
+                    return true;
+                }
             }
         }
         false
@@ -56,14 +60,24 @@ impl FrameworkResolver for FastApiResolver {
         if name.ends_with("_router") || name == "router" {
             let candidates = context.get_nodes_by_name(name);
             if let Some(n) = candidates.first() {
-                return Ok(Some(make_resolved_edge(reference, n.id.clone(), 0.8, self.name())));
+                return Ok(Some(make_resolved_edge(
+                    reference,
+                    n.id.clone(),
+                    0.8,
+                    self.name(),
+                )));
             }
         }
         if name.starts_with("get_") {
             let candidates = context.get_nodes_by_name(name);
             let fn_node = candidates.iter().find(|n| n.kind == NodeKind::Function);
             if let Some(n) = fn_node {
-                return Ok(Some(make_resolved_edge(reference, n.id.clone(), 0.75, self.name())));
+                return Ok(Some(make_resolved_edge(
+                    reference,
+                    n.id.clone(),
+                    0.75,
+                    self.name(),
+                )));
             }
         }
         Ok(None)
@@ -76,7 +90,9 @@ impl FrameworkResolver for FastApiResolver {
         _context: &ResolutionContext<'_>,
     ) -> Result<FrameworkExtractionResult, CodeWikiError> {
         let file_str = file_path.to_string_lossy();
-        if !file_str.ends_with(".py") { return Ok(FrameworkExtractionResult::empty()); }
+        if !file_str.ends_with(".py") {
+            return Ok(FrameworkExtractionResult::empty());
+        }
         let safe = strip_comments(content, CommentLang::Python);
         let mut nodes = Vec::new();
         let mut unresolved_refs = Vec::new();
@@ -89,9 +105,7 @@ impl FrameworkResolver for FastApiResolver {
 
             // Find the handler function immediately after the decorator
             let tail = &safe[match_end..];
-            let handler_name = next_def_regex()
-                .captures(tail)
-                .map(|c| c[1].to_string());
+            let handler_name = next_def_regex().captures(tail).map(|c| c[1].to_string());
 
             let route_id = format!("route:{}:{}:{}:{}", file_str, line, method, route_path);
             nodes.push(Node {
@@ -119,6 +133,10 @@ impl FrameworkResolver for FastApiResolver {
             }
         }
 
-        Ok(FrameworkExtractionResult { nodes, edges: Vec::new(), unresolved_refs })
+        Ok(FrameworkExtractionResult {
+            nodes,
+            edges: Vec::new(),
+            unresolved_refs,
+        })
     }
 }

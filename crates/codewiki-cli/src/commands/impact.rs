@@ -12,7 +12,13 @@ pub fn run(name: String, depth: u8, path: Option<PathBuf>) -> Result<()> {
 
     // Step 1: resolve name → node_id.
     let results = storage
-        .search_nodes(&name, SearchOptions { limit: 1, ..Default::default() })
+        .search_nodes(
+            &name,
+            SearchOptions {
+                limit: 1,
+                ..Default::default()
+            },
+        )
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let node = match results.into_iter().next() {
@@ -41,11 +47,18 @@ pub fn run(name: String, depth: u8, path: Option<PathBuf>) -> Result<()> {
     println!("  {} potentially affected nodes:", subgraph.nodes.len());
 
     let mut nodes: Vec<_> = subgraph.nodes.values().collect();
-    nodes.sort_by(|a, b| a.file_path.cmp(&b.file_path).then(a.start_line.cmp(&b.start_line)));
+    nodes.sort_by(|a, b| {
+        a.file_path
+            .cmp(&b.file_path)
+            .then(a.start_line.cmp(&b.start_line))
+    });
 
     for n in nodes {
         let kind = format!("{:?}", n.kind).to_lowercase();
-        println!("    \u{00b7} `{}` ({}) {}:{}", n.name, kind, n.file_path, n.start_line);
+        println!(
+            "    \u{00b7} `{}` ({}) {}:{}",
+            n.name, kind, n.file_path, n.start_line
+        );
     }
     Ok(())
 }

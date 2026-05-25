@@ -52,9 +52,16 @@ class Animal:
         let mut f = tempfile::NamedTempFile::with_suffix(".py").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        assert!(batch.nodes.iter().any(|n| n.name == "Animal"), "nodes: {:?}", batch.nodes.iter().map(|n| &n.name).collect::<Vec<_>>());
+        assert!(
+            batch.nodes.iter().any(|n| n.name == "Animal"),
+            "nodes: {:?}",
+            batch.nodes.iter().map(|n| &n.name).collect::<Vec<_>>()
+        );
         // Methods should be extracted inside class
-        assert!(batch.nodes.iter().any(|n| n.name == "speak" || n.name == "__init__"));
+        assert!(batch
+            .nodes
+            .iter()
+            .any(|n| n.name == "speak" || n.name == "__init__"));
     }
 
     #[test]

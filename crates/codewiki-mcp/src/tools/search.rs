@@ -19,11 +19,9 @@ pub async fn handle_search(
 
     let limit = limit.clamp(1, 100);
 
-    let kinds: Option<Vec<NodeKind>> = kind.as_deref().map(|k| {
-        parse_kind_filter(k)
-            .map(|nk| vec![nk])
-            .unwrap_or_default()
-    });
+    let kinds: Option<Vec<NodeKind>> = kind
+        .as_deref()
+        .map(|k| parse_kind_filter(k).map(|nk| vec![nk]).unwrap_or_default());
 
     let opts = SearchOptions {
         limit,

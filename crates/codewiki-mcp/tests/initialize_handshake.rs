@@ -53,40 +53,6 @@ fn find_binary() -> Option<std::path::PathBuf> {
 /// server. This does not require the binary to be built.
 #[tokio::test]
 async fn initialize_response_contains_protocol_version() {
-    use codewiki_mcp::{server::CodeWikiMcpServer, tools};
-    use codewiki_storage::QueryHandle;
-    use rmcp::model::{
-        Implementation, InitializeRequestParam, ProtocolVersion,
-    };
-    use std::sync::Arc;
-
-    // Minimal stub QueryHandle
-    struct NoopHandle;
-    impl QueryHandle for NoopHandle {
-        fn search_nodes(&self, _: &str, _: codewiki_storage::SearchOptions)
-            -> Result<Vec<codewiki_core::SearchResult>, codewiki_core::CodeWikiError> { Ok(vec![]) }
-        fn get_node_by_id(&self, _: &str)
-            -> Result<Option<codewiki_core::Node>, codewiki_core::CodeWikiError> { Ok(None) }
-        fn get_callers(&self, _: &str, _: usize)
-            -> Result<Vec<(codewiki_core::Node, codewiki_core::Edge)>, codewiki_core::CodeWikiError> { Ok(vec![]) }
-        fn get_callees(&self, _: &str, _: usize)
-            -> Result<Vec<(codewiki_core::Node, codewiki_core::Edge)>, codewiki_core::CodeWikiError> { Ok(vec![]) }
-        fn get_impact_radius(&self, _: &str, _: usize)
-            -> Result<codewiki_core::Subgraph, codewiki_core::CodeWikiError> { Ok(Default::default()) }
-        fn find_relevant_context(&self, _: &str, _: codewiki_storage::FindOpts)
-            -> Result<codewiki_core::Subgraph, codewiki_core::CodeWikiError> { Ok(Default::default()) }
-        fn get_code(&self, _: &str)
-            -> Result<Option<String>, codewiki_core::CodeWikiError> { Ok(None) }
-        fn get_stats(&self)
-            -> Result<codewiki_core::GraphStats, codewiki_core::CodeWikiError> {
-            Ok(codewiki_core::GraphStats { journal_mode: "wal".to_string(), ..Default::default() })
-        }
-        fn get_files(&self, _: Option<&codewiki_storage::FileFilter>)
-            -> Result<Vec<codewiki_core::FileRecord>, codewiki_core::CodeWikiError> { Ok(vec![]) }
-        fn get_affected_nodes(&self, _: &[std::path::PathBuf])
-            -> Result<Vec<codewiki_core::Node>, codewiki_core::CodeWikiError> { Ok(vec![]) }
-    }
-
     // Build the initialize result directly (in-process, no spawning needed)
     let result = codewiki_mcp::server::CodeWikiMcpServer::build_initialize_result();
 
@@ -124,8 +90,11 @@ fn initialize_handshake_e2e() {
     let tmp = tempfile::tempdir().expect("create temp dir");
     let project_dir = tmp.path();
     // Write a minimal source file so init has something to index.
-    std::fs::write(project_dir.join("hello.ts"), "function hello() { return 1; }\n")
-        .expect("write source file");
+    std::fs::write(
+        project_dir.join("hello.ts"),
+        "function hello() { return 1; }\n",
+    )
+    .expect("write source file");
     // Run `codewiki init` in the temp dir to create the index.
     let init_status = Command::new(&bin)
         .args(["init"])
@@ -157,7 +126,8 @@ fn initialize_handshake_e2e() {
     // Keep stdin open a bit so the server has time to respond
     std::thread::sleep(Duration::from_millis(100));
 
-    // Read the first JSON-RPC response line with a 1-second timeout
+    // Scan response lines (the server may emit log lines before the JSON-RPC
+    // response) until the protocol version appears or the 1-second deadline hits.
     let deadline = Instant::now() + Duration::from_secs(1);
     let reader = BufReader::new(stdout);
     let mut found_protocol_version = false;
@@ -166,17 +136,14 @@ fn initialize_handshake_e2e() {
         if Instant::now() > deadline {
             break;
         }
-        let line = match line {
-            Ok(l) if !l.is_empty() => l,
-            _ => break,
-        };
-
-        if line.contains("2024-11-05") {
-            found_protocol_version = true;
-            break;
+        match line {
+            Ok(l) if l.contains("2024-11-05") => {
+                found_protocol_version = true;
+                break;
+            }
+            Ok(_) => continue,
+            Err(_) => break,
         }
-        // Only read the first response line
-        break;
     }
 
     // Terminate the child

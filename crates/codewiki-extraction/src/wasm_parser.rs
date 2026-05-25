@@ -13,11 +13,7 @@
 // When the feature is off, these are needed by the no-op stubs below.
 // When the feature is on, they are re-imported inside the `inner` module.
 #[cfg(not(feature = "wasmtime-grammars"))]
-use {
-    crate::wasm_grammars::WasmGrammar,
-    codewiki_core::ExtractionBatch,
-    std::path::Path,
-};
+use {crate::wasm_grammars::WasmGrammar, codewiki_core::ExtractionBatch, std::path::Path};
 
 // ── Error type ─────────────────────────────────────────────────────────────────
 
@@ -43,8 +39,10 @@ pub enum WasmExtractionError {
 mod inner {
     use super::WasmExtractionError;
     use crate::ast_walker::extract_with_config;
-    use crate::languages::{lua::LuaExtractor, luau::LuauExtractor, pascal::PascalExtractor, scala::ScalaExtractor};
-    use crate::wasm_grammars::{WasmGrammar, LUA_WASM, LUAU_WASM, PASCAL_WASM, SCALA_WASM};
+    use crate::languages::{
+        lua::LuaExtractor, luau::LuauExtractor, pascal::PascalExtractor, scala::ScalaExtractor,
+    };
+    use crate::wasm_grammars::{WasmGrammar, LUAU_WASM, LUA_WASM, PASCAL_WASM, SCALA_WASM};
     use codewiki_core::ExtractionBatch;
     use std::cell::RefCell;
     use std::collections::HashMap;
@@ -90,7 +88,10 @@ mod inner {
         /// Return a mutable reference to the parser for `grammar`, initialising
         /// the `WasmStore` and loading the language on first use per thread.
         #[allow(clippy::map_entry)]
-        fn parser_for(&mut self, grammar: WasmGrammar) -> Result<&mut tree_sitter::Parser, WasmExtractionError> {
+        fn parser_for(
+            &mut self,
+            grammar: WasmGrammar,
+        ) -> Result<&mut tree_sitter::Parser, WasmExtractionError> {
             // Recycle the parser every N parses.
             if let Some(entry) = self.entries.get(&grammar) {
                 if entry.parse_count >= WASM_PARSER_RECYCLE_INTERVAL {
@@ -101,21 +102,25 @@ mod inner {
             if !self.entries.contains_key(&grammar) {
                 // WasmStore::new takes &Engine (not owned Engine).
                 let engine = get_engine();
-                let mut store = WasmStore::new(engine)
-                    .map_err(|e: tree_sitter::WasmError| WasmExtractionError::StoreInit(e.to_string()))?;
+                let mut store = WasmStore::new(engine).map_err(|e: tree_sitter::WasmError| {
+                    WasmExtractionError::StoreInit(e.to_string())
+                })?;
 
                 let name = grammar.grammar_name();
                 let bytes: &[u8] = match grammar {
-                    WasmGrammar::Lua    => LUA_WASM,
-                    WasmGrammar::Luau   => LUAU_WASM,
+                    WasmGrammar::Lua => LUA_WASM,
+                    WasmGrammar::Luau => LUAU_WASM,
                     WasmGrammar::Pascal => PASCAL_WASM,
-                    WasmGrammar::Scala  => SCALA_WASM,
+                    WasmGrammar::Scala => SCALA_WASM,
                 };
 
                 let load_start = std::time::Instant::now();
-                let language = store
-                    .load_language(name, bytes)
-                    .map_err(|e: tree_sitter::WasmError| WasmExtractionError::GrammarLoad(name, e.to_string()))?;
+                let language =
+                    store
+                        .load_language(name, bytes)
+                        .map_err(|e: tree_sitter::WasmError| {
+                            WasmExtractionError::GrammarLoad(name, e.to_string())
+                        })?;
                 tracing::info!(
                     grammar = name,
                     elapsed_ms = load_start.elapsed().as_millis(),
@@ -126,14 +131,22 @@ mod inner {
                 // set_wasm_store takes ownership of the store.
                 parser
                     .set_wasm_store(store)
-                    .map_err(|e: tree_sitter::LanguageError| WasmExtractionError::SetWasmStore(e.to_string()))?;
+                    .map_err(|e: tree_sitter::LanguageError| {
+                        WasmExtractionError::SetWasmStore(e.to_string())
+                    })?;
                 parser
                     .set_language(&language)
-                    .map_err(|e: tree_sitter::LanguageError| WasmExtractionError::SetLanguage(e.to_string()))?;
+                    .map_err(|e: tree_sitter::LanguageError| {
+                        WasmExtractionError::SetLanguage(e.to_string())
+                    })?;
 
                 self.entries.insert(
                     grammar,
-                    WasmEntry { parser, _language: language, parse_count: 0 },
+                    WasmEntry {
+                        parser,
+                        _language: language,
+                        parse_count: 0,
+                    },
                 );
             }
 
@@ -170,10 +183,10 @@ mod inner {
 
         // Dispatch to the per-language extractor (same extract_with_config path as native).
         let batch = match grammar {
-            WasmGrammar::Lua    => extract_with_config(&LuaExtractor,    &tree, source, path),
-            WasmGrammar::Luau   => extract_with_config(&LuauExtractor,   &tree, source, path),
+            WasmGrammar::Lua => extract_with_config(&LuaExtractor, &tree, source, path),
+            WasmGrammar::Luau => extract_with_config(&LuauExtractor, &tree, source, path),
             WasmGrammar::Pascal => extract_with_config(&PascalExtractor, &tree, source, path),
-            WasmGrammar::Scala  => extract_with_config(&ScalaExtractor,  &tree, source, path),
+            WasmGrammar::Scala => extract_with_config(&ScalaExtractor, &tree, source, path),
         };
 
         Ok(batch)
@@ -198,7 +211,7 @@ pub use inner::extract_wasm;
 
 #[cfg(all(test, feature = "wasmtime-grammars"))]
 mod tests {
-    use crate::wasm_grammars::{LUA_WASM, LUAU_WASM, PASCAL_WASM, SCALA_WASM};
+    use crate::wasm_grammars::{LUAU_WASM, LUA_WASM, PASCAL_WASM, SCALA_WASM};
     use tree_sitter::{wasmtime, WasmStore};
 
     /// Verifies ABI compat and that grammar_name() values match exported WASM symbols.
@@ -206,9 +219,9 @@ mod tests {
     fn wasm_grammars_load_without_error() {
         let engine = wasmtime::Engine::default();
         let mut store = WasmStore::new(&engine).unwrap();
-        store.load_language("lua",    LUA_WASM).unwrap();
-        store.load_language("luau",   LUAU_WASM).unwrap();
+        store.load_language("lua", LUA_WASM).unwrap();
+        store.load_language("luau", LUAU_WASM).unwrap();
         store.load_language("pascal", PASCAL_WASM).unwrap();
-        store.load_language("scala",  SCALA_WASM).unwrap();
+        store.load_language("scala", SCALA_WASM).unwrap();
     }
 }

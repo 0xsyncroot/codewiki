@@ -58,11 +58,8 @@ impl LanguageExtractor for RubyExtractor {
                         for arg in child.named_children(&mut c2) {
                             let arg_kind = arg.kind();
                             if arg_kind == "string" || arg_kind == "simple_string" {
-                                let raw = arg
-                                    .utf8_text(ctx.source.as_bytes())
-                                    .unwrap_or("");
-                                let module = raw
-                                    .trim_matches(|c: char| c == '"' || c == '\'');
+                                let raw = arg.utf8_text(ctx.source.as_bytes()).unwrap_or("");
+                                let module = raw.trim_matches(|c: char| c == '"' || c == '\'');
                                 if !module.is_empty() {
                                     ctx.emit_import(&from_id, module, line);
                                 }
@@ -74,9 +71,7 @@ impl LanguageExtractor for RubyExtractor {
                     // Some tree-sitter-ruby versions put the string directly as a child
                     let kind2 = child.kind();
                     if kind2 == "string" || kind2 == "simple_string" {
-                        let raw = child
-                            .utf8_text(ctx.source.as_bytes())
-                            .unwrap_or("");
+                        let raw = child.utf8_text(ctx.source.as_bytes()).unwrap_or("");
                         let module = raw.trim_matches(|c: char| c == '"' || c == '\'');
                         if !module.is_empty() {
                             ctx.emit_import(&from_id, module, line);
@@ -136,8 +131,10 @@ end
             .iter()
             .filter(|r| r.reference_kind == "imports")
             .collect();
-        let modules: Vec<&str> =
-            import_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        let modules: Vec<&str> = import_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
         assert!(
             modules.contains(&"json"),
             "json import missing; refs: {modules:?}"
@@ -153,8 +150,10 @@ end
             .iter()
             .filter(|r| r.reference_kind == "calls")
             .collect();
-        let callees: Vec<&str> =
-            call_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        let callees: Vec<&str> = call_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
         assert!(
             callees.contains(&"puts"),
             "puts call missing; callees: {callees:?}"

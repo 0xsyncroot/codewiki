@@ -56,10 +56,7 @@ pub async fn handle_impact(
         ));
     }
 
-    let mut out = format!(
-        "## Impact Radius of '{}' (depth {})\n\n",
-        symbol, depth
-    );
+    let mut out = format!("## Impact Radius of '{}' (depth {})\n\n", symbol, depth);
     out.push_str(&format!(
         "**{} affected symbols** across {} files, {} edges\n\n",
         all_nodes.len(),

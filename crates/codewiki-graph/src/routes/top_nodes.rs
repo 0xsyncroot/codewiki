@@ -39,9 +39,10 @@ pub async fn handle(
         _ => DegreeMetric::Total,
     };
     let limit = params.limit.unwrap_or(20).min(50);
-    let kind_filter: Option<codewiki_core::NodeKind> = params.kind.as_deref().and_then(|k| {
-        serde_json::from_value(serde_json::Value::String(k.to_string())).ok()
-    });
+    let kind_filter: Option<codewiki_core::NodeKind> = params
+        .kind
+        .as_deref()
+        .and_then(|k| serde_json::from_value(serde_json::Value::String(k.to_string())).ok());
 
     let db = state.db.clone();
     let result = spawn_blocking(move || {

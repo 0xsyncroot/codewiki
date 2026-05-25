@@ -174,7 +174,8 @@ impl ExtractionOrchestratorImpl {
             for batch in rx {
                 pending.push(batch);
                 if pending.len() >= FLUSH_BULK_SIZE {
-                    let chunk = std::mem::replace(&mut pending, Vec::with_capacity(FLUSH_BULK_SIZE));
+                    let chunk =
+                        std::mem::replace(&mut pending, Vec::with_capacity(FLUSH_BULK_SIZE));
                     match store.flush_bulk(chunk) {
                         Ok((f, n, e)) => {
                             tf.fetch_add(f, Ordering::Relaxed);
@@ -336,8 +337,12 @@ mod tests {
 
     struct NoopStore;
     impl ExtractionStore for NoopStore {
-        fn store_batch(&self, _batch: ExtractionBatch) -> Result<(), String> { Ok(()) }
-        fn delete_file(&self, _path: &Path) -> Result<(), String> { Ok(()) }
+        fn store_batch(&self, _batch: ExtractionBatch) -> Result<(), String> {
+            Ok(())
+        }
+        fn delete_file(&self, _path: &Path) -> Result<(), String> {
+            Ok(())
+        }
     }
 
     #[test]
@@ -363,7 +368,11 @@ mod tests {
             removed: Vec::new(),
         };
         let batches = orch.process_changes(changes);
-        assert!(!batches.is_empty(), "expected at least one batch for {}", ts_path.display());
+        assert!(
+            !batches.is_empty(),
+            "expected at least one batch for {}",
+            ts_path.display()
+        );
     }
 
     #[test]

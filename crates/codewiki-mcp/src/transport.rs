@@ -17,14 +17,16 @@ use rmcp::ServiceExt;
 /// watchdog cancels).
 pub async fn serve_stdio(server: CodeWikiMcpServer) -> Result<(), CodeWikiError> {
     let transport = (tokio::io::stdin(), tokio::io::stdout());
-    let service = server.serve(transport).await.map_err(|e| {
-        CodeWikiError::Mcp(format!("MCP transport error: {e}"))
-    })?;
+    let service = server
+        .serve(transport)
+        .await
+        .map_err(|e| CodeWikiError::Mcp(format!("MCP transport error: {e}")))?;
 
     // Wait for the service to complete (client disconnects).
-    service.waiting().await.map_err(|e| {
-        CodeWikiError::Mcp(format!("MCP service error: {e}"))
-    })?;
+    service
+        .waiting()
+        .await
+        .map_err(|e| CodeWikiError::Mcp(format!("MCP service error: {e}")))?;
 
     Ok(())
 }

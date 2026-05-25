@@ -20,8 +20,7 @@ fn setup_home() -> TempDir {
 // ── Shared utilities ──────────────────────────────────────────────────────────
 
 use codewiki_cli::installer::shared::{
-    instructions_template, json_deep_equal, read_json_file, CODEWIKI_SECTION_END,
-    CODEWIKI_SECTION_START,
+    json_deep_equal, read_json_file, CODEWIKI_SECTION_END, CODEWIKI_SECTION_START,
 };
 use codewiki_cli::installer::targets::{
     claude::ClaudeTarget, codex::CodexTarget, cursor::CursorTarget, hermes::HermesTarget,
@@ -57,7 +56,10 @@ fn claude_args_match_global_constant() {
         .iter()
         .map(|v| v.as_str().unwrap())
         .collect();
-    assert_eq!(args, MCP_SERVE_ARGS_GLOBAL, "Claude args must equal MCP_SERVE_ARGS_GLOBAL");
+    assert_eq!(
+        args, MCP_SERVE_ARGS_GLOBAL,
+        "Claude args must equal MCP_SERVE_ARGS_GLOBAL"
+    );
     let _ = result;
 }
 
@@ -106,10 +108,15 @@ fn claude_install_global_idempotent() {
     let result2 = target.install(Location::Global, &opts).unwrap();
     // MCP entry should report Unchanged.
     use codewiki_cli::installer::shared::FileAction;
-    let mcp = result2.files.iter().find(|f| {
-        f.path.to_string_lossy().ends_with(".claude.json")
-    });
-    assert_eq!(mcp.map(|f| f.action), Some(FileAction::Unchanged), "Second install must be Unchanged");
+    let mcp = result2
+        .files
+        .iter()
+        .find(|f| f.path.to_string_lossy().ends_with(".claude.json"));
+    assert_eq!(
+        mcp.map(|f| f.action),
+        Some(FileAction::Unchanged),
+        "Second install must be Unchanged"
+    );
 }
 
 #[test]
@@ -135,7 +142,11 @@ fn codex_install_idempotent() {
     let result2 = target.install(Location::Global, &opts).unwrap();
     use codewiki_cli::installer::shared::FileAction;
     let toml = result2.files.first().map(|f| f.action);
-    assert_eq!(toml, Some(FileAction::Unchanged), "Second Codex install must be Unchanged");
+    assert_eq!(
+        toml,
+        Some(FileAction::Unchanged),
+        "Second Codex install must be Unchanged"
+    );
 }
 
 #[test]
@@ -216,8 +227,14 @@ fn hermes_uninstall_removes_mcp_entry() {
     let opts = install_opts(false);
     target.install(Location::Global, &opts).unwrap();
 
-    let hermes_cfg = home::home_dir().unwrap().join(".hermes").join("config.yaml");
-    assert!(hermes_cfg.exists(), "config.yaml should be created on install");
+    let hermes_cfg = home::home_dir()
+        .unwrap()
+        .join(".hermes")
+        .join("config.yaml");
+    assert!(
+        hermes_cfg.exists(),
+        "config.yaml should be created on install"
+    );
 
     target.uninstall(Location::Global).unwrap();
     let content = fs::read_to_string(&hermes_cfg).unwrap_or_default();
@@ -250,7 +267,9 @@ fn claude_install_preserves_sibling_mcp_servers() {
     codewiki_cli::installer::shared::write_json_file(&mcp_file, &pre).unwrap();
 
     let target = ClaudeTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
     let config = read_json_file(&mcp_file);
     assert!(
@@ -268,7 +287,9 @@ fn claude_install_preserves_sibling_mcp_servers() {
 fn claude_uninstall_preserves_sibling_mcp_servers() {
     let _home = setup_home();
     let target = ClaudeTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
     let mcp_file = home::home_dir().unwrap().join(".claude.json");
     let mut config = read_json_file(&mcp_file);
@@ -301,14 +322,21 @@ fn claude_uninstall_preserves_sibling_mcp_servers() {
 fn claude_install_adds_permissions_when_auto_allow() {
     let _home = setup_home();
     let target = ClaudeTarget;
-    target.install(Location::Global, &install_opts(true)).unwrap();
+    target
+        .install(Location::Global, &install_opts(true))
+        .unwrap();
 
-    let settings_path = home::home_dir().unwrap().join(".claude").join("settings.json");
+    let settings_path = home::home_dir()
+        .unwrap()
+        .join(".claude")
+        .join("settings.json");
     assert!(settings_path.exists(), "settings.json should be created");
     let settings = read_json_file(&settings_path);
     let allow = settings["permissions"]["allow"].as_array().unwrap();
     assert!(
-        allow.iter().any(|p| p.as_str() == Some("mcp__codewiki__codewiki_search")),
+        allow
+            .iter()
+            .any(|p| p.as_str() == Some("mcp__codewiki__codewiki_search")),
         "permissions should contain codewiki_search"
     );
 }
@@ -318,9 +346,14 @@ fn claude_install_adds_permissions_when_auto_allow() {
 fn claude_install_no_auto_allow_skips_permissions() {
     let _home = setup_home();
     let target = ClaudeTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
-    let settings_path = home::home_dir().unwrap().join(".claude").join("settings.json");
+    let settings_path = home::home_dir()
+        .unwrap()
+        .join(".claude")
+        .join("settings.json");
     // File may or may not exist; if it does, codewiki perms must not be present.
     if settings_path.exists() {
         let settings = read_json_file(&settings_path);
@@ -348,7 +381,9 @@ fn claude_install_no_auto_allow_skips_permissions() {
 fn claude_install_writes_claude_md() {
     let _home = setup_home();
     let target = ClaudeTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
     let md_path = home::home_dir().unwrap().join(".claude").join("CLAUDE.md");
     assert!(md_path.exists(), "CLAUDE.md should be created");
@@ -371,7 +406,10 @@ fn claude_md_idempotent_on_reinstall() {
 
     target.install(Location::Global, &opts).unwrap();
     let content2 = fs::read_to_string(&md_path).unwrap();
-    assert_eq!(content1, content2, "CLAUDE.md must be byte-identical on re-install");
+    assert_eq!(
+        content1, content2,
+        "CLAUDE.md must be byte-identical on re-install"
+    );
 }
 
 #[test]
@@ -379,7 +417,9 @@ fn claude_md_idempotent_on_reinstall() {
 fn codex_install_writes_agents_md() {
     let _home = setup_home();
     let target = CodexTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
     let md_path = home::home_dir().unwrap().join(".codex").join("AGENTS.md");
     assert!(md_path.exists(), "AGENTS.md should be created");
@@ -392,12 +432,17 @@ fn codex_install_writes_agents_md() {
 fn opencode_install_writes_agents_md() {
     let _home = setup_home();
     let target = OpencodeTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
     // Global config dir for opencode: ~/.config/opencode/AGENTS.md
     let home = home::home_dir().unwrap();
     let md_path = home.join(".config").join("opencode").join("AGENTS.md");
-    assert!(md_path.exists(), "AGENTS.md should be created for opencode global");
+    assert!(
+        md_path.exists(),
+        "AGENTS.md should be created for opencode global"
+    );
     let content = fs::read_to_string(&md_path).unwrap();
     assert!(content.contains(CODEWIKI_SECTION_START));
 }
@@ -410,10 +455,13 @@ fn opencode_install_writes_agents_md() {
 #[serial]
 fn json_deep_equal_basic() {
     use serde_json::json;
-    assert!(json_deep_equal(&json!({"a":1,"b":2}), &json!({"b":2,"a":1})));
+    assert!(json_deep_equal(
+        &json!({"a":1,"b":2}),
+        &json!({"b":2,"a":1})
+    ));
     assert!(!json_deep_equal(&json!({"a":1}), &json!({"a":2})));
-    assert!(json_deep_equal(&json!(["a","b"]), &json!(["a","b"])));
-    assert!(!json_deep_equal(&json!(["a","b"]), &json!(["b","a"])));
+    assert!(json_deep_equal(&json!(["a", "b"]), &json!(["a", "b"])));
+    assert!(!json_deep_equal(&json!(["a", "b"]), &json!(["b", "a"])));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -425,7 +473,9 @@ fn json_deep_equal_basic() {
 fn codex_toml_has_correct_structure() {
     let _home = setup_home();
     let target = CodexTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
     let toml_path = home::home_dir().unwrap().join(".codex").join("config.toml");
     assert!(toml_path.exists());
@@ -445,14 +495,25 @@ fn codex_toml_has_correct_structure() {
 fn hermes_yaml_has_mcp_servers_and_toolset() {
     let _home = setup_home();
     let target = HermesTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
-    let yaml_path = home::home_dir().unwrap().join(".hermes").join("config.yaml");
+    let yaml_path = home::home_dir()
+        .unwrap()
+        .join(".hermes")
+        .join("config.yaml");
     assert!(yaml_path.exists());
     let content = fs::read_to_string(&yaml_path).unwrap();
-    assert!(content.contains("mcp_servers:"), "must have mcp_servers block");
+    assert!(
+        content.contains("mcp_servers:"),
+        "must have mcp_servers block"
+    );
     assert!(content.contains("  codewiki:"), "must have codewiki child");
-    assert!(content.contains("mcp-codewiki"), "must have platform_toolsets entry");
+    assert!(
+        content.contains("mcp-codewiki"),
+        "must have platform_toolsets entry"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -464,7 +525,9 @@ fn hermes_yaml_has_mcp_servers_and_toolset() {
 fn opencode_jsonc_has_correct_shape() {
     let _home = setup_home();
     let target = OpencodeTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
 
     let home = home::home_dir().unwrap();
     let jsonc_path = home.join(".config").join("opencode").join("opencode.jsonc");
@@ -495,7 +558,9 @@ fn is_installed_returns_false_before_install() {
 fn is_installed_returns_true_after_install() {
     let _home = setup_home();
     let target = ClaudeTarget;
-    target.install(Location::Global, &install_opts(false)).unwrap();
+    target
+        .install(Location::Global, &install_opts(false))
+        .unwrap();
     assert!(target.is_installed(Location::Global));
 }
 
@@ -554,7 +619,10 @@ fn install_target_claude_skips_target_prompt() {
     codewiki_cli::installer::run_installer(opts).expect("installer must succeed");
 
     // Claude config must exist.
-    assert!(home.join(".claude.json").exists(), "~/.claude.json must be created for --target claude");
+    assert!(
+        home.join(".claude.json").exists(),
+        "~/.claude.json must be created for --target claude"
+    );
 
     // Other targets must NOT be written.
     assert!(
@@ -566,7 +634,11 @@ fn install_target_claude_skips_target_prompt() {
         "~/.codex/config.toml must NOT be created when --target claude"
     );
     assert!(
-        !home.join(".config").join("opencode").join("opencode.jsonc").exists(),
+        !home
+            .join(".config")
+            .join("opencode")
+            .join("opencode.jsonc")
+            .exists(),
         "opencode.jsonc must NOT be created when --target claude"
     );
     assert!(
@@ -592,12 +664,27 @@ fn install_target_all_selects_all_targets() {
     codewiki_cli::installer::run_installer(opts).expect("installer must succeed");
 
     // All five target config files must exist.
-    assert!(home.join(".claude.json").exists(), "~/.claude.json (Claude)");
-    assert!(home.join(".cursor").join("mcp.json").exists(), "~/.cursor/mcp.json (Cursor)");
-    assert!(home.join(".codex").join("config.toml").exists(), "~/.codex/config.toml (Codex)");
     assert!(
-        home.join(".config").join("opencode").join("opencode.jsonc").exists(),
+        home.join(".claude.json").exists(),
+        "~/.claude.json (Claude)"
+    );
+    assert!(
+        home.join(".cursor").join("mcp.json").exists(),
+        "~/.cursor/mcp.json (Cursor)"
+    );
+    assert!(
+        home.join(".codex").join("config.toml").exists(),
+        "~/.codex/config.toml (Codex)"
+    );
+    assert!(
+        home.join(".config")
+            .join("opencode")
+            .join("opencode.jsonc")
+            .exists(),
         "opencode.jsonc (opencode)"
     );
-    assert!(home.join(".hermes").join("config.yaml").exists(), "~/.hermes/config.yaml (Hermes)");
+    assert!(
+        home.join(".hermes").join("config.yaml").exists(),
+        "~/.hermes/config.yaml (Hermes)"
+    );
 }

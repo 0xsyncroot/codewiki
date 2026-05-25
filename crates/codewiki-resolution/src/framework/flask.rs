@@ -23,7 +23,9 @@ fn decorator_regex() -> &'static Regex {
 pub struct FlaskResolver;
 
 impl FrameworkResolver for FlaskResolver {
-    fn name(&self) -> &'static str { "flask" }
+    fn name(&self) -> &'static str {
+        "flask"
+    }
     fn languages(&self) -> Option<&'static [Language]> {
         static LANGS: &[Language] = &[Language::Python];
         Some(LANGS)
@@ -32,12 +34,16 @@ impl FrameworkResolver for FlaskResolver {
     fn detect(&self, context: &ResolutionContext<'_>) -> bool {
         for f in &["requirements.txt", "pyproject.toml"] {
             if let Some(c) = context.read_file(f) {
-                if c.to_lowercase().contains("flask") { return true; }
+                if c.to_lowercase().contains("flask") {
+                    return true;
+                }
             }
         }
         for f in &["app.py", "application.py", "main.py", "__init__.py"] {
             if let Some(c) = context.read_file(f) {
-                if c.contains("Flask(__name__)") { return true; }
+                if c.contains("Flask(__name__)") {
+                    return true;
+                }
             }
         }
         false
@@ -52,7 +58,12 @@ impl FrameworkResolver for FlaskResolver {
         if name.ends_with("_bp") || name.ends_with("_blueprint") {
             let candidates = context.get_nodes_by_name(name);
             if let Some(n) = candidates.first() {
-                return Ok(Some(make_resolved_edge(reference, n.id.clone(), 0.8, self.name())));
+                return Ok(Some(make_resolved_edge(
+                    reference,
+                    n.id.clone(),
+                    0.8,
+                    self.name(),
+                )));
             }
         }
         Ok(None)
@@ -65,7 +76,9 @@ impl FrameworkResolver for FlaskResolver {
         _context: &ResolutionContext<'_>,
     ) -> Result<FrameworkExtractionResult, CodeWikiError> {
         let file_str = file_path.to_string_lossy();
-        if !file_str.ends_with(".py") { return Ok(FrameworkExtractionResult::empty()); }
+        if !file_str.ends_with(".py") {
+            return Ok(FrameworkExtractionResult::empty());
+        }
         let safe = strip_comments(content, CommentLang::Python);
         let mut nodes = Vec::new();
         let mut unresolved_refs = Vec::new();
@@ -97,6 +110,10 @@ impl FrameworkResolver for FlaskResolver {
             });
         }
 
-        Ok(FrameworkExtractionResult { nodes, edges: Vec::new(), unresolved_refs })
+        Ok(FrameworkExtractionResult {
+            nodes,
+            edges: Vec::new(),
+            unresolved_refs,
+        })
     }
 }

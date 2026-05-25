@@ -9,7 +9,7 @@
 //! - A `tokio::sync::broadcast` channel for `FrameworkConfigChanged` events.
 //! - An `AtomicBool` SYNCING flag to prevent concurrent syncs.
 
-use crate::events::{is_framework_config, FsChangeKind, FrameworkConfigChanged};
+use crate::events::{is_framework_config, FrameworkConfigChanged, FsChangeKind};
 use crate::watch_policy::watch_disabled_reason;
 use codewiki_extraction::is_source_file;
 use notify_debouncer_full::notify::RecursiveMode;
@@ -49,7 +49,10 @@ impl Default for WatcherConfig {
 ///
 /// Drop to stop watching.
 pub struct FileWatcher {
-    _debouncer: notify_debouncer_full::Debouncer<notify_debouncer_full::notify::RecommendedWatcher, notify_debouncer_full::RecommendedCache>,
+    _debouncer: notify_debouncer_full::Debouncer<
+        notify_debouncer_full::notify::RecommendedWatcher,
+        notify_debouncer_full::RecommendedCache,
+    >,
     pub changes_rx: mpsc::UnboundedReceiver<WatcherChanges>,
     pub framework_tx: broadcast::Sender<FrameworkConfigChanged>,
     pub syncing: Arc<AtomicBool>,
@@ -105,9 +108,15 @@ impl FileWatcher {
                             }
 
                             match kind {
-                                Some(EventClass::Created) => { changes.added.insert(path); }
-                                Some(EventClass::Modified) => { changes.modified.insert(path); }
-                                Some(EventClass::Removed) => { changes.removed.insert(path); }
+                                Some(EventClass::Created) => {
+                                    changes.added.insert(path);
+                                }
+                                Some(EventClass::Modified) => {
+                                    changes.modified.insert(path);
+                                }
+                                Some(EventClass::Removed) => {
+                                    changes.removed.insert(path);
+                                }
                                 None => {}
                             }
                         }
@@ -185,8 +194,7 @@ fn classify_event(kind: &notify_debouncer_full::notify::EventKind) -> Option<Eve
 }
 
 fn is_in_codewiki_dir(path: &Path) -> bool {
-    path.components()
-        .any(|c| c.as_os_str() == ".codewiki")
+    path.components().any(|c| c.as_os_str() == ".codewiki")
 }
 
 fn normalize_path(path: &Path) -> PathBuf {

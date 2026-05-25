@@ -53,6 +53,14 @@ public:
         let mut f = tempfile::NamedTempFile::with_suffix(".cpp").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        assert!(batch.nodes.iter().any(|n| n.name == "Calculator"), "nodes: {:?}", batch.nodes.iter().map(|n| n.name.as_str()).collect::<Vec<_>>());
+        assert!(
+            batch.nodes.iter().any(|n| n.name == "Calculator"),
+            "nodes: {:?}",
+            batch
+                .nodes
+                .iter()
+                .map(|n| n.name.as_str())
+                .collect::<Vec<_>>()
+        );
     }
 }

@@ -9,8 +9,20 @@ use codewiki_core::NodeKind;
 /// Node kinds that provide high information value in context results.
 /// Imports/exports are excluded because they have near-zero information density.
 pub const HIGH_VALUE_NODE_KINDS: &[&str] = &[
-    "function", "method", "class", "interface", "type_alias", "struct", "trait",
-    "component", "route", "variable", "constant", "enum", "module", "namespace",
+    "function",
+    "method",
+    "class",
+    "interface",
+    "type_alias",
+    "struct",
+    "trait",
+    "component",
+    "route",
+    "variable",
+    "constant",
+    "enum",
+    "module",
+    "namespace",
 ];
 
 // ---------------------------------------------------------------------------
@@ -35,21 +47,15 @@ pub fn extract_symbols_from_query(query: &str) -> Vec<String> {
     let camel_re = CAMEL_RE.get_or_init(|| {
         Regex::new(r"\b([A-Z][a-z]+(?:[A-Z][a-z]*)*|[a-z]+(?:[A-Z][a-z]*)+)\b").unwrap()
     });
-    let snake_re = SNAKE_RE.get_or_init(|| {
-        Regex::new(r"(?i)\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b").unwrap()
-    });
-    let screaming_re = SCREAMING_RE.get_or_init(|| {
-        Regex::new(r"\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\b").unwrap()
-    });
-    let acronym_re = ACRONYM_RE.get_or_init(|| {
-        Regex::new(r"\b([A-Z]{2,})\b").unwrap()
-    });
+    let snake_re =
+        SNAKE_RE.get_or_init(|| Regex::new(r"(?i)\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b").unwrap());
+    let screaming_re =
+        SCREAMING_RE.get_or_init(|| Regex::new(r"\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\b").unwrap());
+    let acronym_re = ACRONYM_RE.get_or_init(|| Regex::new(r"\b([A-Z]{2,})\b").unwrap());
     let dot_re = DOT_RE.get_or_init(|| {
         Regex::new(r"\b([a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z][a-zA-Z0-9]*)+)\b").unwrap()
     });
-    let lower_re = LOWER_RE.get_or_init(|| {
-        Regex::new(r"\b([a-z][a-z0-9]{2,})\b").unwrap()
-    });
+    let lower_re = LOWER_RE.get_or_init(|| Regex::new(r"\b([a-z][a-z0-9]{2,})\b").unwrap());
 
     let mut symbols: HashSet<String> = HashSet::new();
 
@@ -110,31 +116,164 @@ pub fn extract_symbols_from_query(query: &str) -> Vec<String> {
     // Filter out common English words that aren't likely symbol names.
     // Exact port of TS commonWords set (lines 104-129).
     let common_words: HashSet<&str> = [
-        "the", "and", "for", "with", "from", "this", "that", "have", "been",
-        "will", "would", "could", "should", "does", "done", "make", "made",
-        "use", "used", "using", "work", "works", "find", "found", "show",
-        "call", "called", "calling", "get", "set", "add", "all", "any",
-        "how", "what", "when", "where", "which", "who", "why",
-        "not", "but", "are", "was", "were", "has", "had", "its",
-        "can", "did", "may", "also", "into", "than", "then", "them",
-        "each", "other", "some", "such", "only", "same", "about",
-        "after", "before", "between", "through", "during", "without",
-        "again", "further", "once", "here", "there", "both", "just",
-        "more", "most", "very", "being", "having", "doing",
-        "system", "need", "needs", "want", "wants", "like", "look",
-        "change", "changes", "changed", "changing",
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "have",
+        "been",
+        "will",
+        "would",
+        "could",
+        "should",
+        "does",
+        "done",
+        "make",
+        "made",
+        "use",
+        "used",
+        "using",
+        "work",
+        "works",
+        "find",
+        "found",
+        "show",
+        "call",
+        "called",
+        "calling",
+        "get",
+        "set",
+        "add",
+        "all",
+        "any",
+        "how",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "not",
+        "but",
+        "are",
+        "was",
+        "were",
+        "has",
+        "had",
+        "its",
+        "can",
+        "did",
+        "may",
+        "also",
+        "into",
+        "than",
+        "then",
+        "them",
+        "each",
+        "other",
+        "some",
+        "such",
+        "only",
+        "same",
+        "about",
+        "after",
+        "before",
+        "between",
+        "through",
+        "during",
+        "without",
+        "again",
+        "further",
+        "once",
+        "here",
+        "there",
+        "both",
+        "just",
+        "more",
+        "most",
+        "very",
+        "being",
+        "having",
+        "doing",
+        "system",
+        "need",
+        "needs",
+        "want",
+        "wants",
+        "like",
+        "look",
+        "change",
+        "changes",
+        "changed",
+        "changing",
         // Common English nouns/verbs that match thousands of unrelated code symbols
-        "layer", "handle", "handles", "handling", "incoming", "outgoing",
-        "data", "flow", "flows", "level", "levels", "request", "requests",
-        "response", "responses", "implement", "implements", "implementation",
-        "interface", "interfaces", "class", "classes", "method", "methods",
-        "trigger", "triggers", "affected", "affect", "affects",
-        "else", "code", "failing", "failed", "silently", "decide", "decides",
-        "return", "returns", "returned", "take", "takes", "taken",
-        "check", "checks", "checked", "create", "creates", "created",
-        "read", "reads", "write", "writes", "written",
-        "start", "starts", "stop", "stops", "run", "runs", "running",
-    ].iter().copied().collect();
+        "layer",
+        "handle",
+        "handles",
+        "handling",
+        "incoming",
+        "outgoing",
+        "data",
+        "flow",
+        "flows",
+        "level",
+        "levels",
+        "request",
+        "requests",
+        "response",
+        "responses",
+        "implement",
+        "implements",
+        "implementation",
+        "interface",
+        "interfaces",
+        "class",
+        "classes",
+        "method",
+        "methods",
+        "trigger",
+        "triggers",
+        "affected",
+        "affect",
+        "affects",
+        "else",
+        "code",
+        "failing",
+        "failed",
+        "silently",
+        "decide",
+        "decides",
+        "return",
+        "returns",
+        "returned",
+        "take",
+        "takes",
+        "taken",
+        "check",
+        "checks",
+        "checked",
+        "create",
+        "creates",
+        "created",
+        "read",
+        "reads",
+        "write",
+        "writes",
+        "written",
+        "start",
+        "starts",
+        "stop",
+        "stops",
+        "run",
+        "runs",
+        "running",
+    ]
+    .iter()
+    .copied()
+    .collect();
 
     symbols
         .into_iter()
@@ -160,7 +299,7 @@ pub fn get_stem_variants(sym: &str) -> Vec<String> {
     // -ing suffix
     if lower.ends_with("ing") && lower.len() > 4 {
         variants.push(lower[..lower.len() - 3].to_string()); // e.g. running → runn (not ideal but matches TS)
-        // also try dropping 'ing' and adding 'e': running → run (handled by -ing rule)
+                                                             // also try dropping 'ing' and adding 'e': running → run (handled by -ing rule)
     }
 
     // -s suffix
@@ -204,11 +343,19 @@ pub fn name_match_bonus(node_name: &str, query: &str) -> i32 {
     let query_lower_compact = query.replace(char::is_whitespace, "").to_lowercase();
 
     // Exact match
-    if name_lower == query_lower_compact { return 80; }
+    if name_lower == query_lower_compact {
+        return 80;
+    }
 
     // Exact match on a query token
-    let query_tokens: Vec<String> = query.split_whitespace().map(|t| t.to_lowercase()).filter(|t| t.len() >= 2).collect();
-    if query_tokens.len() > 1 && query_tokens.contains(&name_lower) { return 60; }
+    let query_tokens: Vec<String> = query
+        .split_whitespace()
+        .map(|t| t.to_lowercase())
+        .filter(|t| t.len() >= 2)
+        .collect();
+    if query_tokens.len() > 1 && query_tokens.contains(&name_lower) {
+        return 60;
+    }
 
     // Name starts with query
     if name_lower.starts_with(&query_lower_compact) {
@@ -228,7 +375,9 @@ pub fn name_match_bonus(node_name: &str, query: &str) -> i32 {
     }
 
     // Name contains query as substring
-    if name_lower.contains(&query_lower_compact) { return 10; }
+    if name_lower.contains(&query_lower_compact) {
+        return 10;
+    }
 
     0
 }
@@ -236,7 +385,9 @@ pub fn name_match_bonus(node_name: &str, query: &str) -> i32 {
 /// Score relevance of a file path to a query.
 pub fn score_path_relevance(file_path: &str, query: &str) -> i32 {
     let terms = extract_search_terms(query);
-    if terms.is_empty() { return 0; }
+    if terms.is_empty() {
+        return 0;
+    }
 
     let path_lower = file_path.to_lowercase();
     let file_name = std::path::Path::new(file_path)
@@ -252,9 +403,13 @@ pub fn score_path_relevance(file_path: &str, query: &str) -> i32 {
 
     let mut score: i32 = 0;
     for term in &terms {
-        if file_name.contains(term.as_str()) { score += 10; }
-        else if dir_name.contains(term.as_str()) { score += 5; }
-        else if path_lower.contains(term.as_str()) { score += 3; }
+        if file_name.contains(term.as_str()) {
+            score += 10;
+        } else if dir_name.contains(term.as_str()) {
+            score += 5;
+        } else if path_lower.contains(term.as_str()) {
+            score += 3;
+        }
     }
 
     // Penalize test files unless query is about tests
@@ -272,18 +427,20 @@ pub fn extract_search_terms(query: &str) -> Vec<String> {
     let mut tokens: HashSet<String> = HashSet::new();
 
     // CamelCase split
-    let camel_split = query
-        .chars()
-        .fold(String::new(), |mut acc, c| {
-            if c.is_uppercase() && !acc.is_empty() { acc.push(' '); }
-            acc.push(c);
-            acc
-        });
+    let camel_split = query.chars().fold(String::new(), |mut acc, c| {
+        if c.is_uppercase() && !acc.is_empty() {
+            acc.push(' ');
+        }
+        acc.push(c);
+        acc
+    });
     let normalised = camel_split.replace(['_', '.'], " ");
 
     for word in normalised.split_whitespace() {
         let lower = word.to_lowercase();
-        if lower.len() >= 3 { tokens.insert(lower); }
+        if lower.len() >= 3 {
+            tokens.insert(lower);
+        }
     }
     tokens.into_iter().collect()
 }
@@ -345,47 +502,85 @@ mod tests {
     fn extract_symbols_filters_stopwords() {
         // "how", "does", "the" are stopwords; "loop" is NOT a stopword — should be kept
         let symbols = extract_symbols_from_query("how does the loop work");
-        assert!(!symbols.contains(&"how".to_string()), "stopword 'how' should be filtered");
-        assert!(!symbols.contains(&"does".to_string()), "stopword 'does' should be filtered");
-        assert!(!symbols.contains(&"the".to_string()), "stopword 'the' should be filtered");
-        assert!(!symbols.contains(&"work".to_string()), "stopword 'work' should be filtered");
+        assert!(
+            !symbols.contains(&"how".to_string()),
+            "stopword 'how' should be filtered"
+        );
+        assert!(
+            !symbols.contains(&"does".to_string()),
+            "stopword 'does' should be filtered"
+        );
+        assert!(
+            !symbols.contains(&"the".to_string()),
+            "stopword 'the' should be filtered"
+        );
+        assert!(
+            !symbols.contains(&"work".to_string()),
+            "stopword 'work' should be filtered"
+        );
         // "loop" is not a stopword (len >= 3, lowercase)
-        assert!(symbols.contains(&"loop".to_string()), "non-stopword 'loop' should survive");
+        assert!(
+            symbols.contains(&"loop".to_string()),
+            "non-stopword 'loop' should survive"
+        );
     }
 
     #[test]
     fn extract_symbols_filters_batch_is_not_a_stopword() {
         // "batch" is not in commonWords — should survive
         let symbols = extract_symbols_from_query("how does the batch loop avoid infinite loops");
-        assert!(symbols.contains(&"batch".to_string()), "'batch' should be extracted");
+        assert!(
+            symbols.contains(&"batch".to_string()),
+            "'batch' should be extracted"
+        );
         assert!(!symbols.contains(&"how".to_string()), "stopword filtered");
     }
 
     #[test]
     fn extract_symbols_camel_case() {
         let symbols = extract_symbols_from_query("use the BatchProcessor to handle items");
-        assert!(symbols.contains(&"BatchProcessor".to_string()), "CamelCase extracted");
+        assert!(
+            symbols.contains(&"BatchProcessor".to_string()),
+            "CamelCase extracted"
+        );
     }
 
     #[test]
     fn extract_symbols_snake_case() {
         let symbols = extract_symbols_from_query("call run_until_empty to drain");
-        assert!(symbols.contains(&"run_until_empty".to_string()), "snake_case extracted");
+        assert!(
+            symbols.contains(&"run_until_empty".to_string()),
+            "snake_case extracted"
+        );
     }
 
     #[test]
     fn extract_symbols_acronym() {
         let symbols = extract_symbols_from_query("parse REST API calls via HTTP");
-        assert!(symbols.contains(&"REST".to_string()), "acronym REST extracted");
-        assert!(symbols.contains(&"API".to_string()), "acronym API extracted");
-        assert!(symbols.contains(&"HTTP".to_string()), "acronym HTTP extracted");
+        assert!(
+            symbols.contains(&"REST".to_string()),
+            "acronym REST extracted"
+        );
+        assert!(
+            symbols.contains(&"API".to_string()),
+            "acronym API extracted"
+        );
+        assert!(
+            symbols.contains(&"HTTP".to_string()),
+            "acronym HTTP extracted"
+        );
     }
 
     #[test]
     fn extract_symbols_dot_notation() {
         let symbols = extract_symbols_from_query("access app.isPackaged for config");
-        assert!(symbols.iter().any(|s| s == "app.isPackaged" || s == "isPackaged"),
-            "dot notation parts extracted; got: {:?}", symbols);
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s == "app.isPackaged" || s == "isPackaged"),
+            "dot notation parts extracted; got: {:?}",
+            symbols
+        );
     }
 
     #[test]

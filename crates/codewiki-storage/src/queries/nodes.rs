@@ -1,8 +1,8 @@
+use crate::search::normalize_for_fts;
 /// Prepared-statement helpers for node CRUD operations.
 use codewiki_core::{CodeWikiError, Node, NodeKind};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use serde_json;
-use crate::search::normalize_for_fts;
 
 // ---------------------------------------------------------------------------
 // Row → Node conversion
@@ -108,7 +108,7 @@ pub fn insert_node(conn: &Connection, node: &Node) -> Result<(), CodeWikiError> 
         node.is_exported as i64,
         now_ms(),
         is_async,
-        node.metadata,  // decorators column — stores the raw metadata JSON
+        node.metadata, // decorators column — stores the raw metadata JSON
     ])?;
     Ok(())
 }
@@ -175,20 +175,19 @@ pub fn nodes_ids_exist_set(
     Ok(result)
 }
 
-pub fn get_nodes_by_ids(
-    conn: &Connection,
-    ids: &[String],
-) -> Result<Vec<Node>, CodeWikiError> {
+pub fn get_nodes_by_ids(conn: &Connection, ids: &[String]) -> Result<Vec<Node>, CodeWikiError> {
     const CHUNK: usize = 500;
     let mut result = Vec::new();
     for chunk in ids.chunks(CHUNK) {
-        let placeholders = chunk.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect::<Vec<_>>().join(",");
+        let placeholders = chunk
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(",");
         let sql = format!("SELECT * FROM nodes WHERE id IN ({})", placeholders);
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(
-            rusqlite::params_from_iter(chunk.iter()),
-            row_to_node,
-        )?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(chunk.iter()), row_to_node)?;
         for row in rows {
             result.push(row.map_err(CodeWikiError::Sqlite)?);
         }
@@ -226,8 +225,7 @@ pub fn get_nodes_by_qualified_name_exact(
     conn: &Connection,
     qualified_name: &str,
 ) -> Result<Vec<Node>, CodeWikiError> {
-    let mut stmt =
-        conn.prepare_cached("SELECT * FROM nodes WHERE qualified_name = ?1")?;
+    let mut stmt = conn.prepare_cached("SELECT * FROM nodes WHERE qualified_name = ?1")?;
     let rows = stmt.query_map(params![qualified_name], row_to_node)?;
     rows.map(|r| r.map_err(CodeWikiError::Sqlite))
         .collect::<Result<Vec<_>, _>>()
@@ -237,8 +235,7 @@ pub fn get_nodes_by_lower_name(
     conn: &Connection,
     lower_name: &str,
 ) -> Result<Vec<Node>, CodeWikiError> {
-    let mut stmt =
-        conn.prepare_cached("SELECT * FROM nodes WHERE lower(name) = ?1")?;
+    let mut stmt = conn.prepare_cached("SELECT * FROM nodes WHERE lower(name) = ?1")?;
     let rows = stmt.query_map(params![lower_name], row_to_node)?;
     rows.map(|r| r.map_err(CodeWikiError::Sqlite))
         .collect::<Result<Vec<_>, _>>()
@@ -375,8 +372,7 @@ pub fn get_top_nodes_by_degree(
              GROUP BY n.id \
              ORDER BY {} DESC \
              LIMIT {}",
-            order_col,
-            limit
+            order_col, limit
         )
     };
 
@@ -540,9 +536,9 @@ mod tests {
 
     #[test]
     fn get_top_nodes_by_degree_returns_ordered() {
+        use super::DegreeMetric;
         use crate::queries::edges::insert_edge;
         use codewiki_core::{Edge, EdgeKind};
-        use super::DegreeMetric;
 
         let conn = open_in_memory().unwrap();
         for i in 0..3usize {

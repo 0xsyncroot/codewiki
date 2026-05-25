@@ -133,10 +133,8 @@ fn vue_router_component_regex() -> &'static Regex {
 fn vue_router_lazy_component_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(
-            r#"\bcomponent\s*:\s*\(\s*\)\s*=>\s*import\s*\(\s*['"`]([^'"`]+)['"`]\s*\)"#,
-        )
-        .expect("vue_router_lazy_component_regex")
+        Regex::new(r#"\bcomponent\s*:\s*\(\s*\)\s*=>\s*import\s*\(\s*['"`]([^'"`]+)['"`]\s*\)"#)
+            .expect("vue_router_lazy_component_regex")
     })
 }
 
@@ -144,25 +142,20 @@ fn vue_router_lazy_component_regex() -> &'static Regex {
 fn pinia_define_store_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r#"\bdefineStore\s*\(\s*['"`]([^'"`]+)['"`]"#)
-            .expect("pinia_define_store_regex")
+        Regex::new(r#"\bdefineStore\s*\(\s*['"`]([^'"`]+)['"`]"#).expect("pinia_define_store_regex")
     })
 }
 
 /// Detect `createRouter({` to scope vue-router detection.
 fn create_router_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r#"\bcreateRouter\s*\("#).expect("create_router_regex")
-    })
+    RE.get_or_init(|| Regex::new(r#"\bcreateRouter\s*\("#).expect("create_router_regex"))
 }
 
 /// `definePageMeta(` — locates the call in page content.
 fn define_page_meta_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"\bdefinePageMeta\s*\(").expect("define_page_meta_regex")
-    })
+    RE.get_or_init(|| Regex::new(r"\bdefinePageMeta\s*\(").expect("define_page_meta_regex"))
 }
 
 /// `path: '/custom'` inside a definePageMeta body.
@@ -182,25 +175,19 @@ fn page_meta_alias_start_regex() -> &'static Regex {
 /// `middleware:` key inside a definePageMeta body.
 fn page_meta_middleware_start_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"\bmiddleware\s*:").expect("page_meta_middleware_start_regex")
-    })
+    RE.get_or_init(|| Regex::new(r"\bmiddleware\s*:").expect("page_meta_middleware_start_regex"))
 }
 
 /// `routes\s*:\s*[` — locates the routes array inside a createRouter config.
 fn routes_array_start_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"\broutes\s*:\s*\[").expect("routes_array_start_regex")
-    })
+    RE.get_or_init(|| Regex::new(r"\broutes\s*:\s*\[").expect("routes_array_start_regex"))
 }
 
 /// `children\s*:\s*[` — locates a children sub-array inside a route object.
 fn children_array_start_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"\bchildren\s*:\s*\[").expect("children_array_start_regex")
-    })
+    RE.get_or_init(|| Regex::new(r"\bchildren\s*:\s*\[").expect("children_array_start_regex"))
 }
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -275,7 +262,15 @@ fn nuxt_api_verb_from_filename(filename: &str) -> &'static str {
 
 /// Try to resolve an alias-transformed path by trying several extensions.
 fn try_alias_resolve(alias_path: &str, context: &ResolutionContext<'_>) -> Option<String> {
-    let extensions = ["", ".ts", ".js", ".vue", "/index.ts", "/index.js", "/index.vue"];
+    let extensions = [
+        "",
+        ".ts",
+        ".js",
+        ".vue",
+        "/index.ts",
+        "/index.js",
+        "/index.vue",
+    ];
     for ext in &extensions {
         let candidate = format!("{}{}", alias_path, ext);
         if context.file_exists(&candidate) {
@@ -291,7 +286,10 @@ fn try_alias_resolve(alias_path: &str, context: &ResolutionContext<'_>) -> Optio
 // ─── Resolution helpers ────────────────────────────────────────────────────────
 
 fn is_pascal_case(name: &str) -> bool {
-    name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+    name.chars()
+        .next()
+        .map(|c| c.is_uppercase())
+        .unwrap_or(false)
         && name.chars().all(|c| c.is_alphanumeric())
 }
 
@@ -484,7 +482,11 @@ fn compose_route_path(parent: &str, child: &str) -> String {
     if parent.is_empty() || parent == "/" {
         format!("/{}", child.trim_matches('/'))
     } else {
-        format!("{}/{}", parent.trim_end_matches('/'), child.trim_matches('/'))
+        format!(
+            "{}/{}",
+            parent.trim_end_matches('/'),
+            child.trim_matches('/')
+        )
     }
 }
 
@@ -707,9 +709,7 @@ impl FrameworkResolver for VueResolver {
         // Pattern 7: kebab-case component refs → PascalCase lookup
         if is_kebab_case(name) && reference.reference_kind == "calls" {
             let pascal_name = kebab_to_pascal(name);
-            if let Some(node_id) =
-                resolve_component(&pascal_name, &reference.file_path, context)
-            {
+            if let Some(node_id) = resolve_component(&pascal_name, &reference.file_path, context) {
                 return Ok(Some(make_resolved_edge(
                     reference,
                     node_id,
@@ -722,7 +722,11 @@ impl FrameworkResolver for VueResolver {
         // Pattern 8: useXxx() composable → composables/ directory lookup
         if name.starts_with("use")
             && name.len() > 3
-            && name.chars().nth(3).map(|c| c.is_uppercase()).unwrap_or(false)
+            && name
+                .chars()
+                .nth(3)
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
         {
             let candidates = context.get_nodes_by_name(name);
             let target = candidates.iter().find(|n| {
@@ -770,8 +774,7 @@ impl FrameworkResolver for VueResolver {
             let candidates = context.get_nodes_by_name(name);
             let target = candidates.iter().find(|n| {
                 n.kind == NodeKind::Function
-                    && (n.file_path.contains("middleware/")
-                        || n.file_path.contains("middleware\\"))
+                    && (n.file_path.contains("middleware/") || n.file_path.contains("middleware\\"))
             });
             if let Some(node) = target {
                 return Ok(Some(make_resolved_edge(
@@ -831,8 +834,7 @@ impl FrameworkResolver for VueResolver {
                     };
 
                 // Emit primary route node.
-                let route_id =
-                    format!("route:{}:1:GET:{}", file_str, effective_path);
+                let route_id = format!("route:{}:1:GET:{}", file_str, effective_path);
                 nodes.push(Node {
                     id: route_id.clone(),
                     name: effective_path.clone(),
@@ -860,8 +862,7 @@ impl FrameworkResolver for VueResolver {
 
                 // Emit alias route nodes.
                 for alias_path in &alias_paths {
-                    let alias_route_id =
-                        format!("route:{}:1:GET:{}", file_str, alias_path);
+                    let alias_route_id = format!("route:{}:1:GET:{}", file_str, alias_path);
                     nodes.push(Node {
                         id: alias_route_id,
                         name: alias_path.clone(),
@@ -937,13 +938,10 @@ impl FrameworkResolver for VueResolver {
         }
 
         // ── Sub-case C: Nuxt middleware/ ──────────────────────────────────────
-        let in_middleware = normalized.contains("/middleware/")
-            || normalized.starts_with("middleware/");
+        let in_middleware =
+            normalized.contains("/middleware/") || normalized.starts_with("middleware/");
         if in_middleware {
-            let file_name = file_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             let mw_name = file_name
                 .trim_end_matches(".ts")
                 .trim_end_matches(".js")
@@ -1059,7 +1057,11 @@ impl FrameworkResolver for VueResolver {
                 if let Some(stem) = file_path.file_stem().and_then(|s| s.to_str()) {
                     if stem.starts_with("use")
                         && stem.len() > 3
-                        && stem.chars().nth(3).map(|c| c.is_uppercase()).unwrap_or(false)
+                        && stem
+                            .chars()
+                            .nth(3)
+                            .map(|c| c.is_uppercase())
+                            .unwrap_or(false)
                     {
                         let node_id = format!("function:{}:1:{}", file_str, stem);
                         nodes.push(Node {
@@ -1329,7 +1331,11 @@ const router = createRouter({
 
         let paths: Vec<_> = route_nodes.iter().map(|n| n.name.as_str()).collect();
         assert!(paths.contains(&"/users"), "/users route: {:?}", paths);
-        assert!(paths.contains(&"/users/:id"), "/users/:id route: {:?}", paths);
+        assert!(
+            paths.contains(&"/users/:id"),
+            "/users/:id route: {:?}",
+            paths
+        );
         assert!(paths.contains(&"/"), "/ route: {:?}", paths);
     }
 
@@ -1408,7 +1414,11 @@ const router = createRouter({
             .unwrap();
 
         assert_eq!(
-            result.nodes.iter().filter(|n| n.kind == NodeKind::Route).count(),
+            result
+                .nodes
+                .iter()
+                .filter(|n| n.kind == NodeKind::Route)
+                .count(),
             1,
             "one route node for /admin"
         );
@@ -1683,7 +1693,9 @@ export const useCounterStore = defineStore('counter', () => {
         assert!(!store_nodes.is_empty(), "expected store function node");
         let names: Vec<_> = store_nodes.iter().map(|n| n.name.as_str()).collect();
         assert!(
-            names.iter().any(|n| n.contains("Counter") || n.contains("counter")),
+            names
+                .iter()
+                .any(|n| n.contains("Counter") || n.contains("counter")),
             "store name should contain Counter/counter: {:?}",
             names
         );
@@ -1838,7 +1850,11 @@ export const useWishlistStore = defineStore('wishlist', () => ({ ids: ref([]) })
         let dir = TempDir::new().unwrap();
         let comp_dir = dir.path().join("src/components");
         fs::create_dir_all(&comp_dir).unwrap();
-        fs::write(comp_dir.join("Button.vue"), "<template><button /></template>").unwrap();
+        fs::write(
+            comp_dir.join("Button.vue"),
+            "<template><button /></template>",
+        )
+        .unwrap();
 
         let caches = ResolverCaches::default_capacity();
         let node = Node {
@@ -2154,7 +2170,10 @@ export const useWishlistStore = defineStore('wishlist', () => ({ ids: ref([]) })
             path_aliases: &aliases,
             known_files: &[],
         };
-        assert!(VueResolver.detect(&ctx), "must detect nuxt in devDependencies");
+        assert!(
+            VueResolver.detect(&ctx),
+            "must detect nuxt in devDependencies"
+        );
     }
 
     #[test]

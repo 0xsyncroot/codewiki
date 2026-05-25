@@ -55,9 +55,8 @@ impl SyncResult {
 fn acquire_sync_lock(codewiki_dir: &Path) -> Result<File, CodeWikiError> {
     let lock_path = codewiki_dir.join(".sync.lock");
     let file = File::create(&lock_path)?;
-    file.try_lock_exclusive().map_err(|_| {
-        CodeWikiError::Watcher("another sync is already in progress".to_string())
-    })?;
+    file.try_lock_exclusive()
+        .map_err(|_| CodeWikiError::Watcher("another sync is already in progress".to_string()))?;
     Ok(file)
 }
 
@@ -202,18 +201,12 @@ pub fn run_sync_cycle(
     }
 
     // --- Step 7: populate inode column for indexed files (Unix only) ---
-    let indexed_paths: Vec<PathBuf> = batches
-        .iter()
-        .map(|b| b.file.path.clone())
-        .collect();
+    let indexed_paths: Vec<PathBuf> = batches.iter().map(|b| b.file.path.clone()).collect();
     if let Err(e) = update_inodes(db, &indexed_paths) {
         tracing::warn!(err = %e, "failed to update inode column");
     }
 
-    let duration_ms = t0
-        .elapsed()
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
+    let duration_ms = t0.elapsed().map(|d| d.as_millis() as u64).unwrap_or(0);
 
     // Collect all changed paths for OPT-10 framework-extract skip check.
     let changed_paths: Vec<PathBuf> = added_records
@@ -299,15 +292,9 @@ mod tests {
     struct StoreAdapter(Arc<StorageImpl>);
 
     impl codewiki_extraction::ExtractionStore for StoreAdapter {
-        fn store_batch(
-            &self,
-            batch: codewiki_core::ExtractionBatch,
-        ) -> Result<(), String> {
-            codewiki_storage::ExtractionStore::store_extraction_batch(
-                self.0.as_ref(),
-                batch,
-            )
-            .map_err(|e| e.to_string())
+        fn store_batch(&self, batch: codewiki_core::ExtractionBatch) -> Result<(), String> {
+            codewiki_storage::ExtractionStore::store_extraction_batch(self.0.as_ref(), batch)
+                .map_err(|e| e.to_string())
         }
 
         fn delete_file(&self, path: &std::path::Path) -> Result<(), String> {

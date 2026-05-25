@@ -7,8 +7,8 @@ use crate::search::{
     search_nodes_fts, HIGH_VALUE_NODE_KINDS,
 };
 use crate::traits::{
-    BulkStoreStats, ExtractionStore, FileFilter, FindOpts, QueryHandle, ResolvedEdge,
-    ResolutionStore, SearchOptions, SyncStore,
+    BulkStoreStats, ExtractionStore, FileFilter, FindOpts, QueryHandle, ResolutionStore,
+    ResolvedEdge, SearchOptions, SyncStore,
 };
 use codewiki_core::{
     CodeWikiError, Edge, ExtractionBatch, FileRecord, GraphStats, Node, NodeKind, SearchResult,
@@ -47,7 +47,10 @@ impl StorageImpl {
     where
         F: FnOnce(&Connection) -> Result<R, CodeWikiError>,
     {
-        let conn = self.conn.lock().map_err(|_| CodeWikiError::Other("mutex poisoned".into()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CodeWikiError::Other("mutex poisoned".into()))?;
         f(&conn)
     }
 
@@ -341,33 +344,21 @@ impl QueryHandle for StorageImpl {
         Ok(node)
     }
 
-    fn get_callers(
-        &self,
-        node_id: &str,
-        depth: usize,
-    ) -> Result<Vec<(Node, Edge)>, CodeWikiError> {
+    fn get_callers(&self, node_id: &str, depth: usize) -> Result<Vec<(Node, Edge)>, CodeWikiError> {
         self.with_conn(|conn| {
             let traverser = GraphTraverser::new(conn);
             traverser.get_callers(node_id, depth)
         })
     }
 
-    fn get_callees(
-        &self,
-        node_id: &str,
-        depth: usize,
-    ) -> Result<Vec<(Node, Edge)>, CodeWikiError> {
+    fn get_callees(&self, node_id: &str, depth: usize) -> Result<Vec<(Node, Edge)>, CodeWikiError> {
         self.with_conn(|conn| {
             let traverser = GraphTraverser::new(conn);
             traverser.get_callees(node_id, depth)
         })
     }
 
-    fn get_impact_radius(
-        &self,
-        node_id: &str,
-        depth: usize,
-    ) -> Result<Subgraph, CodeWikiError> {
+    fn get_impact_radius(&self, node_id: &str, depth: usize) -> Result<Subgraph, CodeWikiError> {
         self.with_conn(|conn| {
             let traverser = GraphTraverser::new(conn);
             traverser.get_impact_radius(node_id, depth)
@@ -403,41 +394,113 @@ impl QueryHandle for StorageImpl {
         // so that domain words like "request", "response", "schema" count as
         // significant for the purpose of detecting NL queries.
         static NL_STOPWORDS: &[&str] = &[
-            "the", "and", "for", "with", "from", "this", "that", "have", "been",
-            "will", "would", "could", "should", "does", "done", "make", "made",
-            "use", "used", "using", "work", "works", "find", "found", "show",
-            "call", "called", "calling", "get", "set", "add", "all", "any",
-            "how", "what", "when", "where", "which", "who", "why",
-            "not", "but", "are", "was", "were", "has", "had", "its",
-            "can", "did", "may", "also", "into", "than", "then", "them",
-            "each", "other", "some", "such", "only", "same", "about",
-            "after", "before", "between", "through", "during", "without",
-            "again", "further", "once", "here", "there", "both", "just",
-            "more", "most", "very", "being", "having", "doing",
+            "the", "and", "for", "with", "from", "this", "that", "have", "been", "will", "would",
+            "could", "should", "does", "done", "make", "made", "use", "used", "using", "work",
+            "works", "find", "found", "show", "call", "called", "calling", "get", "set", "add",
+            "all", "any", "how", "what", "when", "where", "which", "who", "why", "not", "but",
+            "are", "was", "were", "has", "had", "its", "can", "did", "may", "also", "into", "than",
+            "then", "them", "each", "other", "some", "such", "only", "same", "about", "after",
+            "before", "between", "through", "during", "without", "again", "further", "once",
+            "here", "there", "both", "just", "more", "most", "very", "being", "having", "doing",
         ];
 
         // NL FTS stopword list — used for base_terms in the NL fallback FTS pass.
         // Extends NL_STOPWORDS with high-noise code-domain words that produce
         // too many false-positive FTS hits (e.g. "request" → ConnectionRouter).
         static NL_FTS_STOPWORDS: &[&str] = &[
-            "the", "and", "for", "with", "from", "this", "that", "have", "been",
-            "will", "would", "could", "should", "does", "done", "make", "made",
-            "use", "used", "using", "work", "works", "find", "found", "show",
-            "call", "called", "calling", "get", "set", "add", "all", "any",
-            "how", "what", "when", "where", "which", "who", "why",
-            "not", "but", "are", "was", "were", "has", "had", "its",
-            "can", "did", "may", "also", "into", "than", "then", "them",
-            "each", "other", "some", "such", "only", "same", "about",
-            "after", "before", "between", "through", "during", "without",
-            "again", "further", "once", "here", "there", "both", "just",
-            "more", "most", "very", "being", "having", "doing",
+            "the",
+            "and",
+            "for",
+            "with",
+            "from",
+            "this",
+            "that",
+            "have",
+            "been",
+            "will",
+            "would",
+            "could",
+            "should",
+            "does",
+            "done",
+            "make",
+            "made",
+            "use",
+            "used",
+            "using",
+            "work",
+            "works",
+            "find",
+            "found",
+            "show",
+            "call",
+            "called",
+            "calling",
+            "get",
+            "set",
+            "add",
+            "all",
+            "any",
+            "how",
+            "what",
+            "when",
+            "where",
+            "which",
+            "who",
+            "why",
+            "not",
+            "but",
+            "are",
+            "was",
+            "were",
+            "has",
+            "had",
+            "its",
+            "can",
+            "did",
+            "may",
+            "also",
+            "into",
+            "than",
+            "then",
+            "them",
+            "each",
+            "other",
+            "some",
+            "such",
+            "only",
+            "same",
+            "about",
+            "after",
+            "before",
+            "between",
+            "through",
+            "during",
+            "without",
+            "again",
+            "further",
+            "once",
+            "here",
+            "there",
+            "both",
+            "just",
+            "more",
+            "most",
+            "very",
+            "being",
+            "having",
+            "doing",
             // High-noise code-domain words: searching FTS for these floods results
             // with unrelated nodes (e.g. "request" → ConnectionRouter in django).
-            "request", "requests", "response", "responses",
+            "request",
+            "requests",
+            "response",
+            "responses",
         ];
 
         // Track IDs from Step 2 exact-name channel (used later in Step 5a).
-        let mut exact_match_node_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut exact_match_node_ids: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
 
         // === STEP 2: Exact-name channel ===
         let mut exact_matches: Vec<SearchResult> = Vec::new();
@@ -468,8 +531,10 @@ impl QueryHandle for StorageImpl {
 
             // Co-location boost: files where >= 2 distinct query symbols match
             if exact_matches.len() > 1 {
-                let mut file_symbol_counts: std::collections::HashMap<String, std::collections::HashSet<String>> =
-                    std::collections::HashMap::new();
+                let mut file_symbol_counts: std::collections::HashMap<
+                    String,
+                    std::collections::HashSet<String>,
+                > = std::collections::HashMap::new();
                 for r in &exact_matches {
                     let names = file_symbol_counts
                         .entry(r.node.file_path.clone())
@@ -485,8 +550,11 @@ impl QueryHandle for StorageImpl {
                         r.score += (count - 1) as f64 * 20.0;
                     }
                 }
-                exact_matches
-                    .sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                exact_matches.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
 
             // Trim to search_limit * 2
@@ -498,13 +566,21 @@ impl QueryHandle for StorageImpl {
         // For each symbol (+ stem variants), title-case and search class/interface/etc.
         // nodes whose name starts with it, scoring +15 + brevity bonus.
         if !symbols_from_query.is_empty() {
-            let def_kinds: Vec<NodeKind> = ["class", "interface", "struct", "trait",
-                "protocol", "enum", "type_alias"]
-                .iter()
-                .filter_map(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok())
-                .collect();
+            let def_kinds: Vec<NodeKind> = [
+                "class",
+                "interface",
+                "struct",
+                "trait",
+                "protocol",
+                "enum",
+                "type_alias",
+            ]
+            .iter()
+            .filter_map(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok())
+            .collect();
 
-            let mut expanded_symbols: std::collections::HashSet<String> = symbols_from_query.iter().cloned().collect();
+            let mut expanded_symbols: std::collections::HashSet<String> =
+                symbols_from_query.iter().cloned().collect();
             for sym in &symbols_from_query {
                 for variant in get_stem_variants(sym) {
                     expanded_symbols.insert(variant);
@@ -518,7 +594,9 @@ impl QueryHandle for StorageImpl {
 
             for sym in &expanded_symbols {
                 // Title-case: first char upper, rest lower
-                if sym.is_empty() { continue; }
+                if sym.is_empty() {
+                    continue;
+                }
                 let title_cased = {
                     let mut chars = sym.chars();
                     match chars.next() {
@@ -531,7 +609,9 @@ impl QueryHandle for StorageImpl {
                 };
 
                 // Skip if title-cased == sym (already an exact-case CamelCase symbol)
-                if title_cased == *sym { continue; }
+                if title_cased == *sym {
+                    continue;
+                }
 
                 // Search via FTS for the title-cased prefix
                 let search_opts = SearchOptions {
@@ -541,15 +621,23 @@ impl QueryHandle for StorageImpl {
                 };
                 if let Ok(prefix_results) = self.search_nodes(&title_cased, search_opts) {
                     for r in prefix_results {
-                        if r.node.name.to_lowercase().starts_with(&title_cased.to_lowercase()) {
-                            if existing_ids.contains(&r.node.id) { continue; }
+                        if r.node
+                            .name
+                            .to_lowercase()
+                            .starts_with(&title_cased.to_lowercase())
+                        {
+                            if existing_ids.contains(&r.node.id) {
+                                continue;
+                            }
                             let brevity_bonus = {
                                 let diff = (r.node.name.len() as i64) - (title_cased.len() as i64);
                                 f64::max(0.0, 10.0 - diff as f64 / 3.0)
                             };
                             let new_score = r.score + 15.0 + brevity_bonus;
                             // Check if already in exact_matches
-                            if let Some(existing) = exact_matches.iter_mut().find(|e| e.node.id == r.node.id) {
+                            if let Some(existing) =
+                                exact_matches.iter_mut().find(|e| e.node.id == r.node.id)
+                            {
                                 existing.score = f64::max(existing.score, new_score);
                             } else {
                                 exact_matches.push(SearchResult {
@@ -563,8 +651,11 @@ impl QueryHandle for StorageImpl {
                 }
             }
 
-            exact_matches
-                .sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            exact_matches.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
             exact_matches.truncate(prefix_limit);
         }
 
@@ -589,12 +680,16 @@ impl QueryHandle for StorageImpl {
                 let existing_ids: std::collections::HashSet<String> =
                     exact_matches.iter().map(|r| r.node.id.clone()).collect();
 
-                let action_kinds: Vec<NodeKind> = ["function", "method", "class", "interface", "struct"]
-                    .iter()
-                    .filter_map(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok())
-                    .collect();
+                let action_kinds: Vec<NodeKind> =
+                    ["function", "method", "class", "interface", "struct"]
+                        .iter()
+                        .filter_map(|s| {
+                            serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
+                        })
+                        .collect();
 
-                let mut action_stems: std::collections::HashSet<String> = std::collections::HashSet::new();
+                let mut action_stems: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
                 for sym in &symbols_from_query {
                     let lower = sym.to_lowercase();
                     // -tion/-ation → verb: "validation" → "validate", "execution" → "execute"
@@ -633,7 +728,9 @@ impl QueryHandle for StorageImpl {
 
                 let action_limit = opts.search_limit * 2;
                 for stem in &action_stems {
-                    if stem.len() < 3 { continue; }
+                    if stem.len() < 3 {
+                        continue;
+                    }
                     let search_opts = SearchOptions {
                         limit: action_limit,
                         kinds: Some(action_kinds.clone()),
@@ -642,14 +739,20 @@ impl QueryHandle for StorageImpl {
                     if let Ok(stem_results) = self.search_nodes(stem, search_opts) {
                         for r in stem_results {
                             let stem_lower = stem.to_lowercase();
-                            if !r.node.name.to_lowercase().starts_with(&stem_lower) { continue; }
-                            if existing_ids.contains(&r.node.id) { continue; }
+                            if !r.node.name.to_lowercase().starts_with(&stem_lower) {
+                                continue;
+                            }
+                            if existing_ids.contains(&r.node.id) {
+                                continue;
+                            }
                             let brevity_bonus = {
                                 let diff = (r.node.name.len() as i64) - (stem_lower.len() as i64);
                                 f64::max(0.0, 8.0 - diff as f64 / 3.0)
                             };
                             let new_score = r.score + 12.0 + brevity_bonus;
-                            if let Some(existing) = exact_matches.iter_mut().find(|e| e.node.id == r.node.id) {
+                            if let Some(existing) =
+                                exact_matches.iter_mut().find(|e| e.node.id == r.node.id)
+                            {
                                 existing.score = f64::max(existing.score, new_score);
                             } else {
                                 exact_matches.push(SearchResult {
@@ -663,7 +766,11 @@ impl QueryHandle for StorageImpl {
                 }
 
                 // Re-sort but keep prefix_limit from STEP 2b already applied
-                exact_matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                exact_matches.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
                 // Allow a modest expansion for action-stem results
                 exact_matches.truncate(((opts.search_limit as f64) * 8.0).ceil() as usize);
                 // Protect only STEP 2c-specific new results from STEP 5a dampening.
@@ -700,13 +807,31 @@ impl QueryHandle for StorageImpl {
             if !search_terms.is_empty() {
                 // Broad kinds excluding import (to avoid flooding FTS results)
                 let search_kinds: Vec<NodeKind> = [
-                    "file", "module", "class", "struct", "interface", "trait", "protocol",
-                    "function", "method", "property", "field", "variable", "constant",
-                    "enum", "enum_member", "type_alias", "namespace", "export",
-                    "route", "component",
+                    "file",
+                    "module",
+                    "class",
+                    "struct",
+                    "interface",
+                    "trait",
+                    "protocol",
+                    "function",
+                    "method",
+                    "property",
+                    "field",
+                    "variable",
+                    "constant",
+                    "enum",
+                    "enum_member",
+                    "type_alias",
+                    "namespace",
+                    "export",
+                    "route",
+                    "component",
                 ]
                 .iter()
-                .filter_map(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok())
+                .filter_map(|s| {
+                    serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
+                })
                 .collect();
 
                 let term_limit = opts.search_limit * 2;
@@ -721,7 +846,9 @@ impl QueryHandle for StorageImpl {
                     };
                     if let Ok(results) = self.search_nodes(term, search_opts) {
                         for r in results {
-                            let entry = term_results_map.entry(r.node.id.clone()).or_insert_with(|| (r.clone(), 0));
+                            let entry = term_results_map
+                                .entry(r.node.id.clone())
+                                .or_insert_with(|| (r.clone(), 0));
                             entry.1 += 1; // increment term_hits
                             entry.0.score = f64::max(entry.0.score, r.score);
                         }
@@ -736,7 +863,11 @@ impl QueryHandle for StorageImpl {
                         result
                     })
                     .collect();
-                text_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                text_results.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
                 text_results.truncate(term_limit);
             }
         }
@@ -856,8 +987,16 @@ impl QueryHandle for StorageImpl {
 
             // Prefer high-value structural kinds for NL entry points
             let nl_kinds: Vec<NodeKind> = [
-                "function", "method", "class", "struct", "interface", "trait",
-                "route", "component", "enum", "type_alias",
+                "function",
+                "method",
+                "class",
+                "struct",
+                "interface",
+                "trait",
+                "route",
+                "component",
+                "enum",
+                "type_alias",
             ]
             .iter()
             .filter_map(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok())
@@ -876,7 +1015,9 @@ impl QueryHandle for StorageImpl {
 
             if let Ok(full_results) = self.search_nodes(trimmed, full_query_opts) {
                 for r in full_results {
-                    let entry = nl_term_map.entry(r.node.id.clone()).or_insert_with(|| (r.clone(), 0));
+                    let entry = nl_term_map
+                        .entry(r.node.id.clone())
+                        .or_insert_with(|| (r.clone(), 0));
                     entry.1 += 1; // counts as 1 hit for the full query
                     entry.0.score = f64::max(entry.0.score, r.score);
                 }
@@ -891,7 +1032,9 @@ impl QueryHandle for StorageImpl {
                 };
                 if let Ok(term_results) = self.search_nodes(term, search_opts) {
                     for r in term_results {
-                        let entry = nl_term_map.entry(r.node.id.clone()).or_insert_with(|| (r.clone(), 0));
+                        let entry = nl_term_map
+                            .entry(r.node.id.clone())
+                            .or_insert_with(|| (r.clone(), 0));
                         entry.1 += 1;
                         entry.0.score = f64::max(entry.0.score, r.score);
                     }
@@ -907,7 +1050,11 @@ impl QueryHandle for StorageImpl {
                     r
                 })
                 .collect();
-            nl_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            nl_results.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
             nl_results.truncate(fts_limit);
 
             // Merge NL results into the main result set (don't duplicate)
@@ -942,11 +1089,15 @@ impl QueryHandle for StorageImpl {
             let mut assigned: std::collections::HashSet<String> = std::collections::HashSet::new();
 
             for term in &sorted_terms {
-                if assigned.contains(term) { continue; }
+                if assigned.contains(term) {
+                    continue;
+                }
                 let mut group = vec![term.clone()];
                 assigned.insert(term.clone());
                 for other in &sorted_terms {
-                    if assigned.contains(other) { continue; }
+                    if assigned.contains(other) {
+                        continue;
+                    }
                     if term.contains(other.as_str()) || other.contains(term.as_str()) {
                         group.push(other.clone());
                         assigned.insert(other.clone());
@@ -972,10 +1123,8 @@ impl QueryHandle for StorageImpl {
                     .and_then(|p| p.to_str())
                     .unwrap_or("")
                     .to_lowercase();
-                let dir_segments: Vec<String> = dir_lower
-                    .split('/')
-                    .map(|s| s.to_string())
-                    .collect();
+                let dir_segments: Vec<String> =
+                    dir_lower.split('/').map(|s| s.to_string()).collect();
 
                 let mut match_count = 0usize;
                 for group in &term_groups {
@@ -992,9 +1141,8 @@ impl QueryHandle for StorageImpl {
                             let in_name = name_lower.contains(*t);
                             // Exact dir-segment match (TS faithful) OR compound-name substring
                             // (e.g. "codewiki-resolution" contains "resolution").
-                            let in_dir = dir_segments.iter().any(|seg| {
-                                seg == t || seg.contains(*t)
-                            });
+                            let in_dir =
+                                dir_segments.iter().any(|seg| seg == t || seg.contains(*t));
                             // Also check file stem (e.g. "batch" from "batch.rs")
                             let in_stem = file_stem == *t || file_stem.contains(*t);
                             in_name || in_dir || in_stem
@@ -1010,9 +1158,9 @@ impl QueryHandle for StorageImpl {
                 // via the text channel (STEP 3) rather than STEP 2's exact-name channel,
                 // so they weren't added to exact_match_node_ids but still represent a
                 // direct name hit (e.g. Runtime struct when query contains "runtime").
-                let is_name_exact_match = symbols_from_query.iter().any(|sym| {
-                    sym.eq_ignore_ascii_case(&result.node.name)
-                });
+                let is_name_exact_match = symbols_from_query
+                    .iter()
+                    .any(|sym| sym.eq_ignore_ascii_case(&result.node.name));
 
                 // Canonical-definition bonus: a node whose name exactly matches a query
                 // symbol AND whose file is named after that same symbol (e.g. Runtime in
@@ -1032,7 +1180,11 @@ impl QueryHandle for StorageImpl {
                 }
             }
 
-            search_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            search_results.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
         }
 
         // === Filter and select top search_limit as roots ===
@@ -1048,30 +1200,37 @@ impl QueryHandle for StorageImpl {
             // High-value kinds (function, method, class, etc.) are never deduplicated
             // since overloaded/multiple implementations are all interesting entry points.
             const LEAF_KINDS: &[&str] = &["variable", "parameter", "file", "import", "export"];
-            let mut seen_leaf_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+            let mut seen_leaf_names: std::collections::HashSet<String> =
+                std::collections::HashSet::new();
             let mut deduped: Vec<SearchResult> = Vec::new();
             for r in search_results
                 .into_iter()
                 .filter(|r| r.score >= opts.min_score as f64)
             {
                 if is_nl_query {
-                    let kind_str = serde_json::to_value(&r.node.kind).ok()
+                    let kind_str = serde_json::to_value(&r.node.kind)
+                        .ok()
                         .and_then(|v| v.as_str().map(String::from))
                         .unwrap_or_default();
                     if LEAF_KINDS.contains(&kind_str.as_str()) {
                         let key = format!("{}::{}", r.node.name.to_lowercase(), kind_str);
-                        if seen_leaf_names.contains(&key) { continue; }
+                        if seen_leaf_names.contains(&key) {
+                            continue;
+                        }
                         seen_leaf_names.insert(key);
                     }
                 }
                 deduped.push(r);
-                if deduped.len() >= effective_search_limit { break; }
+                if deduped.len() >= effective_search_limit {
+                    break;
+                }
             }
             deduped
         };
 
         // === BFS-expand each root and collect subgraph ===
-        let mut all_nodes: std::collections::HashMap<String, Node> = std::collections::HashMap::new();
+        let mut all_nodes: std::collections::HashMap<String, Node> =
+            std::collections::HashMap::new();
         let mut all_edges: Vec<Edge> = Vec::new();
         let mut roots: Vec<String> = Vec::new();
 
@@ -1110,7 +1269,10 @@ impl QueryHandle for StorageImpl {
                     let (direction, depth) = if is_nl_query {
                         (crate::graph::traversal::TraversalDirection::Both, 2)
                     } else {
-                        (crate::graph::traversal::TraversalDirection::Outgoing, opts.traversal_depth)
+                        (
+                            crate::graph::traversal::TraversalDirection::Outgoing,
+                            opts.traversal_depth,
+                        )
                     };
                     traverser.traverse_bfs(
                         &result.node.id,
@@ -1136,30 +1298,42 @@ impl QueryHandle for StorageImpl {
                     bfs_nodes.sort_by(|(_, a), (_, b)| {
                         let a_test = crate::search::is_test_file(&a.file_path) as u8;
                         let b_test = crate::search::is_test_file(&b.file_path) as u8;
-                        if a_test != b_test { return a_test.cmp(&b_test); }
+                        if a_test != b_test {
+                            return a_test.cmp(&b_test);
+                        }
                         let a_same_file = (a.file_path == *root_file) as u8;
                         let b_same_file = (b.file_path == *root_file) as u8;
-                        if a_same_file != b_same_file { return b_same_file.cmp(&a_same_file); } // same-file first
+                        if a_same_file != b_same_file {
+                            return b_same_file.cmp(&a_same_file);
+                        } // same-file first
                         if a_same_file == 1 {
                             // Both in same file as root: prefer non-file nodes (methods/functions
                             // over the file node itself which is less useful as BFS expansion).
                             let a_is_file = (a.kind == codewiki_core::NodeKind::File) as u8;
                             let b_is_file = (b.kind == codewiki_core::NodeKind::File) as u8;
-                            if a_is_file != b_is_file { return a_is_file.cmp(&b_is_file); } // file nodes last
-                            // Among methods/functions: sort by start_line ASC so early-defined
-                            // methods (the primary API like new, handle, spawn) come first.
+                            if a_is_file != b_is_file {
+                                return a_is_file.cmp(&b_is_file);
+                            } // file nodes last
+                              // Among methods/functions: sort by start_line ASC so early-defined
+                              // methods (the primary API like new, handle, spawn) come first.
                             return a.start_line.cmp(&b.start_line);
                         }
                         // Both cross-file: kind_bonus DESC then name ASC
                         let a_kb = crate::search::kind_bonus(&a.kind);
                         let b_kb = crate::search::kind_bonus(&b.kind);
-                        if a_kb != b_kb { return b_kb.cmp(&a_kb); }
+                        if a_kb != b_kb {
+                            return b_kb.cmp(&a_kb);
+                        }
                         a.name.cmp(&b.name)
                     });
                     let mut inserted_this_root = 0usize;
                     for (id, node) in bfs_nodes {
-                        if inserted_this_root >= per_root_limit { break; }
-                        if all_nodes.len() >= opts.max_nodes { break; }
+                        if inserted_this_root >= per_root_limit {
+                            break;
+                        }
+                        if all_nodes.len() >= opts.max_nodes {
+                            break;
+                        }
                         let entry = all_nodes.entry(id);
                         if matches!(entry, std::collections::hash_map::Entry::Vacant(_)) {
                             entry.or_insert(node);
@@ -1171,7 +1345,11 @@ impl QueryHandle for StorageImpl {
             }
         }
 
-        Ok(Subgraph { nodes: all_nodes, edges: all_edges, roots })
+        Ok(Subgraph {
+            nodes: all_nodes,
+            edges: all_edges,
+            roots,
+        })
     }
 
     fn get_code(&self, node_id: &str) -> Result<Option<String>, CodeWikiError> {
@@ -1198,10 +1376,7 @@ impl QueryHandle for StorageImpl {
         self.with_conn(mq::get_stats)
     }
 
-    fn get_files(
-        &self,
-        filter: Option<&FileFilter>,
-    ) -> Result<Vec<FileRecord>, CodeWikiError> {
+    fn get_files(&self, filter: Option<&FileFilter>) -> Result<Vec<FileRecord>, CodeWikiError> {
         self.with_conn(|conn| {
             let all = fq::get_all_files(conn)?;
             if let Some(f) = filter {
@@ -1232,12 +1407,15 @@ impl QueryHandle for StorageImpl {
                     .into_iter()
                     .filter(|fr| {
                         let lang_ok = f.language.as_ref().map_or(true, |l| {
-                            let l_str = serde_json::to_value(l).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
+                            let l_str = serde_json::to_value(l)
+                                .ok()
+                                .and_then(|v| v.as_str().map(String::from))
+                                .unwrap_or_default();
                             fr.language == l_str
                         });
-                        let prefix_ok = resolved_prefix.as_ref().map_or(true, |p| {
-                            fr.path.to_string_lossy().starts_with(p.as_str())
-                        });
+                        let prefix_ok = resolved_prefix
+                            .as_ref()
+                            .map_or(true, |p| fr.path.to_string_lossy().starts_with(p.as_str()));
                         lang_ok && prefix_ok
                     })
                     .collect())
@@ -1247,10 +1425,7 @@ impl QueryHandle for StorageImpl {
         })
     }
 
-    fn get_affected_nodes(
-        &self,
-        file_paths: &[PathBuf],
-    ) -> Result<Vec<Node>, CodeWikiError> {
+    fn get_affected_nodes(&self, file_paths: &[PathBuf]) -> Result<Vec<Node>, CodeWikiError> {
         use crate::queries::edges as eq;
         use std::collections::HashSet;
 
@@ -1296,7 +1471,9 @@ impl QueryHandle for StorageImpl {
 
 impl ResolutionStore for StorageImpl {
     fn commit_resolved_batch(&self, batch: Vec<ResolvedEdge>) -> Result<(), CodeWikiError> {
-        if batch.is_empty() { return Ok(()); }
+        if batch.is_empty() {
+            return Ok(());
+        }
         self.with_conn(|conn| {
             // OPT-13: Batched existence check.
             //
@@ -1357,7 +1534,8 @@ impl ResolutionStore for StorageImpl {
             let result: Result<(), CodeWikiError> = (|| {
                 // Bulk edge insert (OPT-14): multi-row INSERT OR IGNORE chunked at 100.
                 // Converts N individual prepare+execute calls → ceil(N/100) statements.
-                let owned_edges: Vec<codewiki_core::Edge> = valid_edges.iter().map(|e| (*e).clone()).collect();
+                let owned_edges: Vec<codewiki_core::Edge> =
+                    valid_edges.iter().map(|e| (*e).clone()).collect();
                 eq::insert_resolved_edges_bulk(conn, &owned_edges)?;
 
                 // Bulk DELETE by PK id (OPT-14): DELETE WHERE id IN (…) chunked at 500.
@@ -1423,8 +1601,7 @@ impl ResolutionStore for StorageImpl {
 
     fn get_total_file_count(&self) -> Result<usize, CodeWikiError> {
         self.with_conn(|conn| {
-            let count: i64 =
-                conn.query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))?;
+            let count: i64 = conn.query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))?;
             Ok(count as usize)
         })
     }
@@ -1480,15 +1657,17 @@ mod tests {
     }
 
     fn make_batch(path: &str, hash: &str, n: usize) -> ExtractionBatch {
-        let nodes: Vec<Node> = (0..n).map(|i| Node {
-            id: format!("{}-node{}", path, i),
-            name: format!("func{}", i),
-            qualified_name: format!("func{}", i),
-            kind: NodeKind::Function,
-            language: Language::TypeScript,
-            file_path: path.to_string(),
-            ..Default::default()
-        }).collect();
+        let nodes: Vec<Node> = (0..n)
+            .map(|i| Node {
+                id: format!("{}-node{}", path, i),
+                name: format!("func{}", i),
+                qualified_name: format!("func{}", i),
+                kind: NodeKind::Function,
+                language: Language::TypeScript,
+                file_path: path.to_string(),
+                ..Default::default()
+            })
+            .collect();
         ExtractionBatch {
             file: FileRecord {
                 path: PathBuf::from(path),
@@ -1534,10 +1713,7 @@ mod tests {
     #[test]
     fn bulk_store_stats() {
         let storage = make_storage();
-        let batches = vec![
-            make_batch("a.ts", "h1", 5),
-            make_batch("b.ts", "h2", 3),
-        ];
+        let batches = vec![make_batch("a.ts", "h1", 5), make_batch("b.ts", "h2", 3)];
         let stats = storage.store_extraction_batch_bulk(batches).unwrap();
         assert_eq!(stats.files_written, 2);
         assert_eq!(stats.files_skipped, 0);
@@ -1557,59 +1733,74 @@ mod tests {
         storage.store_extraction_batch(batch).unwrap();
 
         // Manually insert an edge and an unresolved_ref tied to this file
-        storage.with_conn(|conn| {
-            let edge = Edge {
-                id: "cascade-edge".to_string(),
-                source_id: format!("{}-node0", path),
-                target_id: format!("{}-node1", path),
-                kind: EdgeKind::Calls,
-                ..Default::default()
-            };
-            eq::insert_edge(conn, &edge)?;
+        storage
+            .with_conn(|conn| {
+                let edge = Edge {
+                    id: "cascade-edge".to_string(),
+                    source_id: format!("{}-node0", path),
+                    target_id: format!("{}-node1", path),
+                    kind: EdgeKind::Calls,
+                    ..Default::default()
+                };
+                eq::insert_edge(conn, &edge)?;
 
-            let uref = UnresolvedRef {
-                id: String::new(),
-                from_node_id: format!("{}-node0", path),
-                reference_name: "externalFn".to_string(),
-                reference_kind: "calls".to_string(),
-                file_path: path.to_string(),
-                line: Some(1),
-                col: Some(0),
-                metadata: None,
-            };
-            uq::insert_unresolved_ref(conn, &uref)?;
+                let uref = UnresolvedRef {
+                    id: String::new(),
+                    from_node_id: format!("{}-node0", path),
+                    reference_name: "externalFn".to_string(),
+                    reference_kind: "calls".to_string(),
+                    file_path: path.to_string(),
+                    line: Some(1),
+                    col: Some(0),
+                    metadata: None,
+                };
+                uq::insert_unresolved_ref(conn, &uref)?;
 
-            Ok(())
-        }).unwrap();
+                Ok(())
+            })
+            .unwrap();
 
         // Verify rows exist before deletion
-        storage.with_conn(|conn| {
-            let nodes = nq::get_nodes_by_file(conn, path).unwrap();
-            assert_eq!(nodes.len(), 2, "expected 2 nodes before delete");
-            let unresolved = uq::get_unresolved_count(conn).unwrap();
-            assert!(unresolved > 0, "expected unresolved refs before delete");
-            Ok(())
-        }).unwrap();
+        storage
+            .with_conn(|conn| {
+                let nodes = nq::get_nodes_by_file(conn, path).unwrap();
+                assert_eq!(nodes.len(), 2, "expected 2 nodes before delete");
+                let unresolved = uq::get_unresolved_count(conn).unwrap();
+                assert!(unresolved > 0, "expected unresolved refs before delete");
+                Ok(())
+            })
+            .unwrap();
 
         // Delete the file
         ExtractionStore::delete_file(&storage, std::path::Path::new(path)).unwrap();
 
         // Verify cascade: nodes, edges, and unresolved_refs all gone
-        storage.with_conn(|conn| {
-            let nodes = nq::get_nodes_by_file(conn, path).unwrap();
-            assert!(nodes.is_empty(), "nodes should be deleted after delete_file");
+        storage
+            .with_conn(|conn| {
+                let nodes = nq::get_nodes_by_file(conn, path).unwrap();
+                assert!(
+                    nodes.is_empty(),
+                    "nodes should be deleted after delete_file"
+                );
 
-            let edges = eq::get_outgoing_edges(conn, &format!("{}-node0", path), None).unwrap();
-            assert!(edges.is_empty(), "edges should be deleted after delete_file");
+                let edges = eq::get_outgoing_edges(conn, &format!("{}-node0", path), None).unwrap();
+                assert!(
+                    edges.is_empty(),
+                    "edges should be deleted after delete_file"
+                );
 
-            let unresolved = uq::get_unresolved_count(conn).unwrap();
-            assert_eq!(unresolved, 0, "unresolved_refs should be deleted after delete_file");
+                let unresolved = uq::get_unresolved_count(conn).unwrap();
+                assert_eq!(
+                    unresolved, 0,
+                    "unresolved_refs should be deleted after delete_file"
+                );
 
-            let file = crate::queries::files::get_file_by_path(conn, path).unwrap();
-            assert!(file.is_none(), "file record should be deleted");
+                let file = crate::queries::files::get_file_by_path(conn, path).unwrap();
+                assert!(file.is_none(), "file record should be deleted");
 
-            Ok(())
-        }).unwrap();
+                Ok(())
+            })
+            .unwrap();
     }
 
     #[test]
@@ -1621,25 +1812,27 @@ mod tests {
         let storage = make_storage();
 
         // Set root_path in project_metadata
-        storage.with_conn(|conn| {
-            mq::set_metadata(conn, "root_path", "/projects/myapp")
-        }).unwrap();
+        storage
+            .with_conn(|conn| mq::set_metadata(conn, "root_path", "/projects/myapp"))
+            .unwrap();
 
         // Insert two files
         let store_file = |storage: &StorageImpl, path: &str| {
-            storage.with_conn(|conn| {
-                let file = FileRecord {
-                    path: std::path::PathBuf::from(path),
-                    content_hash: "hash".to_string(),
-                    language: "type_script".to_string(),
-                    size: 100,
-                    modified_at: 1_000_000,
-                    indexed_at: now_ms(),
-                    node_count: 0,
-                    errors: vec![],
-                };
-                crate::queries::files::upsert_file(conn, &file)
-            }).unwrap();
+            storage
+                .with_conn(|conn| {
+                    let file = FileRecord {
+                        path: std::path::PathBuf::from(path),
+                        content_hash: "hash".to_string(),
+                        language: "type_script".to_string(),
+                        size: 100,
+                        modified_at: 1_000_000,
+                        indexed_at: now_ms(),
+                        node_count: 0,
+                        errors: vec![],
+                    };
+                    crate::queries::files::upsert_file(conn, &file)
+                })
+                .unwrap();
         };
 
         store_file(&storage, "/projects/myapp/src/api/handler.ts");
@@ -1651,9 +1844,16 @@ mod tests {
             language: None,
         };
         let files = QueryHandle::get_files(&storage, Some(&filter)).unwrap();
-        assert_eq!(files.len(), 1, "relative prefix should match exactly one file");
+        assert_eq!(
+            files.len(),
+            1,
+            "relative prefix should match exactly one file"
+        );
         assert!(
-            files[0].path.to_string_lossy().contains("src/api/handler.ts"),
+            files[0]
+                .path
+                .to_string_lossy()
+                .contains("src/api/handler.ts"),
             "matched file should be the api handler"
         );
 
@@ -1663,7 +1863,11 @@ mod tests {
             language: None,
         };
         let abs_files = QueryHandle::get_files(&storage, Some(&abs_filter)).unwrap();
-        assert_eq!(abs_files.len(), 1, "absolute prefix should match exactly one file");
+        assert_eq!(
+            abs_files.len(),
+            1,
+            "absolute prefix should match exactly one file"
+        );
     }
 
     #[test]
@@ -1683,7 +1887,9 @@ mod tests {
             col: Some(0),
             metadata: None,
         };
-        storage.with_conn(|conn| uq::insert_unresolved_ref(conn, &uref)).unwrap();
+        storage
+            .with_conn(|conn| uq::insert_unresolved_ref(conn, &uref))
+            .unwrap();
 
         let count = storage.get_unresolved_count().unwrap();
         assert_eq!(count, 1);
@@ -1741,7 +1947,9 @@ mod tests {
             col: Some(0),
             metadata: None,
         };
-        storage.with_conn(|conn| uq::insert_unresolved_ref(conn, &uref)).unwrap();
+        storage
+            .with_conn(|conn| uq::insert_unresolved_ref(conn, &uref))
+            .unwrap();
         assert_eq!(storage.get_unresolved_count().unwrap(), 1);
 
         // Also build a valid resolved edge (both source and target exist).
@@ -1758,7 +1966,9 @@ mod tests {
             col: Some(0),
             metadata: None,
         };
-        storage.with_conn(|conn| uq::insert_unresolved_ref(conn, &good_uref)).unwrap();
+        storage
+            .with_conn(|conn| uq::insert_unresolved_ref(conn, &good_uref))
+            .unwrap();
         assert_eq!(storage.get_unresolved_count().unwrap(), 2);
 
         // Batch: one edge with a PHANTOM (non-existent) target, one valid edge.
@@ -1849,32 +2059,40 @@ mod tests {
 
         // Insert file nodes so the FTS index gets "batch" in the file path context
         let insert_file = |storage: &StorageImpl, path: &str| {
-            storage.with_conn(|conn| {
-                // Insert a file-kind node so FTS can find the file by name
-                let file_node = Node {
-                    id: format!("file:{}", path),
-                    name: std::path::Path::new(path)
-                        .file_name().and_then(|n| n.to_str()).unwrap_or(path).to_string(),
-                    qualified_name: path.to_string(),
-                    kind: NodeKind::File,
-                    language: Language::Rust,
-                    file_path: path.to_string(),
-                    start_line: 1,
-                    end_line: 1,
-                    ..Default::default()
-                };
-                insert_node(conn, &file_node)?;
-                upsert_file(conn, &FileRecord {
-                    path: std::path::PathBuf::from(path),
-                    content_hash: "h".to_string(),
-                    language: "rust".to_string(),
-                    size: 100,
-                    modified_at: 1_000_000,
-                    indexed_at: 1_000_000,
-                    node_count: 1,
-                    errors: vec![],
+            storage
+                .with_conn(|conn| {
+                    // Insert a file-kind node so FTS can find the file by name
+                    let file_node = Node {
+                        id: format!("file:{}", path),
+                        name: std::path::Path::new(path)
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or(path)
+                            .to_string(),
+                        qualified_name: path.to_string(),
+                        kind: NodeKind::File,
+                        language: Language::Rust,
+                        file_path: path.to_string(),
+                        start_line: 1,
+                        end_line: 1,
+                        ..Default::default()
+                    };
+                    insert_node(conn, &file_node)?;
+                    upsert_file(
+                        conn,
+                        &FileRecord {
+                            path: std::path::PathBuf::from(path),
+                            content_hash: "h".to_string(),
+                            language: "rust".to_string(),
+                            size: 100,
+                            modified_at: 1_000_000,
+                            indexed_at: 1_000_000,
+                            node_count: 1,
+                            errors: vec![],
+                        },
+                    )
                 })
-            }).unwrap();
+                .unwrap();
         };
 
         insert_file(&storage, "crates/codewiki-resolution/src/batch.rs");
@@ -1892,7 +2110,9 @@ mod tests {
             end_line: 120,
             ..Default::default()
         };
-        storage.with_conn(|conn| insert_node(conn, &fn_node)).unwrap();
+        storage
+            .with_conn(|conn| insert_node(conn, &fn_node))
+            .unwrap();
 
         // Link file → function via contains edge
         let contains_edge = Edge {
@@ -1902,7 +2122,9 @@ mod tests {
             kind: EdgeKind::Contains,
             ..Default::default()
         };
-        storage.with_conn(|conn| insert_edge(conn, &contains_edge)).unwrap();
+        storage
+            .with_conn(|conn| insert_edge(conn, &contains_edge))
+            .unwrap();
 
         // Insert an unrelated `batch` variable in wasm_parser.rs
         let var_node = Node {
@@ -1916,7 +2138,9 @@ mod tests {
             end_line: 172,
             ..Default::default()
         };
-        storage.with_conn(|conn| insert_node(conn, &var_node)).unwrap();
+        storage
+            .with_conn(|conn| insert_node(conn, &var_node))
+            .unwrap();
 
         let query = "how does the batch loop avoid infinite loops";
         let opts = FindOpts {
@@ -1955,7 +2179,7 @@ mod tests {
     /// one of the requested paths, and return an empty vec for empty input.
     #[test]
     fn get_unresolved_by_files_filters_correctly() {
-        use crate::queries::unresolved::{get_unresolved_by_files, insert_unresolved_ref};
+        use crate::queries::unresolved::insert_unresolved_ref;
         let storage = make_storage();
 
         // Two files, each with one node and one unresolved ref.
@@ -1966,30 +2190,36 @@ mod tests {
 
         storage
             .with_conn(|conn| {
-                insert_unresolved_ref(conn, &UnresolvedRef {
-                    id: String::new(),
-                    from_node_id: "src/a.ts-node0".into(),
-                    reference_name: "refA".into(),
-                    reference_kind: "calls".into(),
-                    file_path: "src/a.ts".into(),
-                    line: Some(1),
-                    col: Some(0),
-                    metadata: None,
-                })
+                insert_unresolved_ref(
+                    conn,
+                    &UnresolvedRef {
+                        id: String::new(),
+                        from_node_id: "src/a.ts-node0".into(),
+                        reference_name: "refA".into(),
+                        reference_kind: "calls".into(),
+                        file_path: "src/a.ts".into(),
+                        line: Some(1),
+                        col: Some(0),
+                        metadata: None,
+                    },
+                )
             })
             .unwrap();
         storage
             .with_conn(|conn| {
-                insert_unresolved_ref(conn, &UnresolvedRef {
-                    id: String::new(),
-                    from_node_id: "src/b.ts-node0".into(),
-                    reference_name: "refB".into(),
-                    reference_kind: "calls".into(),
-                    file_path: "src/b.ts".into(),
-                    line: Some(1),
-                    col: Some(0),
-                    metadata: None,
-                })
+                insert_unresolved_ref(
+                    conn,
+                    &UnresolvedRef {
+                        id: String::new(),
+                        from_node_id: "src/b.ts-node0".into(),
+                        reference_name: "refB".into(),
+                        reference_kind: "calls".into(),
+                        file_path: "src/b.ts".into(),
+                        line: Some(1),
+                        col: Some(0),
+                        metadata: None,
+                    },
+                )
             })
             .unwrap();
 
@@ -1998,11 +2228,8 @@ mod tests {
         assert!(empty.is_empty());
 
         // Request only src/a.ts refs.
-        let a_refs = ResolutionStore::get_unresolved_by_files(
-            &storage,
-            &["src/a.ts".to_string()],
-        )
-        .unwrap();
+        let a_refs =
+            ResolutionStore::get_unresolved_by_files(&storage, &["src/a.ts".to_string()]).unwrap();
         assert_eq!(a_refs.len(), 1);
         assert_eq!(a_refs[0].file_path, "src/a.ts");
 
@@ -2025,19 +2252,25 @@ mod tests {
         let batch = make_batch("src/c.ts", "hc", 2);
         storage.store_extraction_batch(batch).unwrap();
 
-        for (name, from) in [("myFunc", "src/c.ts-node0"), ("otherFunc", "src/c.ts-node1")] {
+        for (name, from) in [
+            ("myFunc", "src/c.ts-node0"),
+            ("otherFunc", "src/c.ts-node1"),
+        ] {
             storage
                 .with_conn(|conn| {
-                    insert_unresolved_ref(conn, &UnresolvedRef {
-                        id: String::new(),
-                        from_node_id: from.into(),
-                        reference_name: name.into(),
-                        reference_kind: "calls".into(),
-                        file_path: "src/c.ts".into(),
-                        line: Some(1),
-                        col: Some(0),
-                        metadata: None,
-                    })
+                    insert_unresolved_ref(
+                        conn,
+                        &UnresolvedRef {
+                            id: String::new(),
+                            from_node_id: from.into(),
+                            reference_name: name.into(),
+                            reference_kind: "calls".into(),
+                            file_path: "src/c.ts".into(),
+                            line: Some(1),
+                            col: Some(0),
+                            metadata: None,
+                        },
+                    )
                 })
                 .unwrap();
         }
@@ -2047,11 +2280,8 @@ mod tests {
         assert!(empty.is_empty());
 
         // Only "myFunc" requested.
-        let refs = ResolutionStore::get_unresolved_by_names(
-            &storage,
-            &["myFunc".to_string()],
-        )
-        .unwrap();
+        let refs =
+            ResolutionStore::get_unresolved_by_names(&storage, &["myFunc".to_string()]).unwrap();
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].reference_name, "myFunc");
 
@@ -2080,15 +2310,18 @@ mod tests {
         ] {
             storage
                 .with_conn(|conn| {
-                    insert_node(conn, &Node {
-                        id: id.to_string(),
-                        name: name.to_string(),
-                        qualified_name: name.to_string(),
-                        kind: codewiki_core::NodeKind::Function,
-                        language: codewiki_core::Language::TypeScript,
-                        file_path: file.to_string(),
-                        ..Default::default()
-                    })
+                    insert_node(
+                        conn,
+                        &Node {
+                            id: id.to_string(),
+                            name: name.to_string(),
+                            qualified_name: name.to_string(),
+                            kind: codewiki_core::NodeKind::Function,
+                            language: codewiki_core::Language::TypeScript,
+                            file_path: file.to_string(),
+                            ..Default::default()
+                        },
+                    )
                 })
                 .unwrap();
         }
@@ -2096,13 +2329,16 @@ mod tests {
         // `app.ts` calls `lib.ts`.
         storage
             .with_conn(|conn| {
-                insert_edge(conn, &codewiki_core::Edge {
-                    id: "e1".to_string(),
-                    source_id: "app-fn".to_string(),
-                    target_id: "lib-fn".to_string(),
-                    kind: codewiki_core::EdgeKind::Calls,
-                    ..Default::default()
-                })
+                insert_edge(
+                    conn,
+                    &codewiki_core::Edge {
+                        id: "e1".to_string(),
+                        source_id: "app-fn".to_string(),
+                        target_id: "lib-fn".to_string(),
+                        kind: codewiki_core::EdgeKind::Calls,
+                        ..Default::default()
+                    },
+                )
             })
             .unwrap();
 
@@ -2111,16 +2347,12 @@ mod tests {
         assert!(empty.is_empty());
 
         // Changed file is `lib.ts` — only `app.ts` should be returned.
-        let deps = ResolutionStore::get_dependent_files(
-            &storage,
-            &["src/lib.ts".to_string()],
-        )
-        .unwrap();
+        let deps =
+            ResolutionStore::get_dependent_files(&storage, &["src/lib.ts".to_string()]).unwrap();
         assert_eq!(deps.len(), 1, "expected exactly 1 dependent file");
         assert_eq!(deps[0], "src/app.ts");
 
         // `unrelated.ts` has no edge to lib.ts — must not appear.
         assert!(!deps.contains(&"src/unrelated.ts".to_string()));
     }
-
 }

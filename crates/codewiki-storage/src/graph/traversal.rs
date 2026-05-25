@@ -1,7 +1,7 @@
 /// Graph traversal algorithms — BFS, DFS, callers/callees, impact, type hierarchy,
 /// path finding, cycle detection. Port of research-source/src/graph/traversal.ts.
 use crate::queries::{edges as eq, nodes as nq};
-use codewiki_core::{Edge, EdgeKind, Node, Subgraph, CodeWikiError};
+use codewiki_core::{CodeWikiError, Edge, EdgeKind, Node, Subgraph};
 use rusqlite::Connection;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -88,7 +88,11 @@ impl<'a> GraphTraverser<'a> {
         if opts.include_start {
             nodes.insert(start_node.id.clone(), start_node.clone());
         }
-        queue.push_back(Step { node_id: start_node.id.clone(), edge: None, depth: 0 });
+        queue.push_back(Step {
+            node_id: start_node.id.clone(),
+            edge: None,
+            depth: 0,
+        });
 
         while let Some(step) = queue.pop_front() {
             if nodes.len() >= opts.limit {
@@ -107,16 +111,32 @@ impl<'a> GraphTraverser<'a> {
                 continue;
             }
 
-            let mut adj = self.get_adjacent_edges(&step.node_id, &opts.direction, &opts.edge_kinds)?;
+            let mut adj =
+                self.get_adjacent_edges(&step.node_id, &opts.direction, &opts.edge_kinds)?;
             // Sort: contains=0, calls=1, rest=2
             adj.sort_by_key(|e| {
-                let k = serde_json::to_value(&e.kind).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
-                if k == "contains" { 0u8 } else if k == "calls" { 1 } else { 2 }
+                let k = serde_json::to_value(&e.kind)
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default();
+                if k == "contains" {
+                    0u8
+                } else if k == "calls" {
+                    1
+                } else {
+                    2
+                }
             });
 
             let want_ids: Vec<String> = adj
                 .iter()
-                .map(|e| if e.source_id == step.node_id { e.target_id.clone() } else { e.source_id.clone() })
+                .map(|e| {
+                    if e.source_id == step.node_id {
+                        e.target_id.clone()
+                    } else {
+                        e.source_id.clone()
+                    }
+                })
                 .filter(|id| !visited.contains(id))
                 .collect();
             let neighbor_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &want_ids)?
@@ -125,16 +145,30 @@ impl<'a> GraphTraverser<'a> {
                 .collect();
 
             for adj_edge in adj {
-                let next_id = if adj_edge.source_id == step.node_id { adj_edge.target_id.clone() } else { adj_edge.source_id.clone() };
-                if visited.contains(&next_id) { continue; }
+                let next_id = if adj_edge.source_id == step.node_id {
+                    adj_edge.target_id.clone()
+                } else {
+                    adj_edge.source_id.clone()
+                };
+                if visited.contains(&next_id) {
+                    continue;
+                }
                 if let Some(next_node) = neighbor_map.get(&next_id) {
                     nodes.insert(next_node.id.clone(), next_node.clone());
-                    queue.push_back(Step { node_id: next_id, edge: Some(adj_edge), depth: step.depth + 1 });
+                    queue.push_back(Step {
+                        node_id: next_id,
+                        edge: Some(adj_edge),
+                        depth: step.depth + 1,
+                    });
                 }
             }
         }
 
-        Ok(Subgraph { nodes, edges, roots: vec![start_id.to_string()] })
+        Ok(Subgraph {
+            nodes,
+            edges,
+            roots: vec![start_id.to_string()],
+        })
     }
 
     /// Depth-first traversal.
@@ -156,9 +190,20 @@ impl<'a> GraphTraverser<'a> {
             nodes.insert(start_node.id.clone(), start_node.clone());
         }
 
-        self.dfs_recursive(&start_node.id, 0, opts, &mut nodes, &mut edges, &mut visited)?;
+        self.dfs_recursive(
+            &start_node.id,
+            0,
+            opts,
+            &mut nodes,
+            &mut edges,
+            &mut visited,
+        )?;
 
-        Ok(Subgraph { nodes, edges, roots: vec![start_id.to_string()] })
+        Ok(Subgraph {
+            nodes,
+            edges,
+            roots: vec![start_id.to_string()],
+        })
     }
 
     fn dfs_recursive(
@@ -178,7 +223,13 @@ impl<'a> GraphTraverser<'a> {
         let adj = self.get_adjacent_edges(node_id, &opts.direction, &opts.edge_kinds)?;
         let want_ids: Vec<String> = adj
             .iter()
-            .map(|e| if e.source_id == node_id { e.target_id.clone() } else { e.source_id.clone() })
+            .map(|e| {
+                if e.source_id == node_id {
+                    e.target_id.clone()
+                } else {
+                    e.source_id.clone()
+                }
+            })
             .filter(|id| !visited.contains(id))
             .collect();
         let neighbor_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &want_ids)?
@@ -187,8 +238,14 @@ impl<'a> GraphTraverser<'a> {
             .collect();
 
         for edge in adj {
-            let next_id = if edge.source_id == node_id { edge.target_id.clone() } else { edge.source_id.clone() };
-            if visited.contains(&next_id) { continue; }
+            let next_id = if edge.source_id == node_id {
+                edge.target_id.clone()
+            } else {
+                edge.source_id.clone()
+            };
+            if visited.contains(&next_id) {
+                continue;
+            }
             if let Some(next_node) = neighbor_map.get(&next_id) {
                 nodes.insert(next_node.id.clone(), next_node.clone());
                 edges.push(edge);
@@ -219,21 +276,37 @@ impl<'a> GraphTraverser<'a> {
         result: &mut Vec<(Node, Edge)>,
         visited: &mut HashSet<String>,
     ) -> Result<(), CodeWikiError> {
-        if depth >= max_depth || visited.contains(node_id) { return Ok(()); }
+        if depth >= max_depth || visited.contains(node_id) {
+            return Ok(());
+        }
         visited.insert(node_id.to_string());
 
-        let incoming = eq::get_incoming_edges(self.conn, node_id, Some(&[EdgeKind::Calls, EdgeKind::References, EdgeKind::Imports]))?;
-        if incoming.is_empty() { return Ok(()); }
+        let incoming = eq::get_incoming_edges(
+            self.conn,
+            node_id,
+            Some(&[EdgeKind::Calls, EdgeKind::References, EdgeKind::Imports]),
+        )?;
+        if incoming.is_empty() {
+            return Ok(());
+        }
 
         let source_ids: Vec<String> = incoming.iter().map(|e| e.source_id.clone()).collect();
         let caller_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &source_ids)?
-            .into_iter().map(|n| (n.id.clone(), n)).collect();
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
 
         for edge in incoming {
             if let Some(caller) = caller_map.get(&edge.source_id) {
                 if !visited.contains(&caller.id) {
                     result.push((caller.clone(), edge));
-                    self.get_callers_recursive(&caller.id.clone(), max_depth, depth + 1, result, visited)?;
+                    self.get_callers_recursive(
+                        &caller.id.clone(),
+                        max_depth,
+                        depth + 1,
+                        result,
+                        visited,
+                    )?;
                 }
             }
         }
@@ -260,21 +333,37 @@ impl<'a> GraphTraverser<'a> {
         result: &mut Vec<(Node, Edge)>,
         visited: &mut HashSet<String>,
     ) -> Result<(), CodeWikiError> {
-        if depth >= max_depth || visited.contains(node_id) { return Ok(()); }
+        if depth >= max_depth || visited.contains(node_id) {
+            return Ok(());
+        }
         visited.insert(node_id.to_string());
 
-        let outgoing = eq::get_outgoing_edges(self.conn, node_id, Some(&[EdgeKind::Calls, EdgeKind::References, EdgeKind::Imports]))?;
-        if outgoing.is_empty() { return Ok(()); }
+        let outgoing = eq::get_outgoing_edges(
+            self.conn,
+            node_id,
+            Some(&[EdgeKind::Calls, EdgeKind::References, EdgeKind::Imports]),
+        )?;
+        if outgoing.is_empty() {
+            return Ok(());
+        }
 
         let target_ids: Vec<String> = outgoing.iter().map(|e| e.target_id.clone()).collect();
         let callee_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &target_ids)?
-            .into_iter().map(|n| (n.id.clone(), n)).collect();
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
 
         for edge in outgoing {
             if let Some(callee) = callee_map.get(&edge.target_id) {
                 if !visited.contains(&callee.id) {
                     result.push((callee.clone(), edge));
-                    self.get_callees_recursive(&callee.id.clone(), max_depth, depth + 1, result, visited)?;
+                    self.get_callees_recursive(
+                        &callee.id.clone(),
+                        max_depth,
+                        depth + 1,
+                        result,
+                        visited,
+                    )?;
                 }
             }
         }
@@ -299,7 +388,11 @@ impl<'a> GraphTraverser<'a> {
         nodes.insert(focal.id.clone(), focal);
         self.impact_recursive(node_id, max_depth, 0, &mut nodes, &mut edges, &mut visited)?;
 
-        Ok(Subgraph { nodes, edges, roots: vec![node_id.to_string()] })
+        Ok(Subgraph {
+            nodes,
+            edges,
+            roots: vec![node_id.to_string()],
+        })
     }
 
     fn impact_recursive(
@@ -311,25 +404,50 @@ impl<'a> GraphTraverser<'a> {
         edges: &mut Vec<Edge>,
         visited: &mut HashSet<String>,
     ) -> Result<(), CodeWikiError> {
-        if depth >= max_depth || visited.contains(node_id) { return Ok(()); }
+        if depth >= max_depth || visited.contains(node_id) {
+            return Ok(());
+        }
         visited.insert(node_id.to_string());
 
         // For container nodes, recurse into children at same depth
         if let Some(focal) = nq::get_node_by_id(self.conn, node_id)? {
-            let kind_str = serde_json::to_value(&focal.kind).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
-            let container_kinds = ["class", "interface", "struct", "trait", "protocol", "module", "enum"];
+            let kind_str = serde_json::to_value(&focal.kind)
+                .ok()
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_default();
+            let container_kinds = [
+                "class",
+                "interface",
+                "struct",
+                "trait",
+                "protocol",
+                "module",
+                "enum",
+            ];
             if container_kinds.contains(&kind_str.as_str()) {
-                let contains_edges = eq::get_outgoing_edges(self.conn, node_id, Some(&[EdgeKind::Contains]))?;
+                let contains_edges =
+                    eq::get_outgoing_edges(self.conn, node_id, Some(&[EdgeKind::Contains]))?;
                 if !contains_edges.is_empty() {
-                    let child_ids: Vec<String> = contains_edges.iter().map(|e| e.target_id.clone()).collect();
-                    let child_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &child_ids)?
-                        .into_iter().map(|n| (n.id.clone(), n)).collect();
+                    let child_ids: Vec<String> =
+                        contains_edges.iter().map(|e| e.target_id.clone()).collect();
+                    let child_map: HashMap<String, Node> =
+                        nq::get_nodes_by_ids(self.conn, &child_ids)?
+                            .into_iter()
+                            .map(|n| (n.id.clone(), n))
+                            .collect();
                     for edge in contains_edges {
                         if let Some(child) = child_map.get(&edge.target_id) {
                             if !visited.contains(&child.id) {
                                 nodes.insert(child.id.clone(), child.clone());
                                 edges.push(edge);
-                                self.impact_recursive(&child.id.clone(), max_depth, depth, nodes, edges, visited)?;
+                                self.impact_recursive(
+                                    &child.id.clone(),
+                                    max_depth,
+                                    depth,
+                                    nodes,
+                                    edges,
+                                    visited,
+                                )?;
                             }
                         }
                     }
@@ -338,17 +456,28 @@ impl<'a> GraphTraverser<'a> {
         }
 
         let incoming = eq::get_incoming_edges(self.conn, node_id, None)?;
-        if incoming.is_empty() { return Ok(()); }
+        if incoming.is_empty() {
+            return Ok(());
+        }
         let src_ids: Vec<String> = incoming.iter().map(|e| e.source_id.clone()).collect();
         let src_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &src_ids)?
-            .into_iter().map(|n| (n.id.clone(), n)).collect();
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
 
         for edge in incoming {
             if let Some(src) = src_map.get(&edge.source_id) {
                 if !nodes.contains_key(&src.id) {
                     nodes.insert(src.id.clone(), src.clone());
                     edges.push(edge);
-                    self.impact_recursive(&src.id.clone(), max_depth, depth + 1, nodes, edges, visited)?;
+                    self.impact_recursive(
+                        &src.id.clone(),
+                        max_depth,
+                        depth + 1,
+                        nodes,
+                        edges,
+                        visited,
+                    )?;
                 }
             }
         }
@@ -371,7 +500,11 @@ impl<'a> GraphTraverser<'a> {
         visited.clear();
         self.type_descendants(node_id, &mut nodes, &mut edges, &mut visited)?;
 
-        Ok(Subgraph { nodes, edges, roots: vec![node_id.to_string()] })
+        Ok(Subgraph {
+            nodes,
+            edges,
+            roots: vec![node_id.to_string()],
+        })
     }
 
     fn type_ancestors(
@@ -381,13 +514,23 @@ impl<'a> GraphTraverser<'a> {
         edges: &mut Vec<Edge>,
         visited: &mut HashSet<String>,
     ) -> Result<(), CodeWikiError> {
-        if visited.contains(node_id) { return Ok(()); }
+        if visited.contains(node_id) {
+            return Ok(());
+        }
         visited.insert(node_id.to_string());
-        let outgoing = eq::get_outgoing_edges(self.conn, node_id, Some(&[EdgeKind::Extends, EdgeKind::Implements]))?;
-        if outgoing.is_empty() { return Ok(()); }
+        let outgoing = eq::get_outgoing_edges(
+            self.conn,
+            node_id,
+            Some(&[EdgeKind::Extends, EdgeKind::Implements]),
+        )?;
+        if outgoing.is_empty() {
+            return Ok(());
+        }
         let parent_ids: Vec<String> = outgoing.iter().map(|e| e.target_id.clone()).collect();
         let parent_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &parent_ids)?
-            .into_iter().map(|n| (n.id.clone(), n)).collect();
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
         for edge in outgoing {
             if let Some(parent) = parent_map.get(&edge.target_id) {
                 if !nodes.contains_key(&parent.id) {
@@ -407,13 +550,23 @@ impl<'a> GraphTraverser<'a> {
         edges: &mut Vec<Edge>,
         visited: &mut HashSet<String>,
     ) -> Result<(), CodeWikiError> {
-        if visited.contains(node_id) { return Ok(()); }
+        if visited.contains(node_id) {
+            return Ok(());
+        }
         visited.insert(node_id.to_string());
-        let incoming = eq::get_incoming_edges(self.conn, node_id, Some(&[EdgeKind::Extends, EdgeKind::Implements]))?;
-        if incoming.is_empty() { return Ok(()); }
+        let incoming = eq::get_incoming_edges(
+            self.conn,
+            node_id,
+            Some(&[EdgeKind::Extends, EdgeKind::Implements]),
+        )?;
+        if incoming.is_empty() {
+            return Ok(());
+        }
         let child_ids: Vec<String> = incoming.iter().map(|e| e.source_id.clone()).collect();
         let child_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &child_ids)?
-            .into_iter().map(|n| (n.id.clone(), n)).collect();
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
         for edge in incoming {
             if let Some(child) = child_map.get(&edge.source_id) {
                 if !nodes.contains_key(&child.id) {
@@ -438,7 +591,9 @@ impl<'a> GraphTraverser<'a> {
             None => return Ok(None),
         };
         let to_node = nq::get_node_by_id(self.conn, to_id)?;
-        if to_node.is_none() { return Ok(None); }
+        if to_node.is_none() {
+            return Ok(None);
+        }
 
         let mut visited: HashSet<String> = HashSet::new();
         let mut queue: VecDeque<(String, Vec<PathStep>)> = VecDeque::new();
@@ -448,17 +603,26 @@ impl<'a> GraphTraverser<'a> {
             if current_id == to_id {
                 return Ok(Some(path));
             }
-            if visited.contains(&current_id) { continue; }
+            if visited.contains(&current_id) {
+                continue;
+            }
             visited.insert(current_id.clone());
 
-            let kinds_opt = if edge_kinds.is_empty() { None } else { Some(edge_kinds) };
+            let kinds_opt = if edge_kinds.is_empty() {
+                None
+            } else {
+                Some(edge_kinds)
+            };
             let outgoing = eq::get_outgoing_edges(self.conn, &current_id, kinds_opt)?;
-            let want_ids: Vec<String> = outgoing.iter()
+            let want_ids: Vec<String> = outgoing
+                .iter()
                 .map(|e| e.target_id.clone())
                 .filter(|id| !visited.contains(id))
                 .collect();
             let next_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &want_ids)?
-                .into_iter().map(|n| (n.id.clone(), n)).collect();
+                .into_iter()
+                .map(|n| (n.id.clone(), n))
+                .collect();
 
             for edge in outgoing {
                 if !visited.contains(&edge.target_id) {
@@ -476,10 +640,14 @@ impl<'a> GraphTraverser<'a> {
     /// All direct incoming edges (one-hop only).
     pub fn find_usages(&self, node_id: &str) -> Result<Vec<(Node, Edge)>, CodeWikiError> {
         let incoming = eq::get_incoming_edges(self.conn, node_id, None)?;
-        if incoming.is_empty() { return Ok(vec![]); }
+        if incoming.is_empty() {
+            return Ok(vec![]);
+        }
         let src_ids: Vec<String> = incoming.iter().map(|e| e.source_id.clone()).collect();
         let src_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &src_ids)?
-            .into_iter().map(|n| (n.id.clone(), n)).collect();
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
         let mut result = Vec::new();
         for edge in incoming {
             if let Some(src) = src_map.get(&edge.source_id) {
@@ -496,10 +664,13 @@ impl<'a> GraphTraverser<'a> {
         let mut current_id = node_id.to_string();
 
         loop {
-            if visited.contains(&current_id) { break; }
+            if visited.contains(&current_id) {
+                break;
+            }
             visited.insert(current_id.clone());
 
-            let containing = eq::get_incoming_edges(self.conn, &current_id, Some(&[EdgeKind::Contains]))?;
+            let containing =
+                eq::get_incoming_edges(self.conn, &current_id, Some(&[EdgeKind::Contains]))?;
             match containing.into_iter().next() {
                 Some(edge) => {
                     if let Some(parent) = nq::get_node_by_id(self.conn, &edge.source_id)? {
@@ -517,11 +688,16 @@ impl<'a> GraphTraverser<'a> {
 
     /// Get immediate children (contains edges).
     pub fn get_children(&self, node_id: &str) -> Result<Vec<Node>, CodeWikiError> {
-        let contains_edges = eq::get_outgoing_edges(self.conn, node_id, Some(&[EdgeKind::Contains]))?;
-        if contains_edges.is_empty() { return Ok(vec![]); }
+        let contains_edges =
+            eq::get_outgoing_edges(self.conn, node_id, Some(&[EdgeKind::Contains]))?;
+        if contains_edges.is_empty() {
+            return Ok(vec![]);
+        }
         let child_ids: Vec<String> = contains_edges.iter().map(|e| e.target_id.clone()).collect();
         let child_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &child_ids)?
-            .into_iter().map(|n| (n.id.clone(), n)).collect();
+            .into_iter()
+            .map(|n| (n.id.clone(), n))
+            .collect();
         let mut children = Vec::new();
         for edge in contains_edges {
             if let Some(child) = child_map.get(&edge.target_id) {
@@ -545,7 +721,14 @@ impl<'a> GraphTraverser<'a> {
         for file in &files {
             let path = file.path.to_string_lossy().to_string();
             if !visited.contains(&path) {
-                self.cycle_dfs(conn, &path, &mut visited, &mut recursion_stack, &mut vec![], &mut cycles)?;
+                self.cycle_dfs(
+                    conn,
+                    &path,
+                    &mut visited,
+                    &mut recursion_stack,
+                    &mut vec![],
+                    &mut cycles,
+                )?;
             }
         }
         Ok(cycles)
@@ -560,8 +743,8 @@ impl<'a> GraphTraverser<'a> {
         path: &mut Vec<String>,
         cycles: &mut Vec<Vec<String>>,
     ) -> Result<(), CodeWikiError> {
-        use crate::queries::nodes::get_nodes_by_file;
         use crate::queries::edges::get_outgoing_edges;
+        use crate::queries::nodes::get_nodes_by_file;
 
         if recursion_stack.contains(file_path) {
             let cycle_start = path.iter().position(|p| p == file_path);
@@ -570,7 +753,9 @@ impl<'a> GraphTraverser<'a> {
             }
             return Ok(());
         }
-        if visited.contains(file_path) { return Ok(()); }
+        if visited.contains(file_path) {
+            return Ok(());
+        }
 
         visited.insert(file_path.to_string());
         recursion_stack.insert(file_path.to_string());
@@ -579,7 +764,11 @@ impl<'a> GraphTraverser<'a> {
         // Find file dependencies via import edges
         let nodes = get_nodes_by_file(conn, file_path)?;
         let file_node = nodes.iter().find(|n| {
-            serde_json::to_value(&n.kind).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default() == "file"
+            serde_json::to_value(&n.kind)
+                .ok()
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_default()
+                == "file"
         });
 
         if let Some(fnode) = file_node {
@@ -587,7 +776,14 @@ impl<'a> GraphTraverser<'a> {
             for edge in import_edges {
                 if let Some(target) = nq::get_node_by_id(conn, &edge.target_id)? {
                     if target.file_path != file_path {
-                        self.cycle_dfs(conn, &target.file_path, visited, recursion_stack, path, cycles)?;
+                        self.cycle_dfs(
+                            conn,
+                            &target.file_path,
+                            visited,
+                            recursion_stack,
+                            path,
+                            cycles,
+                        )?;
                     }
                 }
             }
@@ -640,7 +836,9 @@ mod tests {
         insert_edge(&conn, &make_edge("B", "C", EdgeKind::Calls)).unwrap();
 
         let traverser = GraphTraverser::new(&conn);
-        let subgraph = traverser.traverse_bfs("A", &TraversalOptions::default()).unwrap();
+        let subgraph = traverser
+            .traverse_bfs("A", &TraversalOptions::default())
+            .unwrap();
         assert_eq!(subgraph.nodes.len(), 3);
     }
 
@@ -671,7 +869,13 @@ mod tests {
         let traverser = GraphTraverser::new(&conn);
         // BFS with limit should terminate even with cycles
         let subgraph = traverser
-            .traverse_bfs("A", &TraversalOptions { limit: 100, ..Default::default() })
+            .traverse_bfs(
+                "A",
+                &TraversalOptions {
+                    limit: 100,
+                    ..Default::default()
+                },
+            )
             .unwrap();
         assert!(!subgraph.nodes.is_empty());
     }

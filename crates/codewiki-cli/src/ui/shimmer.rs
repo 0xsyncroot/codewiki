@@ -22,11 +22,11 @@ pub enum Phase {
 impl Phase {
     pub fn label(self) -> &'static str {
         match self {
-            Phase::Scanning  => "Scanning files",
-            Phase::Parsing   => "Parsing",
-            Phase::Storing   => "Storing",
+            Phase::Scanning => "Scanning files",
+            Phase::Parsing => "Parsing",
+            Phase::Storing => "Storing",
             Phase::Resolving => "Resolving references",
-            Phase::Done      => "Done",
+            Phase::Done => "Done",
         }
     }
 }
@@ -34,9 +34,9 @@ impl Phase {
 /// A progress update posted by the extraction pipeline.
 #[derive(Debug, Clone)]
 pub struct IndexProgress {
-    pub phase:   Phase,
+    pub phase: Phase,
     pub percent: u8,
-    pub count:   u64,
+    pub count: u64,
 }
 
 /// An animated progress bar for the indexing pipeline.
@@ -49,11 +49,9 @@ impl ShimmerProgress {
     pub fn new() -> Self {
         let bar = ProgressBar::new(100);
         bar.set_style(
-            ProgressStyle::with_template(
-                "{spinner:.cyan} {msg} [{bar:40.cyan/blue}] {pos}%",
-            )
-            .unwrap_or_else(|_| ProgressStyle::default_bar())
-            .progress_chars("=>-"),
+            ProgressStyle::with_template("{spinner:.cyan} {msg} [{bar:40.cyan/blue}] {pos}%")
+                .unwrap_or_else(|_| ProgressStyle::default_bar())
+                .progress_chars("=>-"),
         );
         bar.enable_steady_tick(Duration::from_millis(80));
         ShimmerProgress { bar }
@@ -71,7 +69,8 @@ impl ShimmerProgress {
 
     /// Finish the bar with a summary message.
     pub fn finish(&self, total_files: u64) {
-        self.bar.finish_with_message(format!("indexed {} files", total_files));
+        self.bar
+            .finish_with_message(format!("indexed {} files", total_files));
         tracing::info!(indexed_files = total_files, "indexed {} files", total_files);
     }
 
@@ -93,7 +92,13 @@ mod tests {
 
     #[test]
     fn phase_labels_are_non_empty() {
-        for phase in [Phase::Scanning, Phase::Parsing, Phase::Storing, Phase::Resolving, Phase::Done] {
+        for phase in [
+            Phase::Scanning,
+            Phase::Parsing,
+            Phase::Storing,
+            Phase::Resolving,
+            Phase::Done,
+        ] {
             assert!(!phase.label().is_empty());
         }
     }

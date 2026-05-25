@@ -1,6 +1,8 @@
 //! T-214 — C language extractor.
 
-use crate::ast_walker::{walk_node, DocCommentStyle, ExtractCtx, LanguageConfig, LanguageExtractor};
+use crate::ast_walker::{
+    walk_node, DocCommentStyle, ExtractCtx, LanguageConfig, LanguageExtractor,
+};
 use codewiki_core::NodeKind;
 
 pub struct CExtractor;
@@ -99,7 +101,7 @@ mod tests {
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
         // File node + function
-        assert!(batch.nodes.len() >= 1, "expected at least a file node");
+        assert!(!batch.nodes.is_empty(), "expected at least a file node");
     }
 
     /// Bug 6 fix: C function names must not include the parameter list.

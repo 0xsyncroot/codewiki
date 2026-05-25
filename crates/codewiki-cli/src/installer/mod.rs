@@ -64,7 +64,10 @@ fn resolve_target_ids(flag: &str, loc: Location) -> Result<Vec<&'static str>> {
                 .collect();
             for id in &ids {
                 if !all.iter().any(|t| t.id() == *id) {
-                    return Err(anyhow::anyhow!("Unknown target: '{}'. Valid: claude, cursor, codex, opencode, hermes", id));
+                    return Err(anyhow::anyhow!(
+                        "Unknown target: '{}'. Valid: claude, cursor, codex, opencode, hermes",
+                        id
+                    ));
                 }
             }
             Ok(valid)
@@ -100,7 +103,11 @@ pub fn run_installer(opts: InstallerOpts) -> Result<()> {
         resolve_target_ids(&opts.target, loc)?
     } else {
         // Interactive: use cliclack multi_select.
-        cliclack::intro(if ascii { "codewiki installer" } else { "◆ codewiki installer" })?;
+        cliclack::intro(if ascii {
+            "codewiki installer"
+        } else {
+            "◆ codewiki installer"
+        })?;
 
         let all_ids: Vec<(&'static str, &'static str, bool)> = all_targets
             .iter()
@@ -117,7 +124,11 @@ pub fn run_installer(opts: InstallerOpts) -> Result<()> {
             .map(|(id, _, _)| *id)
             .collect();
 
-        let initial = if initial.is_empty() { vec!["claude"] } else { initial };
+        let initial = if initial.is_empty() {
+            vec!["claude"]
+        } else {
+            initial
+        };
 
         let items: Vec<(&str, &str, &str)> = all_ids
             .iter()

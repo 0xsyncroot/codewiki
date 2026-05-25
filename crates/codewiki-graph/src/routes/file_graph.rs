@@ -43,8 +43,7 @@ pub async fn handle(
         let conn = db.lock().map_err(|_| anyhow::anyhow!("mutex poisoned"))?;
 
         // Get all nodes in the file
-        let file_nodes = nq::get_nodes_by_file(&conn, &path)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let file_nodes = nq::get_nodes_by_file(&conn, &path).map_err(|e| anyhow::anyhow!("{e}"))?;
 
         if file_nodes.is_empty() {
             return Ok(Subgraph {
@@ -90,8 +89,7 @@ pub async fn handle(
 
     match result {
         Ok(subgraph) => {
-            let resp =
-                build_subgraph_response(subgraph, effective_limit, &HashSet::new(), None);
+            let resp = build_subgraph_response(subgraph, effective_limit, &HashSet::new(), None);
             Json(resp).into_response()
         }
         Err(e) => super::ApiError::internal(e.to_string()).into_response(),

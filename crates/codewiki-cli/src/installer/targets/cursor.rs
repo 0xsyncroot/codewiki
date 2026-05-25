@@ -218,7 +218,9 @@ impl AgentTarget for CursorTarget {
             result.push(p, a);
         }
 
-        result.notes.push("Restart Cursor for MCP changes to take effect.".to_string());
+        result
+            .notes
+            .push("Restart Cursor for MCP changes to take effect.".to_string());
         Ok(result)
     }
 
@@ -301,7 +303,10 @@ mod tests {
             .iter()
             .map(|v| v.as_str().unwrap())
             .collect();
-        assert_eq!(&args[..MCP_SERVE_ARGS_WITH_PATH.len()], MCP_SERVE_ARGS_WITH_PATH);
+        assert_eq!(
+            &args[..MCP_SERVE_ARGS_WITH_PATH.len()],
+            MCP_SERVE_ARGS_WITH_PATH
+        );
         assert_eq!(args.last().unwrap(), &"${workspaceFolder}");
     }
 }

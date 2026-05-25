@@ -49,9 +49,7 @@ pub enum DocCommentStyle {
     },
     /// Python-style: first named child of the body block is an
     /// `expression_statement` containing a `string` node.
-    PythonFirstBodyString {
-        body_field: &'static str,
-    },
+    PythonFirstBodyString { body_field: &'static str },
 }
 
 // ── Language configuration ────────────────────────────────────────────────────
@@ -418,7 +416,9 @@ pub fn extract_docstring(
             line_prefix,
         } => {
             // Try block first (one sibling)
-            if let Some(s) = extract_preceding_block_comment(decl_node, source, block_node_kind, block_prefix) {
+            if let Some(s) =
+                extract_preceding_block_comment(decl_node, source, block_node_kind, block_prefix)
+            {
                 return Some(s);
             }
             // Then line run
@@ -440,7 +440,8 @@ fn extract_preceding_line_comments(
 ) -> Option<String> {
     // Try the direct preceding sibling first; if none, try the parent's preceding
     // sibling (handles `export function f()` where JSDoc is before `export_statement`).
-    let candidate = decl_node.prev_named_sibling()
+    let candidate = decl_node
+        .prev_named_sibling()
         .or_else(|| decl_node.parent().and_then(|p| p.prev_named_sibling()))?;
 
     // Reference row for blank-line gap check: use the effective declaration start
@@ -509,7 +510,8 @@ fn extract_preceding_block_comment(
 ) -> Option<String> {
     // Try the direct preceding sibling first; if none, try the parent's preceding
     // sibling (handles `export function f()` where JSDoc is before `export_statement`).
-    let candidate = decl_node.prev_named_sibling()
+    let candidate = decl_node
+        .prev_named_sibling()
         .or_else(|| decl_node.parent().and_then(|p| p.prev_named_sibling()))?;
 
     // Reference row for blank-line gap check
@@ -577,7 +579,10 @@ fn strip_line_comment_markers(text: &str, prefix: &str) -> Vec<String> {
             let trimmed = line.trim_start();
             if let Some(rest) = trimmed.strip_prefix(prefix) {
                 // Strip one optional leading space after the prefix
-                rest.strip_prefix(' ').unwrap_or(rest).trim_end().to_string()
+                rest.strip_prefix(' ')
+                    .unwrap_or(rest)
+                    .trim_end()
+                    .to_string()
             } else {
                 line.trim_end().to_string()
             }
@@ -616,7 +621,10 @@ fn strip_block_comment_markers(text: &str) -> String {
         }
         // Middle lines: strip leading ` * ` or ` *`
         let cleaned = if let Some(rest) = trimmed.strip_prefix('*') {
-            rest.strip_prefix(' ').unwrap_or(rest).trim_end().to_string()
+            rest.strip_prefix(' ')
+                .unwrap_or(rest)
+                .trim_end()
+                .to_string()
         } else {
             trimmed.trim_end().to_string()
         };
@@ -637,7 +645,10 @@ fn strip_block_comment_markers(text: &str) -> String {
 /// Strip Python triple-quoted or single-quoted string delimiters and dedent.
 fn strip_python_docstring(text: &str) -> String {
     // Try to strip triple-quote delimiters
-    let inner = if let Some(s) = text.strip_prefix("\"\"\"").and_then(|s| s.strip_suffix("\"\"\"")) {
+    let inner = if let Some(s) = text
+        .strip_prefix("\"\"\"")
+        .and_then(|s| s.strip_suffix("\"\"\""))
+    {
         s
     } else if let Some(s) = text.strip_prefix("'''").and_then(|s| s.strip_suffix("'''")) {
         s
@@ -651,10 +662,17 @@ fn strip_python_docstring(text: &str) -> String {
 
     // Dedent: find common leading whitespace of non-empty lines (skip first line)
     let lines: Vec<&str> = inner.lines().collect();
-    let non_empty_body: Vec<&str> = lines.iter().skip(1).filter(|l| !l.trim().is_empty()).copied().collect();
-    let common_indent = non_empty_body.iter().map(|l| {
-        l.len() - l.trim_start_matches([' ', '\t']).len()
-    }).min().unwrap_or(0);
+    let non_empty_body: Vec<&str> = lines
+        .iter()
+        .skip(1)
+        .filter(|l| !l.trim().is_empty())
+        .copied()
+        .collect();
+    let common_indent = non_empty_body
+        .iter()
+        .map(|l| l.len() - l.trim_start_matches([' ', '\t']).len())
+        .min()
+        .unwrap_or(0);
 
     let dedented: Vec<String> = lines
         .iter()
@@ -729,7 +747,10 @@ pub fn walk_node(
     } else if cfg.field_types.contains(&node_type) && is_in_class_scope(ctx) {
         extract_field(node, ctx);
         skip_children = true;
-    } else if cfg.variable_types.contains(&node_type) && !is_in_class_scope(ctx) && !is_in_function_scope(ctx) {
+    } else if cfg.variable_types.contains(&node_type)
+        && !is_in_class_scope(ctx)
+        && !is_in_function_scope(ctx)
+    {
         extract_variable(node, ctx);
         skip_children = true;
     } else if cfg.import_types.contains(&node_type) {
@@ -802,7 +823,10 @@ pub fn is_in_function_scope(ctx: &ExtractCtx) -> bool {
 
 fn extract_name_from_node(node: &tree_sitter::Node, source: &[u8], name_field: &str) -> String {
     if let Some(name_node) = node.child_by_field_name(name_field) {
-        return name_node.utf8_text(source).unwrap_or("<invalid>").to_string();
+        return name_node
+            .utf8_text(source)
+            .unwrap_or("<invalid>")
+            .to_string();
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
@@ -873,7 +897,10 @@ fn extract_namespace(
             for child in node.named_children(&mut cursor) {
                 let k = child.kind();
                 if k == "qualified_name" || k == "identifier" {
-                    found = child.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string();
+                    found = child
+                        .utf8_text(ctx.source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     break;
                 }
             }
@@ -885,17 +912,19 @@ fn extract_namespace(
     }
 
     // Emit the Namespace node (no docstring for namespace declarations).
-    let ns_id = if let Some(id) = ctx.emit_node(NodeKind::Namespace, &ns_name, node, false, None, None) {
-        id
-    } else {
-        return false;
-    };
+    let ns_id =
+        if let Some(id) = ctx.emit_node(NodeKind::Namespace, &ns_name, node, false, None, None) {
+            id
+        } else {
+            return false;
+        };
 
     ctx.scope.push(ns_id);
 
     // Block-scoped namespace: find the body child (declaration_list or body field)
     // and recurse into it.
-    let body_child = node.child_by_field_name("body")
+    let body_child = node
+        .child_by_field_name("body")
         .or_else(|| node.child_by_field_name("declaration_list"));
 
     if let Some(body) = body_child {
@@ -971,7 +1000,14 @@ fn extract_method(
     };
 
     let docstring = extract_docstring(node, ctx.source.as_bytes(), &ctx.config.doc_comment_style);
-    if let Some(id) = ctx.emit_node(NodeKind::Method, &name, node, exported, signature, docstring) {
+    if let Some(id) = ctx.emit_node(
+        NodeKind::Method,
+        &name,
+        node,
+        exported,
+        signature,
+        docstring,
+    ) {
         // Patch is_async into the just-emitted node's metadata
         if let Some(n) = ctx.nodes.iter_mut().find(|n| n.id == id) {
             n.metadata = metadata;
@@ -1142,11 +1178,8 @@ fn extract_enum(
                     walk_node(&inner, ctx, extractor);
                 }
             } else if ctx.config.enum_member_types.contains(&child.kind()) {
-                let mem_name = extract_name_from_node(
-                    &child,
-                    ctx.source.as_bytes(),
-                    ctx.config.name_field,
-                );
+                let mem_name =
+                    extract_name_from_node(&child, ctx.source.as_bytes(), ctx.config.name_field);
                 if !mem_name.is_empty() {
                     ctx.emit_node(NodeKind::EnumMember, &mem_name, &child, false, None, None);
                 }
@@ -1238,7 +1271,11 @@ fn extract_import(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
             for child in node.named_children(&mut cursor) {
                 let k = child.kind();
                 if k == "qualified_name" || k == "identifier" || k == "name" {
-                    let text = child.utf8_text(source_bytes).unwrap_or("").trim_matches(|c| c == '"' || c == '\'').to_string();
+                    let text = child
+                        .utf8_text(source_bytes)
+                        .unwrap_or("")
+                        .trim_matches(|c| c == '"' || c == '\'')
+                        .to_string();
                     if !text.is_empty() {
                         return Some(text);
                     }
@@ -1301,7 +1338,13 @@ fn extract_rust_impl(
         if let Some(existing) = ctx
             .nodes
             .iter()
-            .find(|n| n.name == impl_type && matches!(n.kind, NodeKind::Struct | NodeKind::Trait | NodeKind::Class | NodeKind::Enum))
+            .find(|n| {
+                n.name == impl_type
+                    && matches!(
+                        n.kind,
+                        NodeKind::Struct | NodeKind::Trait | NodeKind::Class | NodeKind::Enum
+                    )
+            })
             .map(|n| n.id.clone())
         {
             existing
@@ -1489,5 +1532,4 @@ mod tests {
             batch.file.modified_at
         );
     }
-
 }

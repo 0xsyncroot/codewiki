@@ -166,7 +166,14 @@ pub fn write_permissions_entry(loc: Location) -> Result<(PathBuf, FileAction)> {
     }
 
     write_json_file(&file, &settings)?;
-    Ok((file, if created { FileAction::Created } else { FileAction::Updated }))
+    Ok((
+        file,
+        if created {
+            FileAction::Created
+        } else {
+            FileAction::Updated
+        },
+    ))
 }
 
 #[tracing::instrument(level = "debug")]
@@ -198,8 +205,12 @@ pub fn write_instructions_entry(loc: Location) -> Result<(PathBuf, FileAction)> 
         }
     }
 
-    let action =
-        replace_or_append_marked_section(&file, instructions_template(), CODEWIKI_SECTION_START, CODEWIKI_SECTION_END)?;
+    let action = replace_or_append_marked_section(
+        &file,
+        instructions_template(),
+        CODEWIKI_SECTION_START,
+        CODEWIKI_SECTION_END,
+    )?;
     let mapped = match action {
         SectionAction::Created => FileAction::Created,
         SectionAction::Unchanged => FileAction::Unchanged,
@@ -237,9 +248,7 @@ fn cleanup_legacy_hooks(loc: Location) -> Result<(PathBuf, FileAction)> {
                 for group in arr.iter_mut() {
                     if let Some(hooks_arr) = group.get_mut("hooks").and_then(|v| v.as_array_mut()) {
                         let before = hooks_arr.len();
-                        hooks_arr.retain(|h| {
-                            !is_legacy_codewiki_hook_command(&h["command"])
-                        });
+                        hooks_arr.retain(|h| !is_legacy_codewiki_hook_command(&h["command"]));
                         if hooks_arr.len() != before {
                             removed_any = true;
                         }
@@ -397,8 +406,11 @@ impl AgentTarget for ClaudeTarget {
             .pointer("/permissions/allow")
             .and_then(|v| v.as_array())
             .map(|arr| {
-                arr.iter()
-                    .any(|p| p.as_str().map(|s| s.starts_with("mcp__codewiki__")).unwrap_or(false))
+                arr.iter().any(|p| {
+                    p.as_str()
+                        .map(|s| s.starts_with("mcp__codewiki__"))
+                        .unwrap_or(false)
+                })
             })
             .unwrap_or(false);
 
@@ -421,7 +433,10 @@ impl AgentTarget for ClaudeTarget {
                 .map(|a| a.is_empty())
                 .unwrap_or(false);
             if allow_empty {
-                if let Some(perms) = settings.get_mut("permissions").and_then(|v| v.as_object_mut()) {
+                if let Some(perms) = settings
+                    .get_mut("permissions")
+                    .and_then(|v| v.as_object_mut())
+                {
                     perms.remove("allow");
                 }
             }
@@ -470,7 +485,11 @@ impl AgentTarget for ClaudeTarget {
     }
 
     fn describe_paths(&self, loc: Location) -> Vec<PathBuf> {
-        vec![mcp_json_path(loc), settings_json_path(loc), instructions_path(loc)]
+        vec![
+            mcp_json_path(loc),
+            settings_json_path(loc),
+            instructions_path(loc),
+        ]
     }
 }
 
@@ -505,7 +524,10 @@ mod tests {
     fn install_global_creates_claude_json() {
         let _home = setup_home();
         let target = ClaudeTarget;
-        let opts = InstallOptions { auto_allow: false, project_root: None };
+        let opts = InstallOptions {
+            auto_allow: false,
+            project_root: None,
+        };
         let result = target.install(Location::Global, &opts).unwrap();
         let mcp_file = mcp_json_path(Location::Global);
         assert!(mcp_file.exists(), ".claude.json should be created");
@@ -525,7 +547,10 @@ mod tests {
     fn install_idempotent_returns_unchanged() {
         let _home = setup_home();
         let target = ClaudeTarget;
-        let opts = InstallOptions { auto_allow: false, project_root: None };
+        let opts = InstallOptions {
+            auto_allow: false,
+            project_root: None,
+        };
         target.install(Location::Global, &opts).unwrap();
         let result2 = target.install(Location::Global, &opts).unwrap();
         // The MCP entry file should report unchanged on the second run.

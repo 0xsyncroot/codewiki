@@ -1,6 +1,6 @@
 /// Project metadata and statistics helpers.
 use codewiki_core::{CodeWikiError, GraphStats};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use std::collections::HashMap;
 
 /// Return a `HashMap<kind_string, count>` of all edges grouped by kind.
@@ -11,8 +11,7 @@ use std::collections::HashMap;
 /// SQL: `SELECT kind, COUNT(*) AS cnt FROM edges GROUP BY kind`
 /// Uses `idx_edges_kind` (or an implicit scan).
 pub fn get_edges_by_kind(conn: &Connection) -> Result<HashMap<String, u64>, CodeWikiError> {
-    let mut stmt =
-        conn.prepare_cached("SELECT kind, COUNT(*) AS cnt FROM edges GROUP BY kind")?;
+    let mut stmt = conn.prepare_cached("SELECT kind, COUNT(*) AS cnt FROM edges GROUP BY kind")?;
     let rows = stmt.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
     })?;
@@ -32,8 +31,7 @@ fn now_ms() -> i64 {
 }
 
 pub fn get_metadata(conn: &Connection, key: &str) -> Result<Option<String>, CodeWikiError> {
-    let mut stmt =
-        conn.prepare_cached("SELECT value FROM project_metadata WHERE key = ?1")?;
+    let mut stmt = conn.prepare_cached("SELECT value FROM project_metadata WHERE key = ?1")?;
     let mut rows = stmt.query(params![key])?;
     if let Some(row) = rows.next()? {
         Ok(Some(row.get(0)?))
@@ -52,9 +50,10 @@ pub fn set_metadata(conn: &Connection, key: &str, value: &str) -> Result<(), Cod
 }
 
 pub fn get_all_metadata(conn: &Connection) -> Result<HashMap<String, String>, CodeWikiError> {
-    let mut stmt =
-        conn.prepare_cached("SELECT key, value FROM project_metadata")?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?;
+    let mut stmt = conn.prepare_cached("SELECT key, value FROM project_metadata")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
     let mut result = HashMap::new();
     for row in rows {
         let (k, v) = row.map_err(CodeWikiError::Sqlite)?;
@@ -87,22 +86,25 @@ pub fn get_stats(conn: &Connection) -> Result<GraphStats, CodeWikiError> {
     let unresolved_ref_count: i64 =
         conn.query_row("SELECT COUNT(*) FROM unresolved_refs", [], |row| row.get(0))?;
 
-    let journal_mode: String =
-        conn.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
+    let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
 
     // DB size
-    let (page_count, page_size): (i64, i64) = conn.query_row(
-        "SELECT page_count, page_size FROM pragma_page_count(), pragma_page_size()",
-        [],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    ).unwrap_or((0, 4096));
+    let (page_count, page_size): (i64, i64) = conn
+        .query_row(
+            "SELECT page_count, page_size FROM pragma_page_count(), pragma_page_size()",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap_or((0, 4096));
     let db_size_bytes = (page_count * page_size) as u64;
 
     let mut nodes_by_kind: HashMap<String, u64> = HashMap::new();
     {
         let mut stmt =
             conn.prepare_cached("SELECT kind, COUNT(*) as cnt FROM nodes GROUP BY kind")?;
-        let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
         for row in rows {
             let (k, v) = row.map_err(CodeWikiError::Sqlite)?;
             nodes_by_kind.insert(k, v as u64);
@@ -113,7 +115,9 @@ pub fn get_stats(conn: &Connection) -> Result<GraphStats, CodeWikiError> {
     {
         let mut stmt =
             conn.prepare_cached("SELECT language, COUNT(*) as cnt FROM files GROUP BY language")?;
-        let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
         for row in rows {
             let (k, v) = row.map_err(CodeWikiError::Sqlite)?;
             files_by_language.insert(k, v as u64);
@@ -208,7 +212,10 @@ mod tests {
         .unwrap();
 
         let map = get_edges_by_kind(&conn).unwrap();
-        assert!(map.contains_key("calls"), "expected 'calls' key in edges_by_kind");
+        assert!(
+            map.contains_key("calls"),
+            "expected 'calls' key in edges_by_kind"
+        );
         assert_eq!(map["calls"], 1);
     }
 }

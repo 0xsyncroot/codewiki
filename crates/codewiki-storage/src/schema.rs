@@ -37,11 +37,9 @@ mod tests {
 
         // Verify schema_versions has a row
         let version: u32 = conn
-            .query_row(
-                "SELECT MAX(version) FROM schema_versions",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT MAX(version) FROM schema_versions", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(version, 1);
     }

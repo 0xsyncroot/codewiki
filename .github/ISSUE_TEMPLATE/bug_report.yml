@@ -1,0 +1,63 @@
+name: Bug report
+description: Report something that isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill out the
+        sections below so we can reproduce and fix the issue quickly.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands and, if possible, a minimal repository or snippet.
+      placeholder: |
+        1. codewiki init
+        2. codewiki index
+        3. codewiki query ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: CodeWiki version
+      description: Output of `codewiki --version`
+      placeholder: "codewiki 0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 14 / Ubuntu 24.04 / Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: target-lang
+    attributes:
+      label: Language / framework of the indexed repository
+      placeholder: "TypeScript + Angular / C# + ASP.NET / Python ..."
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      description: Paste any error output. This will be rendered as code.
+      render: shell
+    validations:
+      required: false

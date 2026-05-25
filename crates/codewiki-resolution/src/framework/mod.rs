@@ -6,7 +6,6 @@
 pub mod angular;
 pub mod cargo_workspace;
 pub mod csharp;
-pub(crate) mod scan_utils;
 pub mod django;
 pub mod express;
 pub mod fastapi;
@@ -16,6 +15,7 @@ pub mod laravel;
 pub mod nestjs;
 pub mod rails;
 pub mod react;
+pub(crate) mod scan_utils;
 pub mod spring;
 pub mod svelte;
 pub mod swift;
@@ -210,9 +210,7 @@ impl FrameworkResolverRegistry {
                 // Language filter — skip if project has none of the resolver's languages
                 if let Some(langs) = r.languages() {
                     if !context.project_languages.is_empty()
-                        && !langs
-                            .iter()
-                            .any(|l| context.project_languages.contains(l))
+                        && !langs.iter().any(|l| context.project_languages.contains(l))
                     {
                         return false;
                     }

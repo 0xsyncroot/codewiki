@@ -55,14 +55,20 @@ fn render_codewiki_mcp_block() -> Vec<String> {
 // ── Line-based YAML manipulation ──────────────────────────────────────────────
 
 fn split_lines(content: &str) -> Vec<String> {
-    content.replace("\r\n", "\n").replace('\r', "\n")
+    content
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
         .split('\n')
         .map(|s| s.to_string())
         .collect()
 }
 
 fn join_lines(mut lines: Vec<String>) -> String {
-    while lines.last().map(|l: &String| l.trim().is_empty()).unwrap_or(false) {
+    while lines
+        .last()
+        .map(|l: &String| l.trim().is_empty())
+        .unwrap_or(false)
+    {
         lines.pop();
     }
     let mut result = lines.join("\n");
@@ -98,7 +104,12 @@ fn child_range(lines: &[String], parent: (usize, usize), child: &str) -> Option<
         .map(|i| ps + 1 + i)?;
 
     let mut end = pe;
-    for (i, line) in lines.iter().enumerate().skip(start + 1).take_while(|(i, _)| *i < pe) {
+    for (i, line) in lines
+        .iter()
+        .enumerate()
+        .skip(start + 1)
+        .take_while(|(i, _)| *i < pe)
+    {
         if line.trim().is_empty() {
             continue;
         }
@@ -258,7 +269,14 @@ fn write_hermes_config() -> Result<(PathBuf, FileAction)> {
     }
 
     atomic_write(&file, &ensure_trailing_newline(&after))?;
-    Ok((file, if existed { FileAction::Updated } else { FileAction::Created }))
+    Ok((
+        file,
+        if existed {
+            FileAction::Updated
+        } else {
+            FileAction::Created
+        },
+    ))
 }
 
 // ── HermesTarget impl ─────────────────────────────────────────────────────────
@@ -309,9 +327,9 @@ impl AgentTarget for HermesTarget {
         let mut result = WriteResult::new();
         let (p, a) = write_hermes_config()?;
         result.push(p, a);
-        result.notes.push(
-            "Start a new Hermes session for MCP changes to take effect.".to_string(),
-        );
+        result
+            .notes
+            .push("Start a new Hermes session for MCP changes to take effect.".to_string());
         Ok(result)
     }
 

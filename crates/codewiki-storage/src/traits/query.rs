@@ -53,32 +53,17 @@ pub trait QueryHandle: Send + Sync {
     fn get_node_by_id(&self, id: &str) -> Result<Option<Node>, CodeWikiError>;
 
     /// Incoming `calls` edges up to `depth` hops.
-    fn get_callers(
-        &self,
-        node_id: &str,
-        depth: usize,
-    ) -> Result<Vec<(Node, Edge)>, CodeWikiError>;
+    fn get_callers(&self, node_id: &str, depth: usize) -> Result<Vec<(Node, Edge)>, CodeWikiError>;
 
     /// Outgoing `calls` edges up to `depth` hops.
-    fn get_callees(
-        &self,
-        node_id: &str,
-        depth: usize,
-    ) -> Result<Vec<(Node, Edge)>, CodeWikiError>;
+    fn get_callees(&self, node_id: &str, depth: usize) -> Result<Vec<(Node, Edge)>, CodeWikiError>;
 
     /// Reverse-reach subgraph: all nodes that would be affected if `node_id` changed.
-    fn get_impact_radius(
-        &self,
-        node_id: &str,
-        depth: usize,
-    ) -> Result<Subgraph, CodeWikiError>;
+    fn get_impact_radius(&self, node_id: &str, depth: usize) -> Result<Subgraph, CodeWikiError>;
 
     /// Composite: search → BFS expand → deduplicate → score.
-    fn find_relevant_context(
-        &self,
-        query: &str,
-        opts: FindOpts,
-    ) -> Result<Subgraph, CodeWikiError>;
+    fn find_relevant_context(&self, query: &str, opts: FindOpts)
+        -> Result<Subgraph, CodeWikiError>;
 
     /// Return raw source text for a node (read from FS, slice start_line..end_line).
     fn get_code(&self, node_id: &str) -> Result<Option<String>, CodeWikiError>;
@@ -87,10 +72,7 @@ pub trait QueryHandle: Send + Sync {
     fn get_stats(&self) -> Result<GraphStats, CodeWikiError>;
 
     /// List all tracked files, optionally filtered.
-    fn get_files(
-        &self,
-        filter: Option<&FileFilter>,
-    ) -> Result<Vec<FileRecord>, CodeWikiError>;
+    fn get_files(&self, filter: Option<&FileFilter>) -> Result<Vec<FileRecord>, CodeWikiError>;
 
     /// Return all nodes whose file_path is in `file_paths`, plus their 1-hop
     /// dependents (incoming edges — i.e. nodes that call/import/use them).

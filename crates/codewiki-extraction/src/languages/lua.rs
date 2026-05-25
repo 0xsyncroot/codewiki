@@ -10,31 +10,34 @@
 //! - `local x = require("x")` is parsed as a `variable_declaration`, which the walker
 //!   skips children for — so we must scan for require() inside the hook.
 
-use crate::ast_walker::{generate_node_id, is_in_function_scope, DocCommentStyle, ExtractCtx, LanguageConfig, LanguageExtractor};
+use crate::ast_walker::{
+    generate_node_id, is_in_function_scope, DocCommentStyle, ExtractCtx, LanguageConfig,
+    LanguageExtractor,
+};
 use codewiki_core::{Edge, EdgeKind, Node, NodeKind};
 
 pub struct LuaExtractor;
 
 pub static CONFIG: LanguageConfig = LanguageConfig {
-    function_types:    &["function_declaration"],
-    class_types:       &[],
+    function_types: &["function_declaration"],
+    class_types: &[],
     // `function t:m()` / `function t.f()` handled in visit_node_hook.
-    method_types:      &[],
-    interface_types:   &[],
-    struct_types:      &[],
-    enum_types:        &[],
+    method_types: &[],
+    interface_types: &[],
+    struct_types: &[],
+    enum_types: &[],
     enum_member_types: &[],
-    type_alias_types:  &[],
+    type_alias_types: &[],
     // require() is handled in visit_node_hook.
-    import_types:      &[],
-    call_types:        &["function_call"],
-    variable_types:    &["variable_declaration"],
-    property_types:    &[],
-    field_types:       &[],
+    import_types: &[],
+    call_types: &["function_call"],
+    variable_types: &["variable_declaration"],
+    property_types: &[],
+    field_types: &[],
     extra_class_types: &[],
     namespace_types: &[],
-    name_field:        "name",
-    body_field:        "body",
+    name_field: "name",
+    body_field: "body",
     methods_are_top_level: false,
     doc_comment_style: DocCommentStyle::PrecedingLineComment {
         node_kind: "comment",
@@ -74,7 +77,8 @@ pub fn require_module(call_node: &tree_sitter::Node, src: &[u8]) -> Option<Strin
             }
             // Fallback: strip quotes from the raw string text.
             let raw = arg.utf8_text(src).unwrap_or("");
-            let stripped = raw.trim_matches(|c: char| c == '"' || c == '\'' || c == '[' || c == ']');
+            let stripped =
+                raw.trim_matches(|c: char| c == '"' || c == '\'' || c == '[' || c == ']');
             if !stripped.is_empty() {
                 return Some(stripped.to_string());
             }
@@ -254,12 +258,7 @@ impl LanguageExtractor for LuaExtractor {
                 };
 
                 let line = node.start_position().row as u32 + 1;
-                let id = generate_node_id(
-                    ctx.file_path,
-                    &NodeKind::Method,
-                    &qualified,
-                    line,
-                );
+                let id = generate_node_id(ctx.file_path, &NodeKind::Method, &qualified, line);
                 let node_record = Node {
                     id: id.clone(),
                     name: field,
@@ -358,8 +357,8 @@ impl LanguageExtractor for LuaExtractor {
 
 #[cfg(all(test, feature = "wasmtime-grammars"))]
 mod tests {
-    use crate::wasm_parser::extract_wasm;
     use crate::wasm_grammars::WasmGrammar;
+    use crate::wasm_parser::extract_wasm;
     use codewiki_core::NodeKind;
     use std::io::Write;
 
@@ -388,7 +387,11 @@ local x = require("utils")
         eprintln!("Lua nodes: {:?}", names);
         eprintln!(
             "Lua refs: {:?}",
-            batch.unresolved_refs.iter().map(|r| (&r.reference_name, &r.reference_kind)).collect::<Vec<_>>()
+            batch
+                .unresolved_refs
+                .iter()
+                .map(|r| (&r.reference_name, &r.reference_kind))
+                .collect::<Vec<_>>()
         );
 
         // File node.
@@ -399,19 +402,28 @@ local x = require("utils")
 
         // greet — top-level function.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "greet" && n.kind == NodeKind::Function),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "greet" && n.kind == NodeKind::Function),
             "expected Function 'greet'; nodes: {names:?}"
         );
 
         // doSomething — table method (MyTable:doSomething).
         assert!(
-            batch.nodes.iter().any(|n| n.name == "doSomething" && n.kind == NodeKind::Method),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "doSomething" && n.kind == NodeKind::Method),
             "expected Method 'doSomething'; nodes: {names:?}"
         );
 
         // helper — table method (M.helper).
         assert!(
-            batch.nodes.iter().any(|n| n.name == "helper" && n.kind == NodeKind::Method),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "helper" && n.kind == NodeKind::Method),
             "expected Method 'helper'; nodes: {names:?}"
         );
 
@@ -428,7 +440,11 @@ local x = require("utils")
         );
 
         // At least 3 non-file nodes.
-        let non_file = batch.nodes.iter().filter(|n| n.kind != NodeKind::File).count();
+        let non_file = batch
+            .nodes
+            .iter()
+            .filter(|n| n.kind != NodeKind::File)
+            .count();
         assert!(
             non_file >= 3,
             "expected >= 3 non-file nodes, got {non_file}; nodes: {names:?}"

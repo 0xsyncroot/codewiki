@@ -69,7 +69,9 @@ pub fn try_build_file_edit(
     let old_end_point = byte_to_point(old_source, old_end_byte);
     let new_end_point = byte_to_point(new_source, new_end_byte);
 
-    let changed_lines = old_end_point.row.saturating_sub(start_point.row)
+    let changed_lines = old_end_point
+        .row
+        .saturating_sub(start_point.row)
         .max(new_end_point.row.saturating_sub(start_point.row));
     if changed_lines > FULL_REPARSE_LINE_LIMIT {
         return None;
@@ -176,7 +178,7 @@ mod tests {
         // Replace entire content — ratio = 1.0 > 0.25.
         let old = "const a = 1;";
         let new = "const b = 2;"; // same length but different throughout
-        // changed region = entire string, ratio = 1.0
+                                  // changed region = entire string, ratio = 1.0
         let result = try_build_file_edit(&p(), old, new, 0.25);
         assert!(result.is_none(), "full rewrite should return None");
     }

@@ -22,16 +22,12 @@ pub struct NodeResponse {
     pub out_degree: u64,
 }
 
-pub async fn handle(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
+pub async fn handle(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     let db = state.db.clone();
     let result = spawn_blocking(move || {
         let conn = db.lock().map_err(|_| anyhow::anyhow!("mutex poisoned"))?;
 
-        let node = nq::get_node_by_id(&conn, &id)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let node = nq::get_node_by_id(&conn, &id).map_err(|e| anyhow::anyhow!("{e}"))?;
         let node = match node {
             Some(n) => n,
             None => return Err(anyhow::anyhow!("NOT_FOUND")),
@@ -51,9 +47,8 @@ pub async fn handle(
         let callee_count = callees.len();
 
         // Degree (all edge kinds)
-        let (in_degree, out_degree) =
-            codewiki_storage::queries::edges::get_node_degree(&conn, &id)
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let (in_degree, out_degree) = codewiki_storage::queries::edges::get_node_degree(&conn, &id)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
 
         Ok(NodeResponse {
             node,

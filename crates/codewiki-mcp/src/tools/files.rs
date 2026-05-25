@@ -60,10 +60,7 @@ pub async fn handle_files(
     Ok(crate::tools::truncate_output(out, MAX_OUTPUT_LENGTH))
 }
 
-fn format_flat(
-    files: &[codewiki_core::FileRecord],
-    include_metadata: bool,
-) -> String {
+fn format_flat(files: &[codewiki_core::FileRecord], include_metadata: bool) -> String {
     let mut out = format!("## Files ({} total)\n\n", files.len());
     for f in files {
         if include_metadata {
@@ -80,10 +77,7 @@ fn format_flat(
     out
 }
 
-fn format_grouped(
-    files: &[codewiki_core::FileRecord],
-    include_metadata: bool,
-) -> String {
+fn format_grouped(files: &[codewiki_core::FileRecord], include_metadata: bool) -> String {
     let mut by_lang: HashMap<&str, Vec<&codewiki_core::FileRecord>> = HashMap::new();
     for f in files {
         by_lang.entry(f.language.as_str()).or_default().push(f);
@@ -157,8 +151,7 @@ fn format_tree(
             if include_metadata {
                 out.push_str(&format!(
                     "{indent}  - `{fname}` ({}, {} nodes)\n",
-                    f.language,
-                    f.node_count
+                    f.language, f.node_count
                 ));
             } else {
                 out.push_str(&format!("{indent}  - `{fname}`\n"));
@@ -189,9 +182,7 @@ fn glob_match_inner(pattern: &[u8], text: &[u8]) -> bool {
             }
             false
         }
-        (Some((&b'?', rest_pat)), Some((_, rest_text))) => {
-            glob_match_inner(rest_pat, rest_text)
-        }
+        (Some((&b'?', rest_pat)), Some((_, rest_text))) => glob_match_inner(rest_pat, rest_text),
         (Some((pc, rest_pat)), Some((tc, rest_text))) if pc == tc => {
             glob_match_inner(rest_pat, rest_text)
         }

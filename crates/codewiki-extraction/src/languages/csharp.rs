@@ -62,7 +62,15 @@ namespace MyApp {
         let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        assert!(batch.nodes.iter().any(|n| n.name == "Service"), "nodes: {:?}", batch.nodes.iter().map(|n| n.name.as_str()).collect::<Vec<_>>());
+        assert!(
+            batch.nodes.iter().any(|n| n.name == "Service"),
+            "nodes: {:?}",
+            batch
+                .nodes
+                .iter()
+                .map(|n| n.name.as_str())
+                .collect::<Vec<_>>()
+        );
     }
 
     // GAP-1: interface_declaration must emit NodeKind::Interface, not Class.
@@ -78,10 +86,17 @@ namespace MyApp.Services {
         let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        let iface = batch.nodes.iter().find(|n| n.name == "IOrderService")
+        let iface = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "IOrderService")
             .expect("IOrderService node should exist");
-        assert_eq!(iface.kind, NodeKind::Interface,
-            "IOrderService must be Interface, got {:?}", iface.kind);
+        assert_eq!(
+            iface.kind,
+            NodeKind::Interface,
+            "IOrderService must be Interface, got {:?}",
+            iface.kind
+        );
     }
 
     // GAP-1: enum_declaration must emit NodeKind::Enum.
@@ -95,10 +110,17 @@ namespace MyApp {
         let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        let en = batch.nodes.iter().find(|n| n.name == "ToastLevel")
+        let en = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "ToastLevel")
             .expect("ToastLevel node should exist");
-        assert_eq!(en.kind, NodeKind::Enum,
-            "ToastLevel must be Enum, got {:?}", en.kind);
+        assert_eq!(
+            en.kind,
+            NodeKind::Enum,
+            "ToastLevel must be Enum, got {:?}",
+            en.kind
+        );
     }
 
     // GAP-1: struct_declaration must emit NodeKind::Struct.
@@ -112,10 +134,17 @@ namespace MyApp {
         let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        let s = batch.nodes.iter().find(|n| n.name == "Point")
+        let s = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "Point")
             .expect("Point node should exist");
-        assert_eq!(s.kind, NodeKind::Struct,
-            "Point must be Struct, got {:?}", s.kind);
+        assert_eq!(
+            s.kind,
+            NodeKind::Struct,
+            "Point must be Struct, got {:?}",
+            s.kind
+        );
     }
 
     // GAP-1: record_declaration must emit NodeKind::Struct.
@@ -129,10 +158,17 @@ namespace MyApp {
         let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        let r = batch.nodes.iter().find(|n| n.name == "CatalogItemDetails")
+        let r = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "CatalogItemDetails")
             .expect("CatalogItemDetails node should exist");
-        assert_eq!(r.kind, NodeKind::Struct,
-            "CatalogItemDetails record must be Struct, got {:?}", r.kind);
+        assert_eq!(
+            r.kind,
+            NodeKind::Struct,
+            "CatalogItemDetails record must be Struct, got {:?}",
+            r.kind
+        );
     }
 
     // GAP-2: namespace scope must be pushed so qualified_name is namespace-prefixed.
@@ -148,7 +184,10 @@ namespace MyApp.Services {
         let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        let cls = batch.nodes.iter().find(|n| n.name == "BasketService")
+        let cls = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "BasketService")
             .expect("BasketService node should exist");
         assert!(
             cls.qualified_name.contains("MyApp.Services"),
@@ -170,14 +209,19 @@ namespace MyApp {
         let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        let import_refs: Vec<_> = batch.unresolved_refs.iter()
+        let import_refs: Vec<_> = batch
+            .unresolved_refs
+            .iter()
             .filter(|r| r.reference_kind == "imports")
             .collect();
         assert!(
             import_refs.len() >= 2,
             "Expected at least 2 import refs, got {}: {:?}",
             import_refs.len(),
-            import_refs.iter().map(|r| r.reference_name.as_str()).collect::<Vec<_>>()
+            import_refs
+                .iter()
+                .map(|r| r.reference_name.as_str())
+                .collect::<Vec<_>>()
         );
     }
 
@@ -196,14 +240,21 @@ namespace MyApp {
         let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        let method = batch.nodes.iter().find(|n| n.name == "CreateOrderAsync")
+        let method = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "CreateOrderAsync")
             .expect("CreateOrderAsync should exist");
         // Signature should be non-None (contains parameters)
-        assert!(method.signature.is_some(),
-            "CreateOrderAsync should have a signature");
+        assert!(
+            method.signature.is_some(),
+            "CreateOrderAsync should have a signature"
+        );
         // metadata should encode is_async
         let meta = method.metadata.as_deref().unwrap_or("{}");
-        assert!(meta.contains("\"is_async\":true"),
-            "CreateOrderAsync metadata should have is_async:true, got: {meta}");
+        assert!(
+            meta.contains("\"is_async\":true"),
+            "CreateOrderAsync metadata should have is_async:true, got: {meta}"
+        );
     }
 }

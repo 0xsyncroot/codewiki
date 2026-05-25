@@ -9,7 +9,8 @@
 //! - `extension_definition` → traverse body inline, no container node.
 
 use crate::ast_walker::{
-    generate_node_id, is_in_function_scope, walk_node, DocCommentStyle, ExtractCtx, LanguageConfig, LanguageExtractor,
+    generate_node_id, is_in_function_scope, walk_node, DocCommentStyle, ExtractCtx, LanguageConfig,
+    LanguageExtractor,
 };
 use codewiki_core::{Edge, EdgeKind, Node, NodeKind};
 
@@ -17,26 +18,26 @@ pub struct ScalaExtractor;
 
 pub static CONFIG: LanguageConfig = LanguageConfig {
     // All functions in Scala are methods; use method_types.
-    function_types:    &[],
-    class_types:       &["class_definition", "object_definition", "trait_definition"],
-    method_types:      &["function_definition", "function_declaration"],
-    interface_types:   &[],
-    struct_types:      &[],
-    enum_types:        &["enum_definition"],
+    function_types: &[],
+    class_types: &["class_definition", "object_definition", "trait_definition"],
+    method_types: &["function_definition", "function_declaration"],
+    interface_types: &[],
+    struct_types: &[],
+    enum_types: &["enum_definition"],
     enum_member_types: &[],
-    type_alias_types:  &["type_definition"],
+    type_alias_types: &["type_definition"],
     // S-1: import_declaration handled in visit_node_hook to support selector imports;
     // keep in import_types so the generic path serves as a fallback when hook returns false.
-    import_types:      &["import_declaration"],
-    call_types:        &["call_expression"],
+    import_types: &["import_declaration"],
+    call_types: &["call_expression"],
     // val/var use the `pattern` field — handled via visit_node_hook.
-    variable_types:    &[],
-    property_types:    &[],
-    field_types:       &[],
+    variable_types: &[],
+    property_types: &[],
+    field_types: &[],
     extra_class_types: &[],
     namespace_types: &[],
-    name_field:        "name",
-    body_field:        "body",
+    name_field: "name",
+    body_field: "body",
     methods_are_top_level: false,
     doc_comment_style: DocCommentStyle::PrecedingBlockComment {
         node_kind: "block_comment",
@@ -159,7 +160,8 @@ impl LanguageExtractor for ScalaExtractor {
                                 }
                             }
                             "identifier" => {
-                                let sel_name = selector.utf8_text(src).unwrap_or("").trim().to_string();
+                                let sel_name =
+                                    selector.utf8_text(src).unwrap_or("").trim().to_string();
                                 if !sel_name.is_empty() {
                                     let qualified = if path_text.is_empty() {
                                         sel_name
@@ -173,8 +175,11 @@ impl LanguageExtractor for ScalaExtractor {
                                 // Other selector kinds (renamed, etc.) — try identifier child.
                                 let mut sc = selector.walk();
                                 let children: Vec<_> = selector.named_children(&mut sc).collect();
-                                if let Some(ident) = children.iter().find(|c| c.kind() == "identifier") {
-                                    let sel_name = ident.utf8_text(src).unwrap_or("").trim().to_string();
+                                if let Some(ident) =
+                                    children.iter().find(|c| c.kind() == "identifier")
+                                {
+                                    let sel_name =
+                                        ident.utf8_text(src).unwrap_or("").trim().to_string();
                                     if !sel_name.is_empty() {
                                         let qualified = if path_text.is_empty() {
                                             sel_name
@@ -219,7 +224,8 @@ impl LanguageExtractor for ScalaExtractor {
             // val_definition / var_definition — name lives in `pattern` field.
             // S-2: at top level, `val` → Constant and `var` → Variable (not both Variable).
             "val_definition" | "var_definition" => {
-                let pattern = node.child_by_field_name("pattern")
+                let pattern = node
+                    .child_by_field_name("pattern")
                     .and_then(|n| n.utf8_text(src).ok())
                     .unwrap_or("")
                     .to_string();
@@ -297,8 +303,8 @@ fn is_in_class_scope(ctx: &ExtractCtx) -> bool {
 
 #[cfg(all(test, feature = "wasmtime-grammars"))]
 mod tests {
-    use crate::wasm_parser::extract_wasm;
     use crate::wasm_grammars::WasmGrammar;
+    use crate::wasm_parser::extract_wasm;
     use codewiki_core::NodeKind;
     use std::io::Write;
 
@@ -339,42 +345,64 @@ def topLevel(x: Int): Int = x * 2
 
         // Animal — class.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "Animal" && n.kind == NodeKind::Class),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "Animal" && n.kind == NodeKind::Class),
             "expected Class 'Animal'; nodes: {names:?}"
         );
 
         // speak — method inside Animal.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "speak" && n.kind == NodeKind::Method),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "speak" && n.kind == NodeKind::Method),
             "expected Method 'speak'; nodes: {names:?}"
         );
 
         // legs — field inside Animal.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "legs" && n.kind == NodeKind::Field),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "legs" && n.kind == NodeKind::Field),
             "expected Field 'legs'; nodes: {names:?}"
         );
 
         // Config — object (mapped to Class).
         assert!(
-            batch.nodes.iter().any(|n| n.name == "Config" && n.kind == NodeKind::Class),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "Config" && n.kind == NodeKind::Class),
             "expected Class 'Config' (object); nodes: {names:?}"
         );
 
         // Runnable — trait.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "Runnable" && n.kind == NodeKind::Trait),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "Runnable" && n.kind == NodeKind::Trait),
             "expected Trait 'Runnable'; nodes: {names:?}"
         );
 
         // run — method inside Runnable.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "run" && n.kind == NodeKind::Method),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "run" && n.kind == NodeKind::Method),
             "expected Method 'run'; nodes: {names:?}"
         );
 
         // At least 7 non-file nodes.
-        let non_file = batch.nodes.iter().filter(|n| n.kind != NodeKind::File).count();
+        let non_file = batch
+            .nodes
+            .iter()
+            .filter(|n| n.kind != NodeKind::File)
+            .count();
         assert!(
             non_file >= 7,
             "expected >= 7 non-file nodes, got {non_file}; nodes: {names:?}"
@@ -427,14 +455,27 @@ def topLevel(x: Int): Int = x * 2
             .expect("Scala WASM extraction should succeed");
 
         let names: Vec<&str> = batch.nodes.iter().map(|n| n.name.as_str()).collect();
-        eprintln!("S-2 Scala nodes: {:?}", batch.nodes.iter().map(|n| (&n.name, &n.kind)).collect::<Vec<_>>());
+        eprintln!(
+            "S-2 Scala nodes: {:?}",
+            batch
+                .nodes
+                .iter()
+                .map(|n| (&n.name, &n.kind))
+                .collect::<Vec<_>>()
+        );
 
         assert!(
-            batch.nodes.iter().any(|n| n.name == "MaxSize" && n.kind == NodeKind::Constant),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "MaxSize" && n.kind == NodeKind::Constant),
             "expected Constant 'MaxSize'; nodes: {names:?}"
         );
         assert!(
-            batch.nodes.iter().any(|n| n.name == "counter" && n.kind == NodeKind::Variable),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "counter" && n.kind == NodeKind::Variable),
             "expected Variable 'counter'; nodes: {names:?}"
         );
     }

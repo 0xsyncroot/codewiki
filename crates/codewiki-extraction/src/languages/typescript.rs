@@ -42,7 +42,7 @@ impl LanguageExtractor for TypeScriptExtractor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     use crate::ast_walker::extract_file;
     use std::io::Write;
 
@@ -63,13 +63,32 @@ export class Greeter {
         let mut f = tempfile::NamedTempFile::with_suffix(".ts").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        let kinds: Vec<_> = batch.nodes.iter().map(|n| format!("{:?}:{}", n.kind, n.name)).collect();
+        let kinds: Vec<_> = batch
+            .nodes
+            .iter()
+            .map(|n| format!("{:?}:{}", n.kind, n.name))
+            .collect();
         // Must have file node
-        assert!(batch.nodes.iter().any(|n| matches!(n.kind, codewiki_core::NodeKind::File)));
+        assert!(batch
+            .nodes
+            .iter()
+            .any(|n| matches!(n.kind, codewiki_core::NodeKind::File)));
         // Must have function
-        assert!(batch.nodes.iter().any(|n| matches!(n.kind, codewiki_core::NodeKind::Function) && n.name == "greet"), "kinds: {kinds:?}");
+        assert!(
+            batch
+                .nodes
+                .iter()
+                .any(|n| matches!(n.kind, codewiki_core::NodeKind::Function) && n.name == "greet"),
+            "kinds: {kinds:?}"
+        );
         // Must have class
-        assert!(batch.nodes.iter().any(|n| matches!(n.kind, codewiki_core::NodeKind::Class) && n.name == "Greeter"), "kinds: {kinds:?}");
+        assert!(
+            batch
+                .nodes
+                .iter()
+                .any(|n| matches!(n.kind, codewiki_core::NodeKind::Class) && n.name == "Greeter"),
+            "kinds: {kinds:?}"
+        );
     }
 
     #[test]
@@ -83,8 +102,14 @@ export enum Color { Red, Green, Blue }
         let mut f = tempfile::NamedTempFile::with_suffix(".ts").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        assert!(batch.nodes.iter().any(|n| matches!(n.kind, codewiki_core::NodeKind::Interface) && n.name == "Shape"));
-        assert!(batch.nodes.iter().any(|n| matches!(n.kind, codewiki_core::NodeKind::Enum) && n.name == "Color"));
+        assert!(batch
+            .nodes
+            .iter()
+            .any(|n| matches!(n.kind, codewiki_core::NodeKind::Interface) && n.name == "Shape"));
+        assert!(batch
+            .nodes
+            .iter()
+            .any(|n| matches!(n.kind, codewiki_core::NodeKind::Enum) && n.name == "Color"));
     }
 
     #[test]
@@ -96,6 +121,9 @@ function main() { foo(); }
         let mut f = tempfile::NamedTempFile::with_suffix(".ts").unwrap();
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
-        assert!(!batch.unresolved_refs.is_empty(), "expected unresolved refs");
+        assert!(
+            !batch.unresolved_refs.is_empty(),
+            "expected unresolved refs"
+        );
     }
 }

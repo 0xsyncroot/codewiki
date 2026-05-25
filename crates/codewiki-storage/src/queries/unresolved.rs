@@ -1,6 +1,6 @@
 /// Prepared-statement helpers for unresolved reference operations.
 use codewiki_core::{CodeWikiError, UnresolvedRef};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 // ---------------------------------------------------------------------------
 // Row → UnresolvedRef
@@ -24,10 +24,7 @@ pub fn row_to_unresolved_ref(row: &rusqlite::Row<'_>) -> Result<UnresolvedRef, r
 // INSERT
 // ---------------------------------------------------------------------------
 
-pub fn insert_unresolved_ref(
-    conn: &Connection,
-    uref: &UnresolvedRef,
-) -> Result<(), CodeWikiError> {
+pub fn insert_unresolved_ref(conn: &Connection, uref: &UnresolvedRef) -> Result<(), CodeWikiError> {
     let mut stmt = conn.prepare_cached(
         r#"INSERT INTO unresolved_refs
             (from_node_id, reference_name, reference_kind, line, col, candidates, file_path, language)
@@ -165,11 +162,8 @@ pub fn get_unresolved_references(conn: &Connection) -> Result<Vec<UnresolvedRef>
 }
 
 pub fn get_unresolved_count(conn: &Connection) -> Result<usize, CodeWikiError> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM unresolved_refs",
-        [],
-        |row| row.get(0),
-    )?;
+    let count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM unresolved_refs", [], |row| row.get(0))?;
     Ok(count as usize)
 }
 
@@ -179,8 +173,7 @@ pub fn get_unresolved_batch(
     limit: usize,
     offset: usize,
 ) -> Result<Vec<UnresolvedRef>, CodeWikiError> {
-    let mut stmt =
-        conn.prepare_cached("SELECT * FROM unresolved_refs LIMIT ?1 OFFSET ?2")?;
+    let mut stmt = conn.prepare_cached("SELECT * FROM unresolved_refs LIMIT ?1 OFFSET ?2")?;
     let rows = stmt.query_map(params![limit as i64, offset as i64], |row| {
         row_to_unresolved_ref(row)
     })?;
@@ -203,9 +196,8 @@ pub fn get_unresolved_batch_after(
     after_id: i64,
     limit: usize,
 ) -> Result<Vec<UnresolvedRef>, CodeWikiError> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT * FROM unresolved_refs WHERE id > ?1 ORDER BY id LIMIT ?2",
-    )?;
+    let mut stmt =
+        conn.prepare_cached("SELECT * FROM unresolved_refs WHERE id > ?1 ORDER BY id LIMIT ?2")?;
     let rows = stmt.query_map(params![after_id, limit as i64], |row| {
         row_to_unresolved_ref(row)
     })?;
@@ -363,14 +355,18 @@ mod tests {
             let mut cur = 0i64;
             loop {
                 let page = get_unresolved_batch_after(&conn, cur, 100).unwrap();
-                if page.is_empty() { break; }
+                if page.is_empty() {
+                    break;
+                }
                 for r in &page {
                     let id = r.id.parse::<i64>().unwrap();
                     assert!(id > cur, "ids must be strictly increasing");
                     ids.push(id);
                     cur = id;
                 }
-                if page.len() < 100 { break; }
+                if page.len() < 100 {
+                    break;
+                }
             }
             ids
         };

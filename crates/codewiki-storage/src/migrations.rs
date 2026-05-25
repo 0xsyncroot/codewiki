@@ -146,11 +146,10 @@ fn execute_ignore_duplicate_column(
 ///
 /// Returns 0 if the schema_versions table does not yet exist.
 pub fn get_current_version(conn: &Connection) -> Result<u32, CodeWikiError> {
-    let result: Result<Option<u32>, _> = conn.query_row(
-        "SELECT MAX(version) FROM schema_versions",
-        [],
-        |row| row.get(0),
-    );
+    let result: Result<Option<u32>, _> =
+        conn.query_row("SELECT MAX(version) FROM schema_versions", [], |row| {
+            row.get(0)
+        });
     match result {
         Ok(Some(v)) => Ok(v),
         Ok(None) => Ok(0),
@@ -188,29 +187,29 @@ pub fn run_migrations(conn: &Connection) -> Result<(), CodeWikiError> {
         if migration.batch {
             // Execute the entire migration as one execute_batch call.
             // Used for migrations containing CREATE TRIGGER statements (embedded `;`).
-            conn.execute_batch(migration.sql).map_err(|e| {
-                CodeWikiError::Migration {
+            conn.execute_batch(migration.sql)
+                .map_err(|e| CodeWikiError::Migration {
                     version: migration.version,
                     source: Box::new(CodeWikiError::Sqlite(e)),
-                }
-            })?;
+                })?;
         } else {
             // Split SQL into individual statements so we can handle ALTER TABLE
             // "duplicate column name" errors gracefully on fresh DBs where schema.sql
             // already has the columns.
             for stmt in migration.sql.split(';') {
                 let stmt = stmt.trim();
-                if stmt.is_empty() { continue; }
+                if stmt.is_empty() {
+                    continue;
+                }
                 let stmt_sql = format!("{};", stmt);
                 if stmt.to_uppercase().starts_with("ALTER TABLE") {
                     execute_ignore_duplicate_column(conn, &stmt_sql, migration.version)?;
                 } else {
-                    conn.execute_batch(&stmt_sql).map_err(|e| {
-                        CodeWikiError::Migration {
+                    conn.execute_batch(&stmt_sql)
+                        .map_err(|e| CodeWikiError::Migration {
                             version: migration.version,
                             source: Box::new(CodeWikiError::Sqlite(e)),
-                        }
-                    })?;
+                        })?;
                 }
             }
         }

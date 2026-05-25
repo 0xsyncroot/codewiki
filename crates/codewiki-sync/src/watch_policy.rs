@@ -88,7 +88,10 @@ pub fn watch_disabled_reason(path: &Path) -> Option<String> {
 /// Returns the `WatchPolicy` for `path`.
 pub fn evaluate_watch_policy(path: &Path) -> WatchPolicy {
     match watch_disabled_reason(path) {
-        Some(reason) => WatchPolicy { enabled: false, reason },
+        Some(reason) => WatchPolicy {
+            enabled: false,
+            reason,
+        },
         None => WatchPolicy {
             enabled: true,
             reason: "watching enabled".to_string(),
@@ -136,7 +139,9 @@ mod tests {
 
     #[test]
     fn non_mnt_path_not_flagged() {
-        assert!(!is_windows_drive_mount(&PathBuf::from("/home/user/project")));
+        assert!(!is_windows_drive_mount(&PathBuf::from(
+            "/home/user/project"
+        )));
         assert!(!is_windows_drive_mount(&PathBuf::from("/tmp/project")));
     }
 

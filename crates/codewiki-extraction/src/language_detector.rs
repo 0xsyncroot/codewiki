@@ -69,16 +69,34 @@ mod tests {
 
     #[test]
     fn typescript_extensions() {
-        assert_eq!(detect_language(Path::new("foo.ts")), Some(Language::TypeScript));
-        assert_eq!(detect_language(Path::new("foo.tsx")), Some(Language::TypeScript));
-        assert_eq!(detect_language(Path::new("foo.mts")), Some(Language::TypeScript));
+        assert_eq!(
+            detect_language(Path::new("foo.ts")),
+            Some(Language::TypeScript)
+        );
+        assert_eq!(
+            detect_language(Path::new("foo.tsx")),
+            Some(Language::TypeScript)
+        );
+        assert_eq!(
+            detect_language(Path::new("foo.mts")),
+            Some(Language::TypeScript)
+        );
     }
 
     #[test]
     fn javascript_extensions() {
-        assert_eq!(detect_language(Path::new("foo.js")), Some(Language::JavaScript));
-        assert_eq!(detect_language(Path::new("foo.jsx")), Some(Language::JavaScript));
-        assert_eq!(detect_language(Path::new("foo.mjs")), Some(Language::JavaScript));
+        assert_eq!(
+            detect_language(Path::new("foo.js")),
+            Some(Language::JavaScript)
+        );
+        assert_eq!(
+            detect_language(Path::new("foo.jsx")),
+            Some(Language::JavaScript)
+        );
+        assert_eq!(
+            detect_language(Path::new("foo.mjs")),
+            Some(Language::JavaScript)
+        );
     }
 
     #[test]
@@ -96,10 +114,16 @@ mod tests {
 
     #[test]
     fn razor_extension_detected() {
-        assert_eq!(detect_language(Path::new("Counter.razor")), Some(Language::Razor));
+        assert_eq!(
+            detect_language(Path::new("Counter.razor")),
+            Some(Language::Razor)
+        );
         assert!(is_source_file(Path::new("Counter.razor")));
         // .razor.cs code-behind files are plain C# (final extension is .cs)
-        assert_eq!(detect_language(Path::new("Counter.razor.cs")), Some(Language::CSharp));
+        assert_eq!(
+            detect_language(Path::new("Counter.razor.cs")),
+            Some(Language::CSharp)
+        );
     }
 
     #[test]
@@ -128,7 +152,11 @@ mod tests {
             ("a.liquid", Language::Liquid),
         ];
         for (path, expected) in cases {
-            assert_eq!(detect_language(Path::new(path)), Some(expected), "failed for {path}");
+            assert_eq!(
+                detect_language(Path::new(path)),
+                Some(expected),
+                "failed for {path}"
+            );
         }
     }
 }

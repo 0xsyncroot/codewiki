@@ -15,13 +15,19 @@ use std::sync::Arc;
 
 /// Keywords that suggest this is a feature-request query.
 const FEATURE_KEYWORDS: &[&str] = &[
-    "add", "create", "implement", "build", "enable", "allow", "new", "support", "want",
+    "add",
+    "create",
+    "implement",
+    "build",
+    "enable",
+    "allow",
+    "new",
+    "support",
+    "want",
 ];
 
 /// Keywords that disqualify a query from the feature-request reminder.
-const EXCLUDE_KEYWORDS: &[&str] = &[
-    "fix", "bug", "error", "broken", "crash", "how does", "find",
-];
+const EXCLUDE_KEYWORDS: &[&str] = &["fix", "bug", "error", "broken", "crash", "how does", "find"];
 
 /// Container node kinds — don't include their full code in context output.
 const CONTAINER_KINDS: &[NodeKind] = &[
@@ -56,9 +62,7 @@ pub async fn handle_context(
 
     if subgraph.nodes.is_empty() {
         out.push_str("No relevant symbols found in the index for this task.\n");
-        out.push_str(
-            "\nTip: Make sure the project is indexed with `codewiki index`.\n",
-        );
+        out.push_str("\nTip: Make sure the project is indexed with `codewiki index`.\n");
         return Ok(out);
     }
 
@@ -97,7 +101,11 @@ pub async fn handle_context(
             "Found {} symbols across {} files. Key entry points: {}. {} relationships.\n\n",
             total_nodes,
             total_files.len(),
-            if entry_names.is_empty() { "none".to_string() } else { entry_names.join(", ") },
+            if entry_names.is_empty() {
+                "none".to_string()
+            } else {
+                entry_names.join(", ")
+            },
             total_edges,
         ));
     }
@@ -131,7 +139,10 @@ pub async fn handle_context(
     // Related symbols section
     if !other_nodes.is_empty() {
         out.push_str("### Related Symbols\n\n");
-        for node in other_nodes.iter().take(max_nodes.saturating_sub(entry_nodes.len())) {
+        for node in other_nodes
+            .iter()
+            .take(max_nodes.saturating_sub(entry_nodes.len()))
+        {
             out.push_str(&format!(
                 "- **{}** ({}) in `{}:{}`\n",
                 node.name,
@@ -145,10 +156,8 @@ pub async fn handle_context(
 
     // OPT-15: Related Files section — unique files in the subgraph, excluding entry-point files
     {
-        let entry_files: std::collections::HashSet<&str> = entry_nodes
-            .iter()
-            .map(|n| n.file_path.as_str())
-            .collect();
+        let entry_files: std::collections::HashSet<&str> =
+            entry_nodes.iter().map(|n| n.file_path.as_str()).collect();
         let mut related_files: Vec<&str> = subgraph
             .nodes
             .values()
@@ -214,9 +223,7 @@ pub async fn handle_context(
                     };
                     out.push_str(&format!(
                         "#### `{}` ({})\n\n```\n{}\n```\n\n",
-                        node.name,
-                        node.file_path,
-                        truncated
+                        node.name, node.file_path, truncated
                     ));
                 }
             }
@@ -249,9 +256,7 @@ pub async fn handle_context(
                         };
                         out.push_str(&format!(
                             "#### `{}` ({})\n\n```\n{}\n```\n\n",
-                            node.name,
-                            node.file_path,
-                            truncated
+                            node.name, node.file_path, truncated
                         ));
                     }
                 }

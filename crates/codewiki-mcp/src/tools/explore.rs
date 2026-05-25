@@ -184,7 +184,11 @@ pub async fn handle_explore(
                 (entry_ids.contains(&e.source_id) && e.target_id == *id)
                     || (entry_ids.contains(&e.target_id) && e.source_id == *id)
             });
-            if connected { 3.0 } else { 1.0 }
+            if connected {
+                3.0
+            } else {
+                1.0
+            }
         };
 
         file_nodes
@@ -381,9 +385,7 @@ pub async fn handle_explore(
     if budget.include_budget_note {
         out.push_str(&format!(
             "*Output budget: {} chars/file, {} chars total ({} files indexed)*\n",
-            budget.max_chars_per_file,
-            budget.max_output_chars,
-            stats.file_count,
+            budget.max_chars_per_file, budget.max_output_chars, stats.file_count,
         ));
     }
 
@@ -411,9 +413,7 @@ fn merge_into_clusters(sorted: Vec<(Node, f64)>, gap_threshold: usize) -> Vec<Cl
         }
 
         if let Some(last) = clusters.last_mut() {
-            let gap = node
-                .start_line
-                .saturating_sub(last.end_line) as usize;
+            let gap = node.start_line.saturating_sub(last.end_line) as usize;
             if gap <= gap_threshold {
                 let merge = Cluster::new(node, importance);
                 last.merge_with(merge);

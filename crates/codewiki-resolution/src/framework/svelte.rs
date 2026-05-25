@@ -118,10 +118,7 @@ fn svelte_file_to_route(file_path: &str) -> Option<String> {
 /// `[param]`     → `:param`
 fn convert_sveltekit_params(path: &str) -> String {
     // Process segment by segment
-    let segments: Vec<String> = path
-        .split('/')
-        .map(convert_single_segment)
-        .collect();
+    let segments: Vec<String> = path.split('/').map(convert_single_segment).collect();
     segments.join("/")
 }
 
@@ -173,7 +170,10 @@ fn is_rune_reference(name: &str) -> bool {
 }
 
 fn is_pascal_case(name: &str) -> bool {
-    name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+    name.chars()
+        .next()
+        .map(|c| c.is_uppercase())
+        .unwrap_or(false)
         && name.chars().all(|c| c.is_alphanumeric())
 }
 
@@ -315,9 +315,7 @@ impl FrameworkResolver for SvelteResolver {
 
         // Pattern 4: PascalCase component refs
         if is_pascal_case(name) && reference.reference_kind == "calls" {
-            if let Some(node_id) =
-                resolve_component(name, &reference.file_path, context)
-            {
+            if let Some(node_id) = resolve_component(name, &reference.file_path, context) {
                 return Ok(Some(make_resolved_edge(
                     reference,
                     node_id,
@@ -345,10 +343,7 @@ impl FrameworkResolver for SvelteResolver {
         };
 
         // Determine the filename for the route type
-        let file_name = file_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         let route_type = match is_sveltekit_route_file(file_name) {
             Some(t) => t,
@@ -393,10 +388,7 @@ impl FrameworkResolver for SvelteResolver {
                         .map(|pos| content[..pos].lines().count() as u32 + 1)
                         .unwrap_or(1);
 
-                    let route_id = format!(
-                        "route:{}:{}:{}:{}",
-                        file_str, line, method, route_path
-                    );
+                    let route_id = format!("route:{}:{}:{}:{}", file_str, line, method, route_path);
                     let handler_name = format!("{}Handler", method.to_lowercase());
 
                     nodes.push(Node {
@@ -518,16 +510,19 @@ mod tests {
         let aliases = PathAliasMap::default();
         let ctx = make_ctx(&caches, &aliases, &[]);
         let result = SvelteResolver
-            .extract(
-                Path::new("src/routes/api/users/+server.ts"),
-                content,
-                &ctx,
-            )
+            .extract(Path::new("src/routes/api/users/+server.ts"), content, &ctx)
             .unwrap();
 
-        assert!(!result.nodes.is_empty(), "should emit at least one route node");
+        assert!(
+            !result.nodes.is_empty(),
+            "should emit at least one route node"
+        );
         let get_route = result.nodes.iter().find(|n| n.name.contains("GET"));
-        assert!(get_route.is_some(), "GET route node expected, nodes: {:?}", result.nodes.iter().map(|n| &n.name).collect::<Vec<_>>());
+        assert!(
+            get_route.is_some(),
+            "GET route node expected, nodes: {:?}",
+            result.nodes.iter().map(|n| &n.name).collect::<Vec<_>>()
+        );
         let n = get_route.unwrap();
         assert!(n.name.contains("/api/users"), "path in name: {}", n.name);
     }
@@ -561,7 +556,7 @@ mod tests {
 
     #[test]
     fn svelte_resolve_store_subscription() {
-        use codewiki_core::{Node, NodeKind, Language};
+        use codewiki_core::{Language, Node, NodeKind};
 
         let caches = ResolverCaches::default_capacity();
         let count_node = Node {
@@ -575,7 +570,9 @@ mod tests {
             end_line: 1,
             ..Default::default()
         };
-        caches.name_cache.insert("count".to_string(), vec![count_node.clone()]);
+        caches
+            .name_cache
+            .insert("count".to_string(), vec![count_node.clone()]);
 
         let aliases = PathAliasMap::default();
         let ctx = make_ctx(&caches, &aliases, &[]);
@@ -598,15 +595,19 @@ mod tests {
 
     #[test]
     fn svelte_resolve_lib_alias() {
+        use codewiki_core::{Language, Node, NodeKind};
         use std::fs;
         use tempfile::TempDir;
-        use codewiki_core::{Node, NodeKind, Language};
 
         let dir = TempDir::new().unwrap();
         // Create src/lib/stores/counter.ts
         let store_dir = dir.path().join("src/lib/stores");
         fs::create_dir_all(&store_dir).unwrap();
-        fs::write(store_dir.join("counter.ts"), "export const count = writable(0);").unwrap();
+        fs::write(
+            store_dir.join("counter.ts"),
+            "export const count = writable(0);",
+        )
+        .unwrap();
 
         let caches = ResolverCaches::default_capacity();
         // Put a node in the file cache
@@ -654,7 +655,7 @@ mod tests {
 
     #[test]
     fn svelte_resolve_component_prefers_same_dir() {
-        use codewiki_core::{Node, NodeKind, Language};
+        use codewiki_core::{Language, Node, NodeKind};
 
         let caches = ResolverCaches::default_capacity();
         let other_node = Node {
@@ -679,9 +680,10 @@ mod tests {
             end_line: 1,
             ..Default::default()
         };
-        caches
-            .name_cache
-            .insert("Button".to_string(), vec![other_node.clone(), same_dir_node.clone()]);
+        caches.name_cache.insert(
+            "Button".to_string(),
+            vec![other_node.clone(), same_dir_node.clone()],
+        );
 
         let aliases = PathAliasMap::default();
         let ctx = make_ctx(&caches, &aliases, &[]);

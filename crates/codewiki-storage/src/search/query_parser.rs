@@ -174,8 +174,12 @@ pub fn parse_query(raw: &str) -> ParsedQuery {
 
     while i < n {
         // Skip whitespace
-        while i < n && chars[i].is_whitespace() { i += 1; }
-        if i >= n { break; }
+        while i < n && chars[i].is_whitespace() {
+            i += 1;
+        }
+        if i >= n {
+            break;
+        }
         let _start = i;
         let mut tok = String::new();
         while i < n && !chars[i].is_whitespace() {
@@ -186,13 +190,18 @@ pub fn parse_query(raw: &str) -> ParsedQuery {
                     tok.push(chars[i]);
                     i += 1;
                 }
-                if i < n { tok.push(chars[i]); i += 1; }
+                if i < n {
+                    tok.push(chars[i]);
+                    i += 1;
+                }
                 continue;
             }
             tok.push(chars[i]);
             i += 1;
         }
-        if !tok.is_empty() { tokens.push(tok); }
+        if !tok.is_empty() {
+            tokens.push(tok);
+        }
     }
 
     let mut text_parts: Vec<String> = Vec::new();
@@ -261,15 +270,23 @@ pub fn parse_query(raw: &str) -> ParsedQuery {
 /// Bounded edit distance (Levenshtein). Returns `max_dist + 1` early if
 /// distance exceeds `max_dist`.
 pub fn bounded_edit_distance(a: &str, b: &str, max_dist: usize) -> usize {
-    if a == b { return 0; }
+    if a == b {
+        return 0;
+    }
     let a_chars: Vec<char> = a.chars().collect();
     let b_chars: Vec<char> = b.chars().collect();
     let al = a_chars.len();
     let bl = b_chars.len();
 
-    if al.abs_diff(bl) > max_dist { return max_dist + 1; }
-    if al == 0 { return bl; }
-    if bl == 0 { return al; }
+    if al.abs_diff(bl) > max_dist {
+        return max_dist + 1;
+    }
+    if al == 0 {
+        return bl;
+    }
+    if bl == 0 {
+        return al;
+    }
 
     let mut prev: Vec<usize> = (0..=bl).collect();
     let mut cur: Vec<usize> = vec![0; bl + 1];
@@ -278,14 +295,20 @@ pub fn bounded_edit_distance(a: &str, b: &str, max_dist: usize) -> usize {
         cur[0] = i;
         let mut row_min = cur[0];
         for j in 1..=bl {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
             let insertion = cur[j - 1] + 1;
             let deletion = prev[j] + 1;
             let substitution = prev[j - 1] + cost;
             cur[j] = insertion.min(deletion).min(substitution);
             row_min = row_min.min(cur[j]);
         }
-        if row_min > max_dist { return max_dist + 1; }
+        if row_min > max_dist {
+            return max_dist + 1;
+        }
         std::mem::swap(&mut prev, &mut cur);
     }
     prev[bl]

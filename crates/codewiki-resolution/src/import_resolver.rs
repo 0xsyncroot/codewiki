@@ -114,9 +114,7 @@ fn is_external_import(import_path: &str, language: &Language) -> bool {
 /// that exists in `ctx`.
 fn probe_extensions(base: &Path, language: &Language, ctx: &dyn ImportContext) -> Option<PathBuf> {
     let extensions: &[&str] = match language {
-        Language::TypeScript | Language::JavaScript => {
-            &[".ts", ".tsx", ".d.ts", ".js", ".jsx"]
-        }
+        Language::TypeScript | Language::JavaScript => &[".ts", ".tsx", ".d.ts", ".js", ".jsx"],
         Language::Python => &[".py"],
         Language::Go => &[".go"],
         Language::Rust => &[".rs"],
@@ -140,15 +138,13 @@ fn probe_extensions(base: &Path, language: &Language, ctx: &dyn ImportContext) -
 
     // Directory index fallbacks
     let index_files: &[&str] = match language {
-        Language::TypeScript | Language::JavaScript => {
-            &[
-                "index.ts",
-                "index.tsx",
-                "index.d.ts",
-                "index.js",
-                "index.jsx",
-            ]
-        }
+        Language::TypeScript | Language::JavaScript => &[
+            "index.ts",
+            "index.tsx",
+            "index.d.ts",
+            "index.js",
+            "index.jsx",
+        ],
         Language::Python => &["__init__.py"],
         Language::Rust => &["mod.rs"],
         _ => &[],
@@ -213,9 +209,8 @@ fn extract_js_imports(content: &str) -> Vec<ImportMapping> {
     // CommonJS: const { X } = require('module')
     static CJS_RE: OnceLock<Regex> = OnceLock::new();
 
-    let named_re = NAMED_RE.get_or_init(|| {
-        Regex::new(r#"import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]"#).unwrap()
-    });
+    let named_re = NAMED_RE
+        .get_or_init(|| Regex::new(r#"import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]"#).unwrap());
     let default_re = DEFAULT_RE.get_or_init(|| {
         Regex::new(r#"import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s+from\s*['"]([^'"]+)['"]"#).unwrap()
     });
@@ -237,9 +232,7 @@ fn extract_js_imports(content: &str) -> Vec<ImportMapping> {
             if part.is_empty() {
                 continue;
             }
-            let (local_name, original_name) = if let Some((orig, loc)) =
-                part.split_once(" as ")
-            {
+            let (local_name, original_name) = if let Some((orig, loc)) = part.split_once(" as ") {
                 (loc.trim().to_string(), Some(orig.trim().to_string()))
             } else {
                 (part.to_string(), None)
@@ -275,9 +268,7 @@ fn extract_js_imports(content: &str) -> Vec<ImportMapping> {
             if part.is_empty() {
                 continue;
             }
-            let (local_name, original_name) = if let Some((orig, loc)) =
-                part.split_once(':')
-            {
+            let (local_name, original_name) = if let Some((orig, loc)) = part.split_once(':') {
                 (loc.trim().to_string(), Some(orig.trim().to_string()))
             } else {
                 (part.to_string(), None)
@@ -303,13 +294,11 @@ fn extract_python_imports(content: &str) -> Vec<ImportMapping> {
     static IMPORT_RE: OnceLock<Regex> = OnceLock::new();
 
     // from X import Y [as Z], A [as B]
-    let from_re = FROM_RE.get_or_init(|| {
-        Regex::new(r#"^from\s+(\.+\S*|\S+)\s+import\s+(.+)$"#).unwrap()
-    });
+    let from_re =
+        FROM_RE.get_or_init(|| Regex::new(r#"^from\s+(\.+\S*|\S+)\s+import\s+(.+)$"#).unwrap());
     // import X.Y [as Z]
-    let import_re = IMPORT_RE.get_or_init(|| {
-        Regex::new(r#"^import\s+(\S+)(?:\s+as\s+(\S+))?"#).unwrap()
-    });
+    let import_re =
+        IMPORT_RE.get_or_init(|| Regex::new(r#"^import\s+(\S+)(?:\s+as\s+(\S+))?"#).unwrap());
 
     let mut result = Vec::new();
 
@@ -322,8 +311,7 @@ fn extract_python_imports(content: &str) -> Vec<ImportMapping> {
                 if part.is_empty() {
                     continue;
                 }
-                let (local_name, original_name) = if let Some((orig, loc)) =
-                    part.split_once(" as ")
+                let (local_name, original_name) = if let Some((orig, loc)) = part.split_once(" as ")
                 {
                     (loc.trim().to_string(), Some(orig.trim().to_string()))
                 } else {
@@ -362,13 +350,11 @@ fn extract_go_imports(content: &str) -> Vec<ImportMapping> {
     static BLOCK_RE: OnceLock<Regex> = OnceLock::new();
 
     // import "path/pkg"  or  import alias "path/pkg"
-    let single_re = SINGLE_RE.get_or_init(|| {
-        Regex::new(r#"import\s+(?:(\w+)\s+)?["'`]([^"'`]+)["'`]"#).unwrap()
-    });
+    let single_re = SINGLE_RE
+        .get_or_init(|| Regex::new(r#"import\s+(?:(\w+)\s+)?["'`]([^"'`]+)["'`]"#).unwrap());
     // import ( ... ) block
-    let block_re = BLOCK_RE.get_or_init(|| {
-        Regex::new(r#"(?m)^\s*(?:(\w+)\s+)?["'`]([^"'`]+)["'`]"#).unwrap()
-    });
+    let block_re =
+        BLOCK_RE.get_or_init(|| Regex::new(r#"(?m)^\s*(?:(\w+)\s+)?["'`]([^"'`]+)["'`]"#).unwrap());
 
     let mut result = Vec::new();
 
@@ -423,9 +409,8 @@ fn extract_php_imports(content: &str) -> Vec<ImportMapping> {
 
     static USE_RE: OnceLock<Regex> = OnceLock::new();
 
-    let use_re = USE_RE.get_or_init(|| {
-        Regex::new(r#"use\s+([\w\\]+)(?:\s+as\s+(\w+))?\s*;"#).unwrap()
-    });
+    let use_re =
+        USE_RE.get_or_init(|| Regex::new(r#"use\s+([\w\\]+)(?:\s+as\s+(\w+))?\s*;"#).unwrap());
 
     use_re
         .captures_iter(content)
@@ -522,7 +507,10 @@ mod tests {
         let src = r#"import { UserService, AuthHelper as Auth } from './services';"#;
         let mappings = extract_import_mappings("file.ts", src, &Language::TypeScript);
         let names: Vec<&str> = mappings.iter().map(|m| m.local_name.as_str()).collect();
-        assert!(names.contains(&"UserService"), "UserService must be extracted");
+        assert!(
+            names.contains(&"UserService"),
+            "UserService must be extracted"
+        );
         assert!(names.contains(&"Auth"), "Auth alias must be extracted");
     }
 

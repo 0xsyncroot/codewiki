@@ -2,7 +2,9 @@
 
 use crate::ast_walker::{generate_node_id, LanguageConfig, LanguageExtractor};
 use crate::languages::svelte::EMPTY_CONFIG;
-use codewiki_core::{EdgeKind, ExtractionBatch, FileRecord, Language, Node, NodeKind, UnresolvedRef};
+use codewiki_core::{
+    EdgeKind, ExtractionBatch, FileRecord, Language, Node, NodeKind, UnresolvedRef,
+};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -39,7 +41,11 @@ pub fn extract_special(source: &str, file_path: &Path) -> ExtractionBatch {
 
     nodes.push(Node {
         id: file_id.clone(),
-        name: file_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+        name: file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string(),
         qualified_name: file_path_str.clone(),
         kind: NodeKind::File,
         language: Language::Dfm,
@@ -175,10 +181,17 @@ end
         let batch = extract_special(source, f.path());
 
         let names: Vec<_> = batch.nodes.iter().map(|n| n.name.as_str()).collect();
-        assert!(batch.nodes.iter().any(|n| n.name == "Form1"), "nodes: {names:?}");
-        assert!(batch.nodes.iter().any(|n| n.name == "Button1"), "nodes: {names:?}");
         assert!(
-            batch.unresolved_refs.iter().any(|r| r.reference_name == "Button1Click")
+            batch.nodes.iter().any(|n| n.name == "Form1"),
+            "nodes: {names:?}"
         );
+        assert!(
+            batch.nodes.iter().any(|n| n.name == "Button1"),
+            "nodes: {names:?}"
+        );
+        assert!(batch
+            .unresolved_refs
+            .iter()
+            .any(|r| r.reference_name == "Button1Click"));
     }
 }

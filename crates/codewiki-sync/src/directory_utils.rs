@@ -94,14 +94,12 @@ pub fn list_directory_contents(project_root: &Path) -> Vec<PathBuf> {
 }
 
 fn walk_no_symlinks(base: &Path, prefix: PathBuf, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(base) else { return };
+    let Ok(entries) = fs::read_dir(base) else {
+        return;
+    };
     for entry in entries.flatten() {
         // Skip symlinks.
-        if entry
-            .file_type()
-            .map(|ft| ft.is_symlink())
-            .unwrap_or(false)
-        {
+        if entry.file_type().map(|ft| ft.is_symlink()).unwrap_or(false) {
             continue;
         }
         let rel = if prefix.as_os_str().is_empty() {
@@ -109,11 +107,7 @@ fn walk_no_symlinks(base: &Path, prefix: PathBuf, out: &mut Vec<PathBuf>) {
         } else {
             prefix.join(entry.file_name())
         };
-        if entry
-            .file_type()
-            .map(|ft| ft.is_dir())
-            .unwrap_or(false)
-        {
+        if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
             walk_no_symlinks(&entry.path(), rel, out);
         } else {
             out.push(rel);
@@ -133,22 +127,16 @@ pub fn get_directory_size(project_root: &Path) -> u64 {
 }
 
 fn dir_size_no_symlinks(dir: &Path) -> u64 {
-    let Ok(entries) = fs::read_dir(dir) else { return 0 };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return 0;
+    };
     let mut total = 0u64;
     for entry in entries.flatten() {
-        if entry
-            .file_type()
-            .map(|ft| ft.is_symlink())
-            .unwrap_or(false)
-        {
+        if entry.file_type().map(|ft| ft.is_symlink()).unwrap_or(false) {
             continue;
         }
         let p = entry.path();
-        if entry
-            .file_type()
-            .map(|ft| ft.is_dir())
-            .unwrap_or(false)
-        {
+        if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
             total += dir_size_no_symlinks(&p);
         } else if let Ok(meta) = fs::metadata(&p) {
             total += meta.len();

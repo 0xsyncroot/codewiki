@@ -66,8 +66,7 @@ pub fn spawn_ppid_watchdog(
     {
         let cancel_clone = cancel.clone();
         tokio::spawn(async move {
-            let mut interval =
-                tokio::time::interval(std::time::Duration::from_millis(poll_ms));
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(poll_ms));
             // The first tick fires immediately; discard it.
             interval.tick().await;
 
@@ -75,9 +74,7 @@ pub fn spawn_ppid_watchdog(
                 interval.tick().await;
 
                 let ppid_changed = current_ppid() != original_ppid;
-                let host_gone = host_ppid
-                    .map(|pid| !is_process_alive(pid))
-                    .unwrap_or(false);
+                let host_gone = host_ppid.map(|pid| !is_process_alive(pid)).unwrap_or(false);
 
                 if ppid_changed || host_gone {
                     tracing::warn!(

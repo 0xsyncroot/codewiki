@@ -362,7 +362,11 @@ mod tests {
         use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("routes.swift"), b"import Vapor\n\nfunc boot(routes: RoutesBuilder) {}\n").unwrap();
+        fs::write(
+            dir.path().join("routes.swift"),
+            b"import Vapor\n\nfunc boot(routes: RoutesBuilder) {}\n",
+        )
+        .unwrap();
 
         let caches = ResolverCaches::default_capacity();
         let aliases = PathAliasMap::default();
@@ -376,7 +380,10 @@ mod tests {
         };
 
         let resolver = VaporResolver;
-        assert!(resolver.detect(&ctx), "must detect Vapor via import Vapor in .swift");
+        assert!(
+            resolver.detect(&ctx),
+            "must detect Vapor via import Vapor in .swift"
+        );
     }
 
     /// T-308: Multiple routes in one file, varied methods.

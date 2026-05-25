@@ -26,7 +26,11 @@ pub fn run(files: Vec<PathBuf>, path: Option<PathBuf>) -> Result<()> {
 
     println!("Nodes affected by {} file(s):", files.len());
     let mut nodes = affected;
-    nodes.sort_by(|a, b| a.file_path.cmp(&b.file_path).then(a.start_line.cmp(&b.start_line)));
+    nodes.sort_by(|a, b| {
+        a.file_path
+            .cmp(&b.file_path)
+            .then(a.start_line.cmp(&b.start_line))
+    });
     for node in &nodes {
         let kind = format!("{:?}", node.kind).to_lowercase();
         println!(

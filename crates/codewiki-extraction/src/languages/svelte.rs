@@ -4,8 +4,13 @@
 //! extractor, offsets line numbers back to .svelte positions, and emits
 //! `contains` edges from the component to all contained symbols.
 
-use crate::ast_walker::{extract_file, generate_node_id, timestamps_for_file, DocCommentStyle, LanguageConfig, LanguageExtractor};
-use codewiki_core::{EdgeKind, ExtractionBatch, FileRecord, Language, Node, NodeKind, UnresolvedRef};
+use crate::ast_walker::{
+    extract_file, generate_node_id, timestamps_for_file, DocCommentStyle, LanguageConfig,
+    LanguageExtractor,
+};
+use codewiki_core::{
+    EdgeKind, ExtractionBatch, FileRecord, Language, Node, NodeKind, UnresolvedRef,
+};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -41,11 +46,15 @@ fn script_re() -> &'static Regex {
 }
 
 fn svelte_runes() -> &'static [&'static str] {
-    &["$props", "$state", "$derived", "$effect", "$inspect", "$host"]
+    &[
+        "$props", "$state", "$derived", "$effect", "$inspect", "$host",
+    ]
 }
 
 fn is_rune(name: &str) -> bool {
-    svelte_runes().iter().any(|r| name == *r || name.starts_with(*r))
+    svelte_runes()
+        .iter()
+        .any(|r| name == *r || name.starts_with(*r))
 }
 
 /// Special extraction for Svelte files — does not use tree-sitter directly.
@@ -65,7 +74,11 @@ pub fn extract_special(source: &str, file_path: &Path) -> ExtractionBatch {
 
     nodes.push(Node {
         id: file_id.clone(),
-        name: file_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+        name: file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string(),
         qualified_name: file_path_str.clone(),
         kind: NodeKind::File,
         language: Language::Svelte,
@@ -238,7 +251,10 @@ mod tests {
 
         let names: Vec<_> = batch.nodes.iter().map(|n| n.name.as_str()).collect();
         assert!(
-            batch.nodes.iter().any(|n| matches!(n.kind, NodeKind::Component)),
+            batch
+                .nodes
+                .iter()
+                .any(|n| matches!(n.kind, NodeKind::Component)),
             "no component node; nodes: {names:?}"
         );
         assert!(
@@ -284,7 +300,10 @@ mod tests {
 
         // The component node and greet function must be present.
         assert!(
-            batch.nodes.iter().any(|n| matches!(n.kind, NodeKind::Component)),
+            batch
+                .nodes
+                .iter()
+                .any(|n| matches!(n.kind, NodeKind::Component)),
             "no component node"
         );
         assert!(

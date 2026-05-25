@@ -121,7 +121,10 @@ pub fn install_git_sync_hook(
     };
 
     fs::create_dir_all(&hooks_dir).map_err(|e| {
-        CodeWikiError::Git(format!("cannot access hooks dir {}: {e}", hooks_dir.display()))
+        CodeWikiError::Git(format!(
+            "cannot access hooks dir {}: {e}",
+            hooks_dir.display()
+        ))
     })?;
 
     let block = marker_block();
@@ -377,7 +380,10 @@ mod tests {
         let content = fs::read_to_string(&hook_file).unwrap();
         // Count occurrences of MARKER_BEGIN — must be exactly 1.
         let count = content.matches(MARKER_BEGIN).count();
-        assert_eq!(count, 1, "marker block should appear exactly once after two installs");
+        assert_eq!(
+            count, 1,
+            "marker block should appear exactly once after two installs"
+        );
     }
 
     #[test]
@@ -396,7 +402,10 @@ mod tests {
         install_direct(&tmp, GitHookName::PostCommit);
         let content = fs::read_to_string(&hook_file).unwrap();
         assert_eq!(content.matches(MARKER_BEGIN).count(), 1);
-        assert!(content.contains("user content"), "user content must survive");
+        assert!(
+            content.contains("user content"),
+            "user content must survive"
+        );
     }
 
     #[test]

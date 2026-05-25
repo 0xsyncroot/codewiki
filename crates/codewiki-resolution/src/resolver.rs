@@ -30,53 +30,211 @@ macro_rules! static_set {
 
 static_set!(
     js_builtins,
-    "console", "window", "document", "global", "process",
-    "Promise", "Array", "Object", "String", "Number", "Boolean",
-    "Date", "Math", "JSON", "RegExp", "Error", "Map", "Set",
-    "setTimeout", "setInterval", "clearTimeout", "clearInterval",
-    "fetch", "require", "module", "exports", "__dirname", "__filename"
+    "console",
+    "window",
+    "document",
+    "global",
+    "process",
+    "Promise",
+    "Array",
+    "Object",
+    "String",
+    "Number",
+    "Boolean",
+    "Date",
+    "Math",
+    "JSON",
+    "RegExp",
+    "Error",
+    "Map",
+    "Set",
+    "setTimeout",
+    "setInterval",
+    "clearTimeout",
+    "clearInterval",
+    "fetch",
+    "require",
+    "module",
+    "exports",
+    "__dirname",
+    "__filename"
 );
 static_set!(
     react_hooks,
-    "useState", "useEffect", "useContext", "useReducer", "useCallback",
-    "useMemo", "useRef", "useLayoutEffect", "useImperativeHandle", "useDebugValue"
+    "useState",
+    "useEffect",
+    "useContext",
+    "useReducer",
+    "useCallback",
+    "useMemo",
+    "useRef",
+    "useLayoutEffect",
+    "useImperativeHandle",
+    "useDebugValue"
 );
 static_set!(
     python_builtins,
-    "print", "len", "range", "str", "int", "float", "list", "dict", "set", "tuple",
-    "open", "input", "type", "isinstance", "hasattr", "getattr", "setattr",
-    "super", "self", "cls", "None", "True", "False"
+    "print",
+    "len",
+    "range",
+    "str",
+    "int",
+    "float",
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "open",
+    "input",
+    "type",
+    "isinstance",
+    "hasattr",
+    "getattr",
+    "setattr",
+    "super",
+    "self",
+    "cls",
+    "None",
+    "True",
+    "False"
 );
 static_set!(
     python_builtin_types,
-    "list", "dict", "set", "tuple", "str", "int", "float", "bool",
-    "bytes", "bytearray", "frozenset", "object", "super"
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "str",
+    "int",
+    "float",
+    "bool",
+    "bytes",
+    "bytearray",
+    "frozenset",
+    "object",
+    "super"
 );
 static_set!(
     python_builtin_methods,
-    "append", "extend", "insert", "remove", "pop", "clear", "sort", "reverse", "copy",
-    "update", "keys", "values", "items", "get", "add", "discard", "union",
-    "intersection", "difference", "split", "join", "strip", "replace", "lower", "upper",
-    "startswith", "endswith", "find", "index", "count", "format", "encode", "decode",
-    "read", "write", "readline", "readlines", "close", "flush"
+    "append",
+    "extend",
+    "insert",
+    "remove",
+    "pop",
+    "clear",
+    "sort",
+    "reverse",
+    "copy",
+    "update",
+    "keys",
+    "values",
+    "items",
+    "get",
+    "add",
+    "discard",
+    "union",
+    "intersection",
+    "difference",
+    "split",
+    "join",
+    "strip",
+    "replace",
+    "lower",
+    "upper",
+    "startswith",
+    "endswith",
+    "find",
+    "index",
+    "count",
+    "format",
+    "encode",
+    "decode",
+    "read",
+    "write",
+    "readline",
+    "readlines",
+    "close",
+    "flush"
 );
 static_set!(
     go_stdlib_packages,
-    "fmt", "os", "io", "net", "http", "log", "math", "sort", "sync",
-    "time", "path", "bytes", "strings", "strconv", "errors", "context",
-    "json", "xml", "csv", "html", "template", "regexp", "reflect",
-    "runtime", "testing", "flag", "bufio", "crypto", "encoding",
-    "filepath", "hash", "mime", "rand", "signal", "sql", "syscall",
-    "unicode", "unsafe", "atomic"
+    "fmt",
+    "os",
+    "io",
+    "net",
+    "http",
+    "log",
+    "math",
+    "sort",
+    "sync",
+    "time",
+    "path",
+    "bytes",
+    "strings",
+    "strconv",
+    "errors",
+    "context",
+    "json",
+    "xml",
+    "csv",
+    "html",
+    "template",
+    "regexp",
+    "reflect",
+    "runtime",
+    "testing",
+    "flag",
+    "bufio",
+    "crypto",
+    "encoding",
+    "filepath",
+    "hash",
+    "mime",
+    "rand",
+    "signal",
+    "sql",
+    "syscall",
+    "unicode",
+    "unsafe",
+    "atomic"
 );
 static_set!(
     go_builtins,
-    "make", "new", "len", "cap", "append", "copy", "delete", "close",
-    "panic", "recover", "print", "println",
-    "nil", "true", "false", "iota",
-    "int", "int8", "int16", "int32", "int64",
-    "uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
-    "float32", "float64", "string", "bool", "byte", "rune", "any", "error"
+    "make",
+    "new",
+    "len",
+    "cap",
+    "append",
+    "copy",
+    "delete",
+    "close",
+    "panic",
+    "recover",
+    "print",
+    "println",
+    "nil",
+    "true",
+    "false",
+    "iota",
+    "int",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "uintptr",
+    "float32",
+    "float64",
+    "string",
+    "bool",
+    "byte",
+    "rune",
+    "any",
+    "error"
 );
 
 // ─── Query handle interface (minimal) ────────────────────────────────────────
@@ -161,11 +319,7 @@ pub struct ReferenceResolver {
 }
 
 impl ReferenceResolver {
-    pub fn new(
-        project_root: PathBuf,
-        db: Arc<dyn ResolverQueryHandle>,
-        capacity: u64,
-    ) -> Self {
+    pub fn new(project_root: PathBuf, db: Arc<dyn ResolverQueryHandle>, capacity: u64) -> Self {
         let path_aliases = PathAliasMap::load(&project_root).unwrap_or_default();
         Self {
             project_root,
@@ -255,10 +409,7 @@ impl ReferenceResolver {
                     .or_default()
                     .push(Arc::clone(&nref_arc));
             }
-            file_map
-                .entry(file_key)
-                .or_default()
-                .push(nref_arc);
+            file_map.entry(file_key).or_default().push(nref_arc);
         }
 
         let files = self.db.get_all_file_paths();
@@ -289,19 +440,14 @@ impl ReferenceResolver {
     }
 
     /// Resolve a single reference using the 3-strategy cascade.
-    pub fn resolve_one(
-        &self,
-        uref: &UnresolvedRef,
-    ) -> Result<Option<ResolvedEdge>, CodeWikiError> {
+    pub fn resolve_one(&self, uref: &UnresolvedRef) -> Result<Option<ResolvedEdge>, CodeWikiError> {
         // Skip built-ins / external
         if self.is_builtin_or_external(uref) {
             return Ok(None);
         }
 
         // Fast pre-filter
-        if !self.has_any_possible_match(&uref.reference_name)
-            && !self.matches_any_import(uref)
-        {
+        if !self.has_any_possible_match(&uref.reference_name) && !self.matches_any_import(uref) {
             return Ok(None);
         }
 
@@ -369,7 +515,9 @@ impl ReferenceResolver {
 
         // Return highest confidence
         Ok(candidates.into_iter().max_by(|a, b| {
-            a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal)
+            a.confidence
+                .partial_cmp(&b.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
         }))
     }
 
@@ -417,7 +565,9 @@ impl ReferenceResolver {
             let mappings = extract_import_mappings(&uref.file_path, &content, &lang);
             return mappings.iter().any(|m| {
                 m.local_name == uref.reference_name
-                    || uref.reference_name.starts_with(&format!("{}.", m.local_name))
+                    || uref
+                        .reference_name
+                        .starts_with(&format!("{}.", m.local_name))
             });
         }
         false
@@ -431,15 +581,28 @@ impl ReferenceResolver {
         for mapping in &mappings {
             if mapping.local_name == uref.reference_name {
                 // Try by original name first, fall back to local name
-                let target_name = mapping.original_name.as_deref().unwrap_or(&mapping.local_name);
+                let target_name = mapping
+                    .original_name
+                    .as_deref()
+                    .unwrap_or(&mapping.local_name);
                 let candidates = self.nodes_by_name(target_name);
                 if let Some(node) = candidates.iter().find(|n| n.is_exported) {
-                    return Some(make_name_match_edge(uref, node, 0.9, ResolvedBy::ImportResolver));
+                    return Some(make_name_match_edge(
+                        uref,
+                        node,
+                        0.9,
+                        ResolvedBy::ImportResolver,
+                    ));
                 }
                 // Fallback to any match
                 let candidates = self.nodes_by_name(&mapping.local_name);
                 if let Some(node) = candidates.first() {
-                    return Some(make_name_match_edge(uref, node, 0.7, ResolvedBy::ImportResolver));
+                    return Some(make_name_match_edge(
+                        uref,
+                        node,
+                        0.7,
+                        ResolvedBy::ImportResolver,
+                    ));
                 }
             }
         }
@@ -486,20 +649,41 @@ impl ReferenceResolver {
             Language::TypeScript | Language::JavaScript
         );
 
-        if is_js && js_builtins().contains(name.as_str()) { return true; }
-        if is_js && (name.starts_with("console.") || name.starts_with("Math.") || name.starts_with("JSON.")) { return true; }
-        if is_js && react_hooks().contains(name.as_str()) { return true; }
+        if is_js && js_builtins().contains(name.as_str()) {
+            return true;
+        }
+        if is_js
+            && (name.starts_with("console.")
+                || name.starts_with("Math.")
+                || name.starts_with("JSON."))
+        {
+            return true;
+        }
+        if is_js && react_hooks().contains(name.as_str()) {
+            return true;
+        }
 
         if language_from_file_path(&uref.file_path) == Language::Python {
-            if python_builtins().contains(name.as_str()) { return true; }
-            if python_builtin_methods().contains(name.as_str()) { return true; }
+            if python_builtins().contains(name.as_str()) {
+                return true;
+            }
+            if python_builtin_methods().contains(name.as_str()) {
+                return true;
+            }
             if let Some(dot) = name.find('.') {
                 let receiver = &name[..dot];
                 let method = &name[dot + 1..];
-                if python_builtin_types().contains(receiver) { return true; }
+                if python_builtin_types().contains(receiver) {
+                    return true;
+                }
                 if python_builtin_methods().contains(method) {
                     let cap = capitalize(receiver);
-                    if self.known_names.as_ref().map(|s| !s.contains(cap.as_str())).unwrap_or(true) {
+                    if self
+                        .known_names
+                        .as_ref()
+                        .map(|s| !s.contains(cap.as_str()))
+                        .unwrap_or(true)
+                    {
                         return true;
                     }
                 }
@@ -507,10 +691,14 @@ impl ReferenceResolver {
         }
 
         if language_from_file_path(&uref.file_path) == Language::Go {
-            if go_builtins().contains(name.as_str()) { return true; }
+            if go_builtins().contains(name.as_str()) {
+                return true;
+            }
             if let Some(dot) = name.find('.') {
                 let pkg = &name[..dot];
-                if go_stdlib_packages().contains(pkg) { return true; }
+                if go_stdlib_packages().contains(pkg) {
+                    return true;
+                }
             }
         }
 
@@ -529,16 +717,27 @@ fn capitalize(s: &str) -> String {
 }
 
 fn language_from_file_path(path: &str) -> Language {
-    if path.ends_with(".ts") || path.ends_with(".tsx") { Language::TypeScript }
-    else if path.ends_with(".js") || path.ends_with(".jsx") { Language::JavaScript }
-    else if path.ends_with(".py") { Language::Python }
-    else if path.ends_with(".go") { Language::Go }
-    else if path.ends_with(".rs") { Language::Rust }
-    else if path.ends_with(".java") { Language::Java }
-    else if path.ends_with(".rb") { Language::Ruby }
-    else if path.ends_with(".php") { Language::Php }
-    else if path.ends_with(".cs") { Language::CSharp }
-    else { Language::Unknown }
+    if path.ends_with(".ts") || path.ends_with(".tsx") {
+        Language::TypeScript
+    } else if path.ends_with(".js") || path.ends_with(".jsx") {
+        Language::JavaScript
+    } else if path.ends_with(".py") {
+        Language::Python
+    } else if path.ends_with(".go") {
+        Language::Go
+    } else if path.ends_with(".rs") {
+        Language::Rust
+    } else if path.ends_with(".java") {
+        Language::Java
+    } else if path.ends_with(".rb") {
+        Language::Ruby
+    } else if path.ends_with(".php") {
+        Language::Php
+    } else if path.ends_with(".cs") {
+        Language::CSharp
+    } else {
+        Language::Unknown
+    }
 }
 
 fn make_name_match_edge(

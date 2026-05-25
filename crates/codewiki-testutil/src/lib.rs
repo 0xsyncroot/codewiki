@@ -149,7 +149,9 @@ function bootstrap{i}(): void {{
             n = n,
             next = next,
         );
-        let p = cache_root.join("src").join(format!("module_{i:04}.ts", i = i));
+        let p = cache_root
+            .join("src")
+            .join(format!("module_{i:04}.ts", i = i));
         fs::write(&p, &content).expect("write corpus file");
     }
 
@@ -212,7 +214,10 @@ mod tests {
     fn generate_files_are_valid_typescript() {
         let dir = generate_synthetic_ts_project(3);
         for i in 0..3 {
-            let p = dir.path().join("src").join(format!("module_{i:04}.ts", i = i));
+            let p = dir
+                .path()
+                .join("src")
+                .join(format!("module_{i:04}.ts", i = i));
             assert!(p.exists(), "module_{i:04}.ts should exist");
             let content = fs::read_to_string(&p).expect("read file");
             assert!(
@@ -243,8 +248,14 @@ mod tests {
         let before = fs::read_to_string(&p).unwrap();
         append_line(&p, "// bench edit");
         let after = fs::read_to_string(&p).unwrap();
-        assert!(after.len() > before.len(), "file should be longer after append");
-        assert!(after.ends_with("// bench edit\n"), "last line should be the appended line");
+        assert!(
+            after.len() > before.len(),
+            "file should be longer after append"
+        );
+        assert!(
+            after.ends_with("// bench edit\n"),
+            "last line should be the appended line"
+        );
     }
 
     #[test]

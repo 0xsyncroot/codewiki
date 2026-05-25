@@ -1,6 +1,6 @@
 /// Prepared-statement helpers for edge operations.
 use codewiki_core::{CodeWikiError, Edge, EdgeKind};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 // ---------------------------------------------------------------------------
 // Row → Edge conversion
@@ -85,7 +85,13 @@ pub fn insert_resolved_edges_bulk(conn: &Connection, edges: &[Edge]) -> Result<(
                 let base = i * COLS + 1;
                 format!(
                     "(?{},?{},?{},?{},?{},?{},?{})",
-                    base, base+1, base+2, base+3, base+4, base+5, base+6
+                    base,
+                    base + 1,
+                    base + 2,
+                    base + 3,
+                    base + 4,
+                    base + 5,
+                    base + 6
                 )
             })
             .collect();
@@ -277,10 +283,7 @@ pub fn find_edges_between_nodes(
 /// Uses `idx_edges_target_kind` and `idx_edges_source_kind` prefix scans.
 ///
 /// Returns `(in_degree, out_degree)`.
-pub fn get_node_degree(
-    conn: &Connection,
-    node_id: &str,
-) -> Result<(u64, u64), CodeWikiError> {
+pub fn get_node_degree(conn: &Connection, node_id: &str) -> Result<(u64, u64), CodeWikiError> {
     let (in_degree, out_degree): (i64, i64) = conn.query_row(
         "SELECT \
             (SELECT COUNT(*) FROM edges WHERE target = ?1) AS in_degree, \
@@ -333,10 +336,9 @@ pub fn get_dependent_files(
         .cloned()
         .collect();
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(
-        rusqlite::params_from_iter(params_vec.iter()),
-        |row| row.get(0),
-    )?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(params_vec.iter()), |row| {
+        row.get(0)
+    })?;
     rows.map(|r| r.map_err(CodeWikiError::Sqlite))
         .collect::<Result<Vec<_>, _>>()
 }
@@ -404,8 +406,7 @@ mod tests {
         let outgoing = get_outgoing_edges(&conn, "a", None).unwrap();
         assert_eq!(outgoing.len(), 2);
 
-        let outgoing_calls =
-            get_outgoing_edges(&conn, "a", Some(&[EdgeKind::Calls])).unwrap();
+        let outgoing_calls = get_outgoing_edges(&conn, "a", Some(&[EdgeKind::Calls])).unwrap();
         assert_eq!(outgoing_calls.len(), 1);
 
         let incoming_b = get_incoming_edges(&conn, "b", None).unwrap();

@@ -31,7 +31,10 @@ impl std::str::FromStr for Location {
         match s {
             "global" => Ok(Location::Global),
             "local" => Ok(Location::Local),
-            _ => Err(anyhow::anyhow!("unknown location '{}'; use global or local", s)),
+            _ => Err(anyhow::anyhow!(
+                "unknown location '{}'; use global or local",
+                s
+            )),
         }
     }
 }

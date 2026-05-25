@@ -234,8 +234,7 @@ fn find_decorators(safe: &str, names: &[&str]) -> Vec<DecoratorHit> {
 /// Scope boundary: from `class ClassName` to start of next scope (or EOF).
 fn build_class_scopes(safe: &str) -> Vec<ClassScope> {
     static CLASS_RE: OnceLock<Regex> = OnceLock::new();
-    let re = CLASS_RE
-        .get_or_init(|| Regex::new(r"\bclass\s+([A-Za-z_$][A-Za-z0-9_$]*)").unwrap());
+    let re = CLASS_RE.get_or_init(|| Regex::new(r"\bclass\s+([A-Za-z_$][A-Za-z0-9_$]*)").unwrap());
 
     let total_len = safe.len();
     let mut scopes: Vec<ClassScope> = Vec::new();
@@ -295,15 +294,13 @@ fn extract_pipe_name(args: &str) -> Option<String> {
 
 fn extract_provided_in(args: &str) -> Option<String> {
     static RE: OnceLock<Regex> = OnceLock::new();
-    let re =
-        RE.get_or_init(|| Regex::new(r#"providedIn\s*:\s*['"`]([^'"`]+)['"`]"#).unwrap());
+    let re = RE.get_or_init(|| Regex::new(r#"providedIn\s*:\s*['"`]([^'"`]+)['"`]"#).unwrap());
     re.captures(args).map(|c| c[1].to_string())
 }
 
 fn extract_standalone_flag(args: &str) -> Option<bool> {
     static RE: OnceLock<Regex> = OnceLock::new();
-    let re = RE
-        .get_or_init(|| Regex::new(r"\bstandalone\s*:\s*(true|false)\b").unwrap());
+    let re = RE.get_or_init(|| Regex::new(r"\bstandalone\s*:\s*(true|false)\b").unwrap());
     re.captures(args).map(|c| &c[1] == "true")
 }
 
@@ -315,9 +312,7 @@ fn extract_constructor_di_types(args: &str) -> Vec<String> {
     // Each param: optional modifiers + name: Type + optional init
     // We just look for `: TypeName` patterns (TypeName starts with uppercase)
     static PARAM_TYPE_RE: OnceLock<Regex> = OnceLock::new();
-    let re = PARAM_TYPE_RE.get_or_init(|| {
-        Regex::new(r":\s*([A-Z][A-Za-z0-9_$]*)").unwrap()
-    });
+    let re = PARAM_TYPE_RE.get_or_init(|| Regex::new(r":\s*([A-Z][A-Za-z0-9_$]*)").unwrap());
     for cap in re.captures_iter(args) {
         let ty = cap[1].to_string();
         if !ts_builtin_types().contains(ty.as_str()) {
@@ -390,8 +385,7 @@ fn extract_named_array_identifiers(args: &str, key: &str) -> Vec<String> {
 
     // Extract PascalCase identifiers (component/module/service names)
     static IDENT_RE: OnceLock<Regex> = OnceLock::new();
-    let ident_re = IDENT_RE
-        .get_or_init(|| Regex::new(r"\b([A-Z][A-Za-z0-9_$]*)").unwrap());
+    let ident_re = IDENT_RE.get_or_init(|| Regex::new(r"\b([A-Z][A-Za-z0-9_$]*)").unwrap());
     ident_re
         .captures_iter(&inner)
         .map(|c| c[1].to_string())
@@ -404,8 +398,7 @@ fn extract_named_array_identifiers(args: &str, key: &str) -> Vec<String> {
 fn extract_inline_template(args: &str) -> Option<String> {
     // Find `template:` key
     static TEMPLATE_KEY_RE: OnceLock<Regex> = OnceLock::new();
-    let re = TEMPLATE_KEY_RE
-        .get_or_init(|| Regex::new(r"\btemplate\s*:\s*").unwrap());
+    let re = TEMPLATE_KEY_RE.get_or_init(|| Regex::new(r"\btemplate\s*:\s*").unwrap());
     let m = re.find(args)?;
     let rest = &args[m.end()..];
 
@@ -436,9 +429,7 @@ fn extract_inline_template(args: &str) -> Option<String> {
 /// Scan template string for multi-word kebab element selectors (custom components).
 fn scan_template_selectors(template: &str) -> Vec<String> {
     static RE: OnceLock<Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| {
-        Regex::new(r"<([a-z][a-z0-9]*(?:-[a-z0-9]+)+)").unwrap()
-    });
+    let re = RE.get_or_init(|| Regex::new(r"<([a-z][a-z0-9]*(?:-[a-z0-9]+)+)").unwrap());
     re.captures_iter(template)
         .map(|c| c[1].to_string())
         .collect::<std::collections::HashSet<_>>()
@@ -522,7 +513,11 @@ fn compose_angular_route_path(parent: &str, child: &str) -> String {
     if parent.is_empty() || parent == "/" {
         format!("/{}", child.trim_matches('/'))
     } else {
-        format!("{}/{}", parent.trim_end_matches('/'), child.trim_matches('/'))
+        format!(
+            "{}/{}",
+            parent.trim_end_matches('/'),
+            child.trim_matches('/')
+        )
     }
 }
 
@@ -535,7 +530,13 @@ fn guard_ident_regex() -> &'static Regex {
 fn extract_guard_names(obj_body: &str) -> Vec<String> {
     let id_re = guard_ident_regex();
     let mut guards = Vec::new();
-    for key in &["canActivate", "canDeactivate", "canMatch", "canLoad", "canActivateChild"] {
+    for key in &[
+        "canActivate",
+        "canDeactivate",
+        "canMatch",
+        "canLoad",
+        "canActivateChild",
+    ] {
         let pattern = format!(r"\b{key}\s*:\s*\[");
         if let Ok(re) = Regex::new(&pattern) {
             if let Some(m) = re.find(obj_body) {
@@ -595,17 +596,14 @@ fn extract_route_path(obj_body: &str) -> Option<String> {
 /// Extract `redirectTo:` value.
 fn extract_redirect_to(obj_body: &str) -> Option<String> {
     static RE: OnceLock<Regex> = OnceLock::new();
-    let re =
-        RE.get_or_init(|| Regex::new(r#"\bredirectTo\s*:\s*['"`]([^'"`]*)['"`]"#).unwrap());
+    let re = RE.get_or_init(|| Regex::new(r#"\bredirectTo\s*:\s*['"`]([^'"`]*)['"`]"#).unwrap());
     re.captures(obj_body).map(|c| c[1].to_string())
 }
 
 /// Extract `component: ClassName` from a route object body.
 fn extract_route_component_name(obj_body: &str) -> Option<String> {
     static RE: OnceLock<Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| {
-        Regex::new(r"\bcomponent\s*:\s*([A-Z][A-Za-z0-9_$]*)").unwrap()
-    });
+    let re = RE.get_or_init(|| Regex::new(r"\bcomponent\s*:\s*([A-Z][A-Za-z0-9_$]*)").unwrap());
     re.captures(obj_body).map(|c| c[1].to_string())
 }
 
@@ -615,9 +613,8 @@ fn extract_route_component_name(obj_body: &str) -> Option<String> {
 ///   `() => import('./path/to/file').then(m => m.SomeComponent)`
 fn extract_lazy_import(obj_body: &str, key: &str) -> Option<(String, Option<String>)> {
     // Match: key: () => import('./...')
-    let pattern = format!(
-        r#"\b{key}\s*:\s*(?:\(\s*\)\s*=>)?\s*import\s*\(\s*["'`]([^"'`]+)["'`]\s*\)"#
-    );
+    let pattern =
+        format!(r#"\b{key}\s*:\s*(?:\(\s*\)\s*=>)?\s*import\s*\(\s*["'`]([^"'`]+)["'`]\s*\)"#);
     let re = Regex::new(&pattern).ok()?;
     let cap = re.captures(obj_body)?;
     let import_path = cap[1].to_string();
@@ -684,8 +681,7 @@ fn parse_angular_routes_array(
                                 if let Some(children_body) =
                                     read_bracket_array(&obj_body, bracket_start)
                                 {
-                                    let child_offset =
-                                        array_offset_in_file + i + bracket_start + 1;
+                                    let child_offset = array_offset_in_file + i + bracket_start + 1;
                                     let child_routes = parse_angular_routes_array(
                                         &children_body,
                                         prefix,
@@ -762,8 +758,7 @@ fn extract_angular_routes(
             Some(s) => s,
             None => continue,
         };
-        let routes =
-            parse_angular_routes_array(&inner, "", bracket_pos + 1, original);
+        let routes = parse_angular_routes_array(&inner, "", bracket_pos + 1, original);
 
         for route in routes {
             // Use the display path: prepend '/' if missing for route name
@@ -775,10 +770,7 @@ fn extract_angular_routes(
                 format!("/{}", route.full_path.trim_start_matches('/'))
             };
 
-            let route_id = format!(
-                "route:{}:{}:GET:{}",
-                file_str, route.line, display_path
-            );
+            let route_id = format!("route:{}:{}:GET:{}", file_str, route.line, display_path);
 
             // Determine if this is a layout/empty-path child
             let is_layout = route.full_path == display_path.trim_start_matches('/')
@@ -803,7 +795,10 @@ fn extract_angular_routes(
             });
 
             // If redirect_to only — no component refs
-            if route.redirect_to.is_some() && route.component_name.is_none() && route.lazy_import_path.is_none() {
+            if route.redirect_to.is_some()
+                && route.component_name.is_none()
+                && route.lazy_import_path.is_none()
+            {
                 continue;
             }
 
@@ -894,8 +889,7 @@ impl FrameworkResolver for AngularResolver {
             if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&raw) {
                 for section in &["dependencies", "devDependencies"] {
                     if let Some(obj) = pkg.get(section).and_then(|v| v.as_object()) {
-                        if let Some(version_str) =
-                            obj.get("@angular/core").and_then(|v| v.as_str())
+                        if let Some(version_str) = obj.get("@angular/core").and_then(|v| v.as_str())
                         {
                             let gte19 = parse_angular_version_gte_19(version_str);
                             let _ = self.angular_version_gte_19.set(gte19);
@@ -991,9 +985,7 @@ impl FrameworkResolver for AngularResolver {
         }
 
         // Pattern 4: Component by class name
-        let component_match = candidates
-            .iter()
-            .find(|n| n.kind == NodeKind::Component);
+        let component_match = candidates.iter().find(|n| n.kind == NodeKind::Component);
         if let Some(node) = component_match {
             return Ok(Some(make_resolved_edge(
                 reference,
@@ -1004,9 +996,7 @@ impl FrameworkResolver for AngularResolver {
         }
 
         // Pattern 5: Module by class name
-        let module_match = candidates
-            .iter()
-            .find(|n| n.kind == NodeKind::Module);
+        let module_match = candidates.iter().find(|n| n.kind == NodeKind::Module);
         if let Some(node) = module_match {
             return Ok(Some(make_resolved_edge(
                 reference,
@@ -1069,13 +1059,7 @@ impl FrameworkResolver for AngularResolver {
 
         // ── Phase A: Component / DI extraction ───────────────────────────────
 
-        let decorator_names = &[
-            "Component",
-            "Directive",
-            "Pipe",
-            "Injectable",
-            "NgModule",
-        ];
+        let decorator_names = &["Component", "Directive", "Pipe", "Injectable", "NgModule"];
         let hits = find_decorators(&safe, decorator_names);
 
         for hit in &hits {
@@ -1088,8 +1072,8 @@ impl FrameworkResolver for AngularResolver {
 
             match hit.name.as_str() {
                 "Component" => {
-                    let selector = extract_selector(&hit.args)
-                        .unwrap_or_else(|| class_name.clone());
+                    let selector =
+                        extract_selector(&hit.args).unwrap_or_else(|| class_name.clone());
                     let standalone = extract_standalone_flag(&hit.args)
                         .unwrap_or_else(|| self.is_standalone_by_default());
 
@@ -1127,8 +1111,7 @@ impl FrameworkResolver for AngularResolver {
                         ..Default::default()
                     });
 
-                    let comp_id =
-                        format!("component:{}:{}:{}", file_str, line, class_name);
+                    let comp_id = format!("component:{}:{}:{}", file_str, line, class_name);
 
                     // standalone imports:[...] → "uses" refs
                     if standalone {
@@ -1176,8 +1159,8 @@ impl FrameworkResolver for AngularResolver {
                 }
 
                 "Directive" => {
-                    let selector = extract_selector(&hit.args)
-                        .unwrap_or_else(|| class_name.clone());
+                    let selector =
+                        extract_selector(&hit.args).unwrap_or_else(|| class_name.clone());
                     let meta = serde_json::json!({
                         "class": class_name,
                         "selector": selector,
@@ -1198,8 +1181,8 @@ impl FrameworkResolver for AngularResolver {
                 }
 
                 "Pipe" => {
-                    let pipe_name = extract_pipe_name(&hit.args)
-                        .unwrap_or_else(|| class_name.to_lowercase());
+                    let pipe_name =
+                        extract_pipe_name(&hit.args).unwrap_or_else(|| class_name.to_lowercase());
                     let meta = serde_json::json!({
                         "class": class_name,
                         "name": pipe_name,
@@ -1220,8 +1203,7 @@ impl FrameworkResolver for AngularResolver {
                 }
 
                 "Injectable" => {
-                    let provided_in =
-                        extract_provided_in(&hit.args).unwrap_or_default();
+                    let provided_in = extract_provided_in(&hit.args).unwrap_or_default();
                     let meta = serde_json::json!({
                         "class": class_name,
                         "providedIn": provided_in,
@@ -1246,8 +1228,7 @@ impl FrameworkResolver for AngularResolver {
                         "class": class_name,
                     });
 
-                    let module_id =
-                        format!("module:{}:{}:{}", file_str, line, class_name);
+                    let module_id = format!("module:{}:{}:{}", file_str, line, class_name);
 
                     nodes.push(Node {
                         id: module_id.clone(),
@@ -1315,8 +1296,7 @@ impl FrameworkResolver for AngularResolver {
         // ── DI: constructor params ────────────────────────────────────────────
 
         static CTOR_RE: OnceLock<Regex> = OnceLock::new();
-        let ctor_re = CTOR_RE
-            .get_or_init(|| Regex::new(r"\bconstructor\s*\(").unwrap());
+        let ctor_re = CTOR_RE.get_or_init(|| Regex::new(r"\bconstructor\s*\(").unwrap());
 
         for m in ctor_re.find_iter(&safe) {
             let paren = m.end() - 1;
@@ -1329,9 +1309,7 @@ impl FrameworkResolver for AngularResolver {
                         .iter()
                         .find(|n| n.name == cls.name)
                         .map(|n| n.id.clone())
-                        .unwrap_or_else(|| {
-                            format!("class:{}:{}", file_str, cls.name)
-                        });
+                        .unwrap_or_else(|| format!("class:{}:{}", file_str, cls.name));
 
                     let ctor_line = line_at(&safe, m.start());
                     for ty in types {
@@ -1405,9 +1383,11 @@ impl FrameworkResolver for AngularResolver {
 
         // ── Phase B: Routing extraction ───────────────────────────────────────
 
-        if safe.contains("Routes") || safe.contains("RouterModule") || safe.contains("provideRouter") {
-            let (route_nodes, route_refs) =
-                extract_angular_routes(&safe, &file_str, content);
+        if safe.contains("Routes")
+            || safe.contains("RouterModule")
+            || safe.contains("provideRouter")
+        {
+            let (route_nodes, route_refs) = extract_angular_routes(&safe, &file_str, content);
             nodes.extend(route_nodes);
             unresolved_refs.extend(route_refs);
         }
@@ -1432,9 +1412,8 @@ fn extract_input_output_names(class_body: &str) -> (Vec<String>, Vec<String>) {
     let inp_re = INPUT_RE.get_or_init(|| {
         Regex::new(r"@Input\b[^;]*?(?:set\s+)?([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=(]").unwrap()
     });
-    let out_re = OUTPUT_RE.get_or_init(|| {
-        Regex::new(r"@Output\b[^;]*?([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=]").unwrap()
-    });
+    let out_re = OUTPUT_RE
+        .get_or_init(|| Regex::new(r"@Output\b[^;]*?([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=]").unwrap());
 
     let inputs = inp_re
         .captures_iter(class_body)
@@ -1615,11 +1594,7 @@ export class HelloComponent {}
             "qn: {}",
             comp.qualified_name
         );
-        assert!(
-            comp.id.starts_with("component:"),
-            "id: {}",
-            comp.id
-        );
+        assert!(comp.id.starts_with("component:"), "id: {}", comp.id);
     }
 
     #[test]
@@ -1757,7 +1732,10 @@ export class AppModule {}
             .map(|r| r.reference_name.as_str())
             .collect();
         assert!(ref_names.contains(&"AppComponent"), "names: {ref_names:?}");
-        assert!(ref_names.contains(&"HeaderComponent"), "names: {ref_names:?}");
+        assert!(
+            ref_names.contains(&"HeaderComponent"),
+            "names: {ref_names:?}"
+        );
     }
 
     #[test]
@@ -1832,9 +1810,18 @@ export class XComponent {
             .filter(|r| r.reference_kind == "references")
             .collect();
         let names: Vec<_> = di_refs.iter().map(|r| r.reference_name.as_str()).collect();
-        assert!(!names.contains(&"ElementRef"), "ElementRef should be excluded, got: {names:?}");
-        assert!(!names.contains(&"ChangeDetectorRef"), "ChangeDetectorRef should be excluded, got: {names:?}");
-        assert!(names.contains(&"UserService"), "UserService should be present, got: {names:?}");
+        assert!(
+            !names.contains(&"ElementRef"),
+            "ElementRef should be excluded, got: {names:?}"
+        );
+        assert!(
+            !names.contains(&"ChangeDetectorRef"),
+            "ChangeDetectorRef should be excluded, got: {names:?}"
+        );
+        assert!(
+            names.contains(&"UserService"),
+            "UserService should be present, got: {names:?}"
+        );
     }
 
     #[test]
@@ -1948,9 +1935,16 @@ provideRouter(ROUTES);
         let result = AngularResolver::new()
             .extract(Path::new("app.config.ts"), content, &ctx)
             .unwrap();
-        let route_nodes: Vec<_> = result.nodes.iter().filter(|n| n.kind == NodeKind::Route).collect();
+        let route_nodes: Vec<_> = result
+            .nodes
+            .iter()
+            .filter(|n| n.kind == NodeKind::Route)
+            .collect();
         // provideRouter references ROUTES variable not an inline array, so only const Routes = [ matches
-        assert!(!route_nodes.is_empty(), "at least one route from const Routes");
+        assert!(
+            !route_nodes.is_empty(),
+            "at least one route from const Routes"
+        );
     }
 
     #[test]
@@ -1974,7 +1968,10 @@ export const routes: Routes = [
             .iter()
             .filter(|r| r.reference_kind == "imports")
             .collect();
-        assert!(!imports_refs.is_empty(), "should have imports ref for loadChildren");
+        assert!(
+            !imports_refs.is_empty(),
+            "should have imports ref for loadChildren"
+        );
     }
 
     #[test]
@@ -1998,7 +1995,10 @@ export const routes: Routes = [
             .iter()
             .filter(|r| r.reference_kind == "imports")
             .collect();
-        assert!(!imports_refs.is_empty(), "should have imports ref for loadComponent");
+        assert!(
+            !imports_refs.is_empty(),
+            "should have imports ref for loadComponent"
+        );
         let ref_refs: Vec<_> = result
             .unresolved_refs
             .iter()
@@ -2034,7 +2034,10 @@ export const ROUTES: Routes = [
             .map(|n| n.name.as_str())
             .collect();
         assert!(route_names.contains(&"/users"), "routes: {route_names:?}");
-        assert!(route_names.contains(&"/users/:id"), "routes: {route_names:?}");
+        assert!(
+            route_names.contains(&"/users/:id"),
+            "routes: {route_names:?}"
+        );
     }
 
     #[test]
@@ -2083,7 +2086,12 @@ export const ROUTES: Routes = [
             .iter()
             .filter(|r| r.reference_kind == "references")
             .collect();
-        assert_eq!(component_refs.len(), 0, "redirect should have no component refs: {:?}", component_refs);
+        assert_eq!(
+            component_refs.len(),
+            0,
+            "redirect should have no component refs: {:?}",
+            component_refs
+        );
     }
 
     #[test]
@@ -2162,13 +2170,19 @@ export class XComponent {}
             .iter()
             .filter(|r| r.reference_kind == "uses")
             .collect();
-        let names: Vec<_> = uses_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        let names: Vec<_> = uses_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
         // RouterLink is built-in and filtered; FavoriteButtonComponent should be present
         assert!(
             names.contains(&"FavoriteButtonComponent"),
             "names: {names:?}"
         );
-        assert!(!names.contains(&"RouterLink"), "RouterLink should be filtered: {names:?}");
+        assert!(
+            !names.contains(&"RouterLink"),
+            "RouterLink should be filtered: {names:?}"
+        );
     }
 
     #[test]
@@ -2255,12 +2269,7 @@ export class XComponent {}
 
     // ── Group 6: resolve() ────────────────────────────────────────────────────
 
-    fn make_node(
-        id: &str,
-        name: &str,
-        kind: NodeKind,
-        file_path: &str,
-    ) -> Node {
+    fn make_node(id: &str, name: &str, kind: NodeKind, file_path: &str) -> Node {
         Node {
             id: id.to_string(),
             name: name.to_string(),
@@ -2294,7 +2303,9 @@ export class XComponent {}
             NodeKind::Class,
             "users.service.ts",
         );
-        caches.name_cache.insert("UserService".to_string(), vec![node]);
+        caches
+            .name_cache
+            .insert("UserService".to_string(), vec![node]);
         let aliases = PathAliasMap::default();
         let ctx = make_ctx(&caches, &aliases, &[]);
         let reference = make_ref("UserService", "references");
@@ -2313,7 +2324,9 @@ export class XComponent {}
             NodeKind::Class,
             "other.ts",
         );
-        caches.name_cache.insert("UserService".to_string(), vec![node]);
+        caches
+            .name_cache
+            .insert("UserService".to_string(), vec![node]);
         let aliases = PathAliasMap::default();
         let ctx = make_ctx(&caches, &aliases, &[]);
         let reference = make_ref("UserService", "references");
@@ -2449,9 +2462,17 @@ export class MyPipePipe {}
         let result = AngularResolver::new()
             .extract(Path::new("my-pipe.pipe.ts"), content, &ctx)
             .unwrap();
-        let node = result.nodes.iter().find(|n| n.kind == NodeKind::Class).unwrap();
+        let node = result
+            .nodes
+            .iter()
+            .find(|n| n.kind == NodeKind::Class)
+            .unwrap();
         let re = Regex::new(r"^[^:]+::pipe:[a-z]").unwrap();
-        assert!(re.is_match(&node.qualified_name), "qn: {}", node.qualified_name);
+        assert!(
+            re.is_match(&node.qualified_name),
+            "qn: {}",
+            node.qualified_name
+        );
     }
 
     #[test]
@@ -2467,8 +2488,16 @@ export const ROUTES: Routes = [
         let result = AngularResolver::new()
             .extract(Path::new("app.routes.ts"), content, &ctx)
             .unwrap();
-        let route = result.nodes.iter().find(|n| n.kind == NodeKind::Route).unwrap();
+        let route = result
+            .nodes
+            .iter()
+            .find(|n| n.kind == NodeKind::Route)
+            .unwrap();
         let re = Regex::new(r"^[^:]+::GET:/").unwrap();
-        assert!(re.is_match(&route.qualified_name), "qn: {}", route.qualified_name);
+        assert!(
+            re.is_match(&route.qualified_name),
+            "qn: {}",
+            route.qualified_name
+        );
     }
 }

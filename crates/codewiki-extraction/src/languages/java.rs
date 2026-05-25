@@ -7,7 +7,11 @@ pub struct JavaExtractor;
 
 static CONFIG: LanguageConfig = LanguageConfig {
     function_types: &[],
-    class_types: &["class_declaration", "interface_declaration", "enum_declaration"],
+    class_types: &[
+        "class_declaration",
+        "interface_declaration",
+        "enum_declaration",
+    ],
     method_types: &["method_declaration", "constructor_declaration"],
     interface_types: &[],
     struct_types: &[],
@@ -39,10 +43,7 @@ impl LanguageExtractor for JavaExtractor {
         // Java import_declaration: the qualified class name is the full node text
         // (no named field). Strip the `import ` prefix and trailing `;`.
         if node.kind() == "import_declaration" {
-            let raw = node
-                .utf8_text(ctx.source.as_bytes())
-                .unwrap_or("")
-                .trim();
+            let raw = node.utf8_text(ctx.source.as_bytes()).unwrap_or("").trim();
             let module = raw
                 .trim_start_matches("import ")
                 .trim_start_matches("static ")
@@ -128,8 +129,10 @@ public class Animal {
             .iter()
             .filter(|r| r.reference_kind == "imports")
             .collect();
-        let modules: Vec<&str> =
-            import_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        let modules: Vec<&str> = import_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
         assert!(
             modules.contains(&"java.util.List"),
             "java.util.List import missing; refs: {modules:?}"

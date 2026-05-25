@@ -63,7 +63,9 @@ pub async fn handle(
                 parts[..parts.len().saturating_sub(1)].join("/")
             };
 
-            let entry = map.entry(dir).or_insert((0, 0, std::collections::HashSet::new()));
+            let entry = map
+                .entry(dir)
+                .or_insert((0, 0, std::collections::HashSet::new()));
             entry.0 += f.node_count as u64;
             entry.1 += 1;
             entry.2.insert(f.language.clone());

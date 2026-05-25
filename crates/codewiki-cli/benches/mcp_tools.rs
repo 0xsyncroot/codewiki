@@ -55,11 +55,7 @@ fn bench_mcp_tools(c: &mut Criterion) {
             let count = std::fs::read_dir(&src)
                 .expect("read corpus src")
                 .filter_map(|e| e.ok())
-                .filter(|e| {
-                    e.file_name()
-                        .to_string_lossy()
-                        .contains("module")
-                })
+                .filter(|e| e.file_name().to_string_lossy().contains("module"))
                 .count();
             std::hint::black_box(count)
         });

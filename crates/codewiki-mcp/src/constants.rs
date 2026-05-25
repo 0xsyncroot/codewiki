@@ -31,8 +31,8 @@ pub fn init_tracing() {
     TRACING_INIT.get_or_init(|| {
         use tracing_subscriber::{fmt, EnvFilter};
 
-        let filter = EnvFilter::try_from_env("CODEWIKI_LOG")
-            .unwrap_or_else(|_| EnvFilter::new("warn"));
+        let filter =
+            EnvFilter::try_from_env("CODEWIKI_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
 
         fmt::Subscriber::builder()
             .with_env_filter(filter)

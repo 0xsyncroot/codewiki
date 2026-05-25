@@ -13,10 +13,8 @@ pub async fn handle(State(state): State<AppState>) -> impl IntoResponse {
     let db = state.db.clone();
     let result: anyhow::Result<Value> = spawn_blocking(move || {
         let conn = db.lock().map_err(|_| anyhow::anyhow!("mutex poisoned"))?;
-        let stats = mq::get_stats(&conn)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        let edges_by_kind = mq::get_edges_by_kind(&conn)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let stats = mq::get_stats(&conn).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let edges_by_kind = mq::get_edges_by_kind(&conn).map_err(|e| anyhow::anyhow!("{e}"))?;
         let v = json!({
             "node_count": stats.node_count,
             "edge_count": stats.edge_count,

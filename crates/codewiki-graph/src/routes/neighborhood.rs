@@ -137,10 +137,7 @@ mod tests {
         let db = Arc::new(Mutex::new(conn));
         let state = AppState { db, max_nodes: 200 };
         let app = Router::new()
-            .route(
-                "/api/neighborhood/{id}",
-                axum::routing::get(handle),
-            )
+            .route("/api/neighborhood/{id}", axum::routing::get(handle))
             .with_state(state);
 
         let req = Request::builder()

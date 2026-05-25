@@ -26,29 +26,29 @@ pub struct PascalExtractor;
 
 pub static CONFIG: LanguageConfig = LanguageConfig {
     // `declProc` covers both `procedure` and `function` in the Pascal AST.
-    function_types:    &["declProc"],
+    function_types: &["declProc"],
     // declClass/declIntf/declEnum are INSIDE declType — handled by visit_node_hook.
-    class_types:       &[],
+    class_types: &[],
     // Methods inside a class body are also `declProc`.
-    method_types:      &["declProc"],
-    interface_types:   &[],
-    struct_types:      &[],
-    enum_types:        &[],
+    method_types: &["declProc"],
+    interface_types: &[],
+    struct_types: &[],
+    enum_types: &[],
     enum_member_types: &[],
     // declType is the wrapper for all type declarations — see visit_node_hook.
-    type_alias_types:  &[],
+    type_alias_types: &[],
     // `uses` clause imports are handled in visit_node_hook (P-1) — keep out of CONFIG
     // to avoid running the broken generic extract_import path.
-    import_types:      &[],
-    call_types:        &["exprCall"],
-    variable_types:    &["declField", "declConst"],
+    import_types: &[],
+    call_types: &["exprCall"],
+    variable_types: &["declField", "declConst"],
     // P-4: class properties are emitted via generic property extraction.
-    property_types:    &["declProp"],
-    field_types:       &[],
+    property_types: &["declProp"],
+    field_types: &[],
     extra_class_types: &[],
     namespace_types: &[],
-    name_field:        "name",
-    body_field:        "body",
+    name_field: "name",
+    body_field: "body",
     methods_are_top_level: false,
     doc_comment_style: DocCommentStyle::None,
 };
@@ -130,7 +130,8 @@ impl LanguageExtractor for PascalExtractor {
                         let mut c2 = child.walk();
                         for ident in child.named_children(&mut c2) {
                             if ident.kind() == "identifier" {
-                                let unit_name = ident.utf8_text(src).unwrap_or("").trim().to_string();
+                                let unit_name =
+                                    ident.utf8_text(src).unwrap_or("").trim().to_string();
                                 if !unit_name.is_empty() {
                                     ctx.emit_import(&from_id, &unit_name, line);
                                 }
@@ -185,7 +186,11 @@ impl LanguageExtractor for PascalExtractor {
                     // Walk all children (including anonymous) to find kRecord.
                     let mut cc = child.walk();
                     let is_record = child.children(&mut cc).any(|c| c.kind() == "kRecord");
-                    if is_record { NodeKind::Struct } else { NodeKind::Class }
+                    if is_record {
+                        NodeKind::Struct
+                    } else {
+                        NodeKind::Class
+                    }
                 }
 
                 // Check direct named children first.
@@ -261,8 +266,11 @@ impl LanguageExtractor for PascalExtractor {
                                         let mut c2 = child.walk();
                                         for ident in child.named_children(&mut c2) {
                                             if ident.kind() == "identifier" {
-                                                let member_name =
-                                                    ident.utf8_text(src).unwrap_or("").trim().to_string();
+                                                let member_name = ident
+                                                    .utf8_text(src)
+                                                    .unwrap_or("")
+                                                    .trim()
+                                                    .to_string();
                                                 if !member_name.is_empty() {
                                                     emit_direct(
                                                         ctx,
@@ -308,8 +316,8 @@ impl LanguageExtractor for PascalExtractor {
 
 #[cfg(all(test, feature = "wasmtime-grammars"))]
 mod tests {
-    use crate::wasm_parser::extract_wasm;
     use crate::wasm_grammars::WasmGrammar;
+    use crate::wasm_parser::extract_wasm;
     use codewiki_core::NodeKind;
     use std::io::Write;
 
@@ -342,7 +350,6 @@ end.
             batch.nodes.iter().map(|n| &n.kind).collect::<Vec<_>>()
         );
 
-
         // File node.
         assert!(
             batch.nodes.iter().any(|n| n.kind == NodeKind::File),
@@ -350,7 +357,11 @@ end.
         );
 
         // At least 4 non-file nodes.
-        let non_file = batch.nodes.iter().filter(|n| n.kind != NodeKind::File).count();
+        let non_file = batch
+            .nodes
+            .iter()
+            .filter(|n| n.kind != NodeKind::File)
+            .count();
         assert!(
             non_file >= 4,
             "expected >= 4 non-file nodes, got {non_file}; nodes: {names:?}"
@@ -358,13 +369,19 @@ end.
 
         // TColor — should be emitted as Enum.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "TColor" && n.kind == NodeKind::Enum),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "TColor" && n.kind == NodeKind::Enum),
             "expected Enum 'TColor'; nodes: {names:?}"
         );
 
         // TAnimal — should be emitted as Class.
         assert!(
-            batch.nodes.iter().any(|n| n.name == "TAnimal" && n.kind == NodeKind::Class),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "TAnimal" && n.kind == NodeKind::Class),
             "expected Class 'TAnimal'; nodes: {names:?}"
         );
 
@@ -373,7 +390,8 @@ end.
             batch
                 .nodes
                 .iter()
-                .any(|n| n.name == "Greet" && matches!(n.kind, NodeKind::Function | NodeKind::Method)),
+                .any(|n| n.name == "Greet"
+                    && matches!(n.kind, NodeKind::Function | NodeKind::Method)),
             "expected Function/Method 'Greet'; nodes: {names:?}"
         );
     }
@@ -395,7 +413,11 @@ end.
 
         eprintln!(
             "P-1 Pascal refs: {:?}",
-            batch.unresolved_refs.iter().map(|r| (&r.reference_name, &r.reference_kind)).collect::<Vec<_>>()
+            batch
+                .unresolved_refs
+                .iter()
+                .map(|r| (&r.reference_name, &r.reference_kind))
+                .collect::<Vec<_>>()
         );
 
         let import_names: Vec<&str> = batch
@@ -435,14 +457,20 @@ end.
 
         // Enum container
         assert!(
-            batch.nodes.iter().any(|n| n.name == "TDir" && n.kind == NodeKind::Enum),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "TDir" && n.kind == NodeKind::Enum),
             "expected Enum 'TDir'; nodes: {names:?}"
         );
 
         // Enum members
         for member in &["North", "South", "East", "West"] {
             assert!(
-                batch.nodes.iter().any(|n| n.name == *member && n.kind == NodeKind::EnumMember),
+                batch
+                    .nodes
+                    .iter()
+                    .any(|n| n.name == *member && n.kind == NodeKind::EnumMember),
                 "expected EnumMember '{member}'; nodes: {names:?}"
             );
         }
@@ -469,7 +497,10 @@ end.
         eprintln!("P-3 Pascal nodes: {names:?}");
 
         assert!(
-            batch.nodes.iter().any(|n| n.name == "TPoint" && n.kind == NodeKind::Struct),
+            batch
+                .nodes
+                .iter()
+                .any(|n| n.name == "TPoint" && n.kind == NodeKind::Struct),
             "expected Struct 'TPoint'; nodes: {names:?}"
         );
     }

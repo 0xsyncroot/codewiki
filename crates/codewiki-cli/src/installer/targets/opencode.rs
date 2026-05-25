@@ -148,7 +148,14 @@ fn write_mcp_entry(loc: Location) -> Result<(PathBuf, FileAction)> {
     obj["mcp"]["codewiki"] = after;
 
     write_json_file(&file, &obj)?;
-    Ok((file, if existed { FileAction::Updated } else { FileAction::Created }))
+    Ok((
+        file,
+        if existed {
+            FileAction::Updated
+        } else {
+            FileAction::Created
+        },
+    ))
 }
 
 /// Strip both `//` line comments and `/* */` block comments from JSONC text.
@@ -366,7 +373,10 @@ mod tests {
     fn setup_home() -> TempDir {
         let dir = tempfile::tempdir().unwrap();
         std::env::set_var("HOME", dir.path());
-        std::env::set_var("XDG_CONFIG_HOME", dir.path().join(".config").to_str().unwrap());
+        std::env::set_var(
+            "XDG_CONFIG_HOME",
+            dir.path().join(".config").to_str().unwrap(),
+        );
         dir
     }
 
@@ -388,7 +398,10 @@ mod tests {
     fn strip_handles_line_comment() {
         let input = "{ \"key\": \"value\" // comment\n}";
         let stripped = strip_jsonc_comments(input);
-        assert!(!stripped.contains("// comment"), "line comment should be removed");
+        assert!(
+            !stripped.contains("// comment"),
+            "line comment should be removed"
+        );
         assert!(stripped.contains("\"value\""), "value should be preserved");
         // The newline that terminates the comment must still be present so JSON
         // structure is intact.
@@ -400,7 +413,10 @@ mod tests {
     fn strip_handles_block_comment_single_line() {
         let input = "{ \"key\": /* inline */ \"value\" }";
         let stripped = strip_jsonc_comments(input);
-        assert!(!stripped.contains("inline"), "block comment should be removed");
+        assert!(
+            !stripped.contains("inline"),
+            "block comment should be removed"
+        );
         let parsed: serde_json::Value = serde_json::from_str(&stripped).unwrap();
         assert_eq!(parsed["key"].as_str().unwrap(), "value");
     }
@@ -409,7 +425,10 @@ mod tests {
     fn strip_handles_block_comment_multi_line() {
         let input = "{\n  /* this is\n     a multi-line\n     comment */\n  \"key\": \"value\"\n}";
         let stripped = strip_jsonc_comments(input);
-        assert!(!stripped.contains("multi-line"), "block comment content should be removed");
+        assert!(
+            !stripped.contains("multi-line"),
+            "block comment content should be removed"
+        );
         let parsed: serde_json::Value = serde_json::from_str(&stripped).unwrap();
         assert_eq!(parsed["key"].as_str().unwrap(), "value");
     }
@@ -437,7 +456,10 @@ mod tests {
     fn opencode_preserves_block_comments_in_existing_file() {
         let _home = setup_home();
         let target = OpencodeTarget;
-        let opts = InstallOptions { auto_allow: false, project_root: None };
+        let opts = InstallOptions {
+            auto_allow: false,
+            project_root: None,
+        };
 
         // Write an opencode.jsonc that has a $schema, a block comment, and a
         // sibling key that must survive the round-trip.
@@ -457,7 +479,10 @@ mod tests {
 
         // Install should succeed.
         let result = target.install(Location::Global, &opts).unwrap();
-        assert!(result.files.iter().any(|f| f.action == FileAction::Updated || f.action == FileAction::Created));
+        assert!(result
+            .files
+            .iter()
+            .any(|f| f.action == FileAction::Updated || f.action == FileAction::Created));
 
         // Read back and verify data survival.
         let written = std::fs::read_to_string(&jsonc_path).unwrap();

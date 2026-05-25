@@ -42,39 +42,27 @@ pub fn get_extractor_and_use_special(
     source: &str,
 ) -> GetExtractorResult {
     match lang {
-        Language::Svelte => {
-            GetExtractorResult::Special(svelte::extract_special(source, path))
-        }
-        Language::Vue => {
-            GetExtractorResult::Special(vue::extract_special(source, path))
-        }
-        Language::Razor => {
-            GetExtractorResult::Special(razor::extract_special(source, path))
-        }
-        Language::Liquid => {
-            GetExtractorResult::Special(liquid::extract_special(source, path))
-        }
-        Language::Dfm => {
-            GetExtractorResult::Special(dfm::extract_special(source, path))
-        }
+        Language::Svelte => GetExtractorResult::Special(svelte::extract_special(source, path)),
+        Language::Vue => GetExtractorResult::Special(vue::extract_special(source, path)),
+        Language::Razor => GetExtractorResult::Special(razor::extract_special(source, path)),
+        Language::Liquid => GetExtractorResult::Special(liquid::extract_special(source, path)),
+        Language::Dfm => GetExtractorResult::Special(dfm::extract_special(source, path)),
         Language::Lua | Language::Luau | Language::Pascal | Language::Scala => {
             use crate::wasm_grammars::WasmGrammar;
             use crate::wasm_parser::extract_wasm;
 
             let grammar = match lang {
-                Language::Lua    => WasmGrammar::Lua,
-                Language::Luau   => WasmGrammar::Luau,
+                Language::Lua => WasmGrammar::Lua,
+                Language::Luau => WasmGrammar::Luau,
                 Language::Pascal => WasmGrammar::Pascal,
-                Language::Scala  => WasmGrammar::Scala,
+                Language::Scala => WasmGrammar::Scala,
                 _ => unreachable!(),
             };
 
-            GetExtractorResult::Special(
-                extract_wasm(source, path, grammar).unwrap_or_else(|e| {
-                    tracing::warn!(?lang, %e, "WASM extraction failed; falling back to file-only");
-                    file_only_batch(source, path)
-                }),
-            )
+            GetExtractorResult::Special(extract_wasm(source, path, grammar).unwrap_or_else(|e| {
+                tracing::warn!(?lang, %e, "WASM extraction failed; falling back to file-only");
+                file_only_batch(source, path)
+            }))
         }
         _ => match get_extractor(lang) {
             Some(ext) => GetExtractorResult::UseTreeSitter(ext),
@@ -111,32 +99,6 @@ pub fn get_extractor(lang: &Language) -> Option<Box<dyn LanguageExtractor>> {
         // WASM-backed languages are handled via get_extractor_and_use_special (not here).
         Language::Lua | Language::Luau | Language::Pascal | Language::Scala => None,
         Language::Unknown => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::ast_walker::extract_file;
-    use codewiki_core::NodeKind;
-    use std::io::Write;
-
-    /// Bug 8 fix: WASM-backed languages (Lua/Luau/Pascal/Scala) must emit at least
-    /// a file node rather than returning zero nodes (GetExtractorResult::None).
-    #[test]
-    fn lua_extractor_emits_at_least_file_node() {
-        let source = "-- Lua script\nlocal x = 1\nprint(x)\n";
-        let mut f = tempfile::NamedTempFile::with_suffix(".lua").unwrap();
-        f.write_all(source.as_bytes()).unwrap();
-        let batch = extract_file(f.path(), source);
-
-        assert!(
-            !batch.nodes.is_empty(),
-            "Lua extractor returned zero nodes — expected at least a file node"
-        );
-        assert!(
-            batch.nodes.iter().any(|n| n.kind == NodeKind::File),
-            "No file node emitted for Lua source"
-        );
     }
 }
 
@@ -188,5 +150,31 @@ pub fn file_only_batch(source: &str, file_path: &Path) -> ExtractionBatch {
         nodes,
         edges: Vec::new(),
         unresolved_refs: Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ast_walker::extract_file;
+    use codewiki_core::NodeKind;
+    use std::io::Write;
+
+    /// Bug 8 fix: WASM-backed languages (Lua/Luau/Pascal/Scala) must emit at least
+    /// a file node rather than returning zero nodes (GetExtractorResult::None).
+    #[test]
+    fn lua_extractor_emits_at_least_file_node() {
+        let source = "-- Lua script\nlocal x = 1\nprint(x)\n";
+        let mut f = tempfile::NamedTempFile::with_suffix(".lua").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+
+        assert!(
+            !batch.nodes.is_empty(),
+            "Lua extractor returned zero nodes — expected at least a file node"
+        );
+        assert!(
+            batch.nodes.iter().any(|n| n.kind == NodeKind::File),
+            "No file node emitted for Lua source"
+        );
     }
 }

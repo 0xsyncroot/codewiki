@@ -17,9 +17,28 @@ static BUILT_IN_TYPES: OnceLock<HashSet<&'static str>> = OnceLock::new();
 fn built_in_types() -> &'static HashSet<&'static str> {
     BUILT_IN_TYPES.get_or_init(|| {
         [
-            "Array", "Boolean", "Date", "Error", "Function", "JSON", "Math", "Number",
-            "Object", "Promise", "RegExp", "String", "Symbol", "Map", "Set", "WeakMap",
-            "WeakSet", "React", "Component", "Fragment", "Suspense", "StrictMode",
+            "Array",
+            "Boolean",
+            "Date",
+            "Error",
+            "Function",
+            "JSON",
+            "Math",
+            "Number",
+            "Object",
+            "Promise",
+            "RegExp",
+            "String",
+            "Symbol",
+            "Map",
+            "Set",
+            "WeakMap",
+            "WeakSet",
+            "React",
+            "Component",
+            "Fragment",
+            "Suspense",
+            "StrictMode",
         ]
         .into_iter()
         .collect()
@@ -27,7 +46,14 @@ fn built_in_types() -> &'static HashSet<&'static str> {
 }
 
 fn component_dirs() -> &'static [&'static str] {
-    &["/components/", "/src/components/", "/app/components/", "/pages/", "/src/pages/", "/views/"]
+    &[
+        "/components/",
+        "/src/components/",
+        "/app/components/",
+        "/pages/",
+        "/src/pages/",
+        "/views/",
+    ]
 }
 fn hook_dirs() -> &'static [&'static str] {
     &["/hooks/", "/src/hooks/", "/lib/hooks/", "/utils/hooks/"]
@@ -44,7 +70,9 @@ fn is_pascal_case(s: &str) -> bool {
 pub struct ReactResolver;
 
 impl FrameworkResolver for ReactResolver {
-    fn name(&self) -> &'static str { "react" }
+    fn name(&self) -> &'static str {
+        "react"
+    }
     fn languages(&self) -> Option<&'static [Language]> {
         static LANGS: &[Language] = &[Language::TypeScript, Language::JavaScript];
         Some(LANGS)
@@ -55,16 +83,26 @@ impl FrameworkResolver for ReactResolver {
             if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&raw) {
                 let deps = {
                     let mut d = serde_json::Map::new();
-                    if let Some(x) = pkg.get("dependencies").and_then(|v| v.as_object()) { d.extend(x.clone()); }
-                    if let Some(x) = pkg.get("devDependencies").and_then(|v| v.as_object()) { d.extend(x.clone()); }
+                    if let Some(x) = pkg.get("dependencies").and_then(|v| v.as_object()) {
+                        d.extend(x.clone());
+                    }
+                    if let Some(x) = pkg.get("devDependencies").and_then(|v| v.as_object()) {
+                        d.extend(x.clone());
+                    }
                     d
                 };
-                if deps.contains_key("react") || deps.contains_key("next") || deps.contains_key("react-native") {
+                if deps.contains_key("react")
+                    || deps.contains_key("next")
+                    || deps.contains_key("react-native")
+                {
                     return true;
                 }
             }
         }
-        context.known_files.iter().any(|f| f.ends_with(".jsx") || f.ends_with(".tsx"))
+        context
+            .known_files
+            .iter()
+            .any(|f| f.ends_with(".jsx") || f.ends_with(".tsx"))
     }
 
     fn resolve(
@@ -77,17 +115,41 @@ impl FrameworkResolver for ReactResolver {
         // PascalCase component references
         if is_pascal_case(name) && !built_in_types().contains(name.as_str()) {
             let candidates = context.get_nodes_by_name(name);
-            let components: Vec<_> = candidates.iter()
-                .filter(|n| matches!(n.kind, NodeKind::Component | NodeKind::Function | NodeKind::Class))
+            let components: Vec<_> = candidates
+                .iter()
+                .filter(|n| {
+                    matches!(
+                        n.kind,
+                        NodeKind::Component | NodeKind::Function | NodeKind::Class
+                    )
+                })
                 .collect();
             if !components.is_empty() {
-                let from_dir = reference.file_path.rsplit('/').skip(1).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("/");
-                let target = components.iter()
+                let from_dir = reference
+                    .file_path
+                    .rsplit('/')
+                    .skip(1)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<_>>()
+                    .join("/");
+                let target = components
+                    .iter()
                     .find(|n| n.file_path.starts_with(&from_dir))
-                    .or_else(|| components.iter().find(|n| component_dirs().iter().any(|d| n.file_path.contains(d))))
+                    .or_else(|| {
+                        components
+                            .iter()
+                            .find(|n| component_dirs().iter().any(|d| n.file_path.contains(d)))
+                    })
                     .or_else(|| components.first());
                 if let Some(node) = target {
-                    return Ok(Some(make_resolved_edge(reference, node.id.clone(), 0.8, self.name())));
+                    return Ok(Some(make_resolved_edge(
+                        reference,
+                        node.id.clone(),
+                        0.8,
+                        self.name(),
+                    )));
                 }
             }
         }
@@ -95,15 +157,22 @@ impl FrameworkResolver for ReactResolver {
         // use* hook references
         if name.starts_with("use") && name.len() > 3 {
             let candidates = context.get_nodes_by_name(name);
-            let hooks: Vec<_> = candidates.iter()
+            let hooks: Vec<_> = candidates
+                .iter()
                 .filter(|n| n.kind == NodeKind::Function && n.name.starts_with("use"))
                 .collect();
             if !hooks.is_empty() {
-                let target = hooks.iter()
+                let target = hooks
+                    .iter()
                     .find(|n| hook_dirs().iter().any(|d| n.file_path.contains(d)))
                     .or_else(|| hooks.first());
                 if let Some(node) = target {
-                    return Ok(Some(make_resolved_edge(reference, node.id.clone(), 0.85, self.name())));
+                    return Ok(Some(make_resolved_edge(
+                        reference,
+                        node.id.clone(),
+                        0.85,
+                        self.name(),
+                    )));
                 }
             }
         }
@@ -112,17 +181,30 @@ impl FrameworkResolver for ReactResolver {
         if name.ends_with("Context") || name.ends_with("Provider") {
             let candidates = context.get_nodes_by_name(name);
             if candidates.is_empty() {
-                let base = name.trim_end_matches("Context").trim_end_matches("Provider");
+                let base = name
+                    .trim_end_matches("Context")
+                    .trim_end_matches("Provider");
                 let fallback = context.get_nodes_by_name(base);
                 if let Some(n) = fallback.first() {
-                    return Ok(Some(make_resolved_edge(reference, n.id.clone(), 0.8, self.name())));
+                    return Ok(Some(make_resolved_edge(
+                        reference,
+                        n.id.clone(),
+                        0.8,
+                        self.name(),
+                    )));
                 }
             } else {
-                let target = candidates.iter()
+                let target = candidates
+                    .iter()
                     .find(|n| context_dirs().iter().any(|d| n.file_path.contains(d)))
                     .or_else(|| candidates.first());
                 if let Some(node) = target {
-                    return Ok(Some(make_resolved_edge(reference, node.id.clone(), 0.8, self.name())));
+                    return Ok(Some(make_resolved_edge(
+                        reference,
+                        node.id.clone(),
+                        0.8,
+                        self.name(),
+                    )));
                 }
             }
         }
@@ -176,8 +258,7 @@ impl FrameworkResolver for ReactResolver {
                     after_end -= 1;
                 }
                 let after = &content[after_start..after_end];
-                let has_jsx = after.contains('<')
-                    && (after.contains("/>") || after.contains("</"));
+                let has_jsx = after.contains('<') && (after.contains("/>") || after.contains("</"));
 
                 if has_jsx {
                     nodes.push(Node {
@@ -201,7 +282,10 @@ impl FrameworkResolver for ReactResolver {
         {
             static HOOK_RE: OnceLock<Regex> = OnceLock::new();
             let hook_re = HOOK_RE.get_or_init(|| {
-                Regex::new(r#"(?:export\s+)?(?:function|const|let)\s+(use[A-Z][a-zA-Z0-9]*)\s*[=(]"#).unwrap()
+                Regex::new(
+                    r#"(?:export\s+)?(?:function|const|let)\s+(use[A-Z][a-zA-Z0-9]*)\s*[=(]"#,
+                )
+                .unwrap()
             });
             for cap in hook_re.captures_iter(content) {
                 let name = cap[1].to_string();
@@ -223,7 +307,9 @@ impl FrameworkResolver for ReactResolver {
         }
 
         // Next.js pages/ and app/ routes
-        if (file_str.contains("pages/") || file_str.contains("app/")) && content.contains("export default") {
+        if (file_str.contains("pages/") || file_str.contains("app/"))
+            && content.contains("export default")
+        {
             if let Some(route_path) = file_path_to_nextjs_route(&file_str) {
                 let byte_offset = content.find("export default").unwrap_or(0);
                 let line = content[..byte_offset].lines().count() as u32 + 1;
@@ -241,39 +327,55 @@ impl FrameworkResolver for ReactResolver {
             }
         }
 
-        Ok(FrameworkExtractionResult { nodes, edges: Vec::new(), unresolved_refs: Vec::new() })
+        Ok(FrameworkExtractionResult {
+            nodes,
+            edges: Vec::new(),
+            unresolved_refs: Vec::new(),
+        })
     }
 }
 
 fn file_path_to_nextjs_route(file_path: &str) -> Option<String> {
     if let Some(pos) = file_path.find("pages/") {
         let rest = &file_path[pos + 6..];
-        let mut route = format!("/{}", rest
-            .trim_end_matches(".tsx")
-            .trim_end_matches(".ts")
-            .trim_end_matches(".jsx")
-            .trim_end_matches(".js"));
+        let mut route = format!(
+            "/{}",
+            rest.trim_end_matches(".tsx")
+                .trim_end_matches(".ts")
+                .trim_end_matches(".jsx")
+                .trim_end_matches(".js")
+        );
         // /index → /
         if route.ends_with("/index") {
             route.truncate(route.len() - 6);
-            if route.is_empty() { route = "/".to_string(); }
+            if route.is_empty() {
+                route = "/".to_string();
+            }
         }
         // [slug] → :slug
         let route = route.replace('[', ":").replace(']', "");
-        return Some(if route.is_empty() { "/".to_string() } else { route });
+        return Some(if route.is_empty() {
+            "/".to_string()
+        } else {
+            route
+        });
     }
     if let Some(pos) = file_path.find("app/") {
         let rest = &file_path[pos + 4..];
         if !rest.contains("page.") {
             return None;
         }
-        let mut route = format!("/{}", rest
-            .trim_end_matches(".tsx")
-            .trim_end_matches(".ts")
-            .trim_end_matches(".jsx")
-            .trim_end_matches(".js")
-            .trim_end_matches("/page"));
-        if route.is_empty() { route = "/".to_string(); }
+        let mut route = format!(
+            "/{}",
+            rest.trim_end_matches(".tsx")
+                .trim_end_matches(".ts")
+                .trim_end_matches(".jsx")
+                .trim_end_matches(".js")
+                .trim_end_matches("/page")
+        );
+        if route.is_empty() {
+            route = "/".to_string();
+        }
         let route = route.replace('[', ":").replace(']', "");
         return Some(route);
     }

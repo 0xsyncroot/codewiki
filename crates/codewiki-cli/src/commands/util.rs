@@ -3,10 +3,12 @@
 use anyhow::{Context, Result};
 use codewiki_core::{Node, UnresolvedRef};
 use codewiki_resolution::resolver::ResolverQueryHandle;
-use codewiki_resolution::{ResolutionBatchRunner, ReferenceResolver, FrameworkResolverRegistry, ResolverCaches};
+use codewiki_resolution::{
+    FrameworkResolverRegistry, ReferenceResolver, ResolutionBatchRunner, ResolverCaches,
+};
 use codewiki_storage::queries::nodes::NodeRef;
-use codewiki_storage::{StorageImpl, open, ExtractionStore, QueryHandle};
 use codewiki_storage::traits::ResolutionStore;
+use codewiki_storage::{open, ExtractionStore, QueryHandle, StorageImpl};
 use rusqlite::Connection;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -38,18 +40,27 @@ impl StorageQueryAdapter {
             db_path,
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )
-        .with_context(|| format!("resolver query adapter: failed to open {}", db_path.display()))?;
+        .with_context(|| {
+            format!(
+                "resolver query adapter: failed to open {}",
+                db_path.display()
+            )
+        })?;
         // Configure WAL reader pragmas.
         conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")
             .ok();
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 }
 
 impl ResolverQueryHandle for StorageQueryAdapter {
     fn get_node_by_id(&self, id: &str) -> Option<Node> {
         let conn = self.conn.lock().ok()?;
-        codewiki_storage::queries::nodes::get_node_by_id(&conn, id).ok().flatten()
+        codewiki_storage::queries::nodes::get_node_by_id(&conn, id)
+            .ok()
+            .flatten()
     }
 
     fn get_nodes_by_name(&self, name: &str) -> Vec<Node> {
@@ -64,7 +75,8 @@ impl ResolverQueryHandle for StorageQueryAdapter {
 
     fn get_nodes_by_qualified_name(&self, qname: &str) -> Vec<Node> {
         let conn = self.conn.lock().unwrap_or_else(|p| p.into_inner());
-        codewiki_storage::queries::nodes::get_nodes_by_qualified_name_exact(&conn, qname).unwrap_or_default()
+        codewiki_storage::queries::nodes::get_nodes_by_qualified_name_exact(&conn, qname)
+            .unwrap_or_default()
     }
 
     fn get_nodes_in_file(&self, file_path: &str) -> Vec<Node> {
@@ -238,9 +250,9 @@ pub fn run_resolution(
     // point — `ctx.known_files` now borrows `framework_files` instead.
     let config_files = discover_config_files(project_root);
     let mut framework_files = known_files; // OPT-3: move, not clone
-    // Record how many source files are in the vec before appending config-only
-    // entries; `ctx.known_files` borrows only this prefix so resolution context
-    // stays source-file only.
+                                           // Record how many source files are in the vec before appending config-only
+                                           // entries; `ctx.known_files` borrows only this prefix so resolution context
+                                           // stays source-file only.
     let source_file_count = framework_files.len();
     for cf in &config_files {
         if !framework_files.contains(cf) {
@@ -337,13 +349,15 @@ pub fn run_resolution(
     }
 
     // Build the reference resolver and drain unresolved_refs → real edges.
-    let storage_arc: Arc<dyn ResolutionStore> =
-        Arc::clone(storage) as Arc<dyn ResolutionStore>;
+    let storage_arc: Arc<dyn ResolutionStore> = Arc::clone(storage) as Arc<dyn ResolutionStore>;
     let query_adapter: Arc<dyn ResolverQueryHandle> =
         Arc::new(StorageQueryAdapter::open(&db_path)?);
     // OPT-1: raised capacity from 1_000 to NODE_CACHE_CAPACITY (50_000).
-    let mut ref_resolver =
-        ReferenceResolver::new(project_root.to_path_buf(), query_adapter, NODE_CACHE_CAPACITY);
+    let mut ref_resolver = ReferenceResolver::new(
+        project_root.to_path_buf(),
+        query_adapter,
+        NODE_CACHE_CAPACITY,
+    );
     ref_resolver.warm_caches();
 
     let runner = ResolutionBatchRunner::new(storage_arc, ref_resolver, true);
@@ -400,9 +414,7 @@ pub fn run_resolution_incremental(
     // -----------------------------------------------------------------------
     // 10 % fallback guard: if too many files changed, full pass is cheaper.
     // -----------------------------------------------------------------------
-    let total_files = storage
-        .get_total_file_count()
-        .unwrap_or(0);
+    let total_files = storage.get_total_file_count().unwrap_or(0);
 
     let fallback_threshold = (total_files / 10).max(1);
     if changed_paths.len() >= fallback_threshold {
@@ -499,8 +511,7 @@ pub fn run_resolution_incremental(
     // -----------------------------------------------------------------------
     // Build resolver with warm caches and run for the scoped ref set.
     // -----------------------------------------------------------------------
-    let storage_arc: Arc<dyn ResolutionStore> =
-        Arc::clone(storage) as Arc<dyn ResolutionStore>;
+    let storage_arc: Arc<dyn ResolutionStore> = Arc::clone(storage) as Arc<dyn ResolutionStore>;
     let qa_arc: Arc<dyn ResolverQueryHandle> = Arc::new(
         StorageQueryAdapter::open(&db_path)
             .with_context(|| "OPT-9: resolver query adapter open failed")?,
@@ -514,6 +525,9 @@ pub fn run_resolution_incremental(
         .run_for_refs(all_refs)
         .map_err(|e| anyhow::anyhow!("incremental resolution failed: {}", e))?;
 
-    tracing::info!(resolved_count, "OPT-9: incremental resolution pipeline complete");
+    tracing::info!(
+        resolved_count,
+        "OPT-9: incremental resolution pipeline complete"
+    );
     Ok(resolved_count)
 }

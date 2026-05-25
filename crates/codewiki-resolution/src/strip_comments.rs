@@ -34,9 +34,7 @@ pub fn strip_comments(src: &str, lang: CommentLang) -> String {
         CommentLang::Go => strip_go(src),
         CommentLang::Rust => strip_rust(src),
         CommentLang::Php => strip_php(src),
-        CommentLang::Java | CommentLang::CSharp | CommentLang::Swift => {
-            strip_c_style(src, false)
-        }
+        CommentLang::Java | CommentLang::CSharp | CommentLang::Swift => strip_c_style(src, false),
     }
 }
 
@@ -547,7 +545,10 @@ mod tests {
         let out = strip_comments(src, CommentLang::Python);
         // The comment portion is blanked; real code preserved
         assert!(out.contains("real = 2"), "real code must survive: {out:?}");
-        assert!(!out.contains("path('/fake/'"), "comment content must be blanked: {out:?}");
+        assert!(
+            !out.contains("path('/fake/'"),
+            "comment content must be blanked: {out:?}"
+        );
         // Newline preserved
         assert_eq!(out.lines().count(), src.lines().count());
     }
@@ -568,7 +569,10 @@ mod tests {
         // y = 2 must survive
         assert!(out.contains("y = 2"), "code after docstring must survive");
         // The fake route inside docstring must be blanked
-        assert!(!out.contains("path('/fake/'"), "docstring content must be blanked");
+        assert!(
+            !out.contains("path('/fake/'"),
+            "docstring content must be blanked"
+        );
     }
 
     #[test]
@@ -673,7 +677,10 @@ mod tests {
     fn python_docstring_still_blanked() {
         let src = "x = 1\n\"\"\"\nimport fake\n\"\"\"\ny = 2\n";
         let out = strip_comments(src, CommentLang::Python);
-        assert!(!out.contains("import fake"), "docstring content must be blanked");
+        assert!(
+            !out.contains("import fake"),
+            "docstring content must be blanked"
+        );
         assert!(out.contains("y = 2"), "code after docstring must survive");
         assert_eq!(out.lines().count(), src.lines().count());
     }

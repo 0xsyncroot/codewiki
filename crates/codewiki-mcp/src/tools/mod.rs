@@ -4,8 +4,8 @@
 //! and the tool's JSON arguments. The `dispatch` function routes incoming
 //! `tools/call` requests to the correct handler.
 
-pub mod callers;
 pub mod callees;
+pub mod callers;
 pub mod context;
 pub mod explore;
 pub mod files;
@@ -25,7 +25,14 @@ pub const MAX_OUTPUT_LENGTH: usize = 15_000;
 /// Container node kinds: for these, `codewiki_node` with `includeCode=true`
 /// returns an outline rather than the full body.
 pub const CONTAINER_NODE_KINDS: &[&str] = &[
-    "class", "struct", "interface", "trait", "protocol", "enum", "namespace", "module",
+    "class",
+    "struct",
+    "interface",
+    "trait",
+    "protocol",
+    "enum",
+    "namespace",
+    "module",
 ];
 
 /// Build the JSON input schema object from a serde_json Value.
@@ -289,14 +296,12 @@ pub async fn dispatch(
 ) -> Result<CallToolResult, rmcp::Error> {
     let args = params.arguments.unwrap_or_default();
     let get_str = |key: &str| -> Option<String> {
-        args.get(key).and_then(|v| v.as_str()).map(|s| s.to_string())
+        args.get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     };
-    let get_u64 = |key: &str| -> Option<u64> {
-        args.get(key).and_then(|v| v.as_u64())
-    };
-    let get_bool = |key: &str| -> Option<bool> {
-        args.get(key).and_then(|v| v.as_bool())
-    };
+    let get_u64 = |key: &str| -> Option<u64> { args.get(key).and_then(|v| v.as_u64()) };
+    let get_bool = |key: &str| -> Option<bool> { args.get(key).and_then(|v| v.as_bool()) };
 
     let result = match params.name.as_ref() {
         "codewiki_search" => {
@@ -337,9 +342,7 @@ pub async fn dispatch(
             let max_files = get_u64("maxFiles").map(|n| n as usize);
             explore::handle_explore(handle, query, max_files).await
         }
-        "codewiki_status" => {
-            status::handle_status(handle).await
-        }
+        "codewiki_status" => status::handle_status(handle).await,
         "codewiki_files" => {
             let path = get_str("path");
             let pattern = get_str("pattern");
@@ -349,7 +352,9 @@ pub async fn dispatch(
             files::handle_files(handle, path, pattern, format, include_metadata, max_depth).await
         }
         _other => {
-            return Err(rmcp::Error::method_not_found::<rmcp::model::CallToolRequestMethod>());
+            return Err(rmcp::Error::method_not_found::<
+                rmcp::model::CallToolRequestMethod,
+            >());
         }
     };
 
@@ -360,9 +365,10 @@ pub async fn dispatch(
         Err(e) => {
             let msg = e.to_string();
             tracing::warn!(error = %msg, "Tool handler returned error");
-            Ok(CallToolResult::error(vec![
-                rmcp::model::RawContent::text(msg).no_annotation(),
-            ]))
+            Ok(CallToolResult::error(vec![rmcp::model::RawContent::text(
+                msg,
+            )
+            .no_annotation()]))
         }
     }
 }

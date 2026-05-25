@@ -52,7 +52,7 @@ enum ClassKind {
 
 struct ClassScope {
     kind: ClassKind,
-    prefix: String,   // controller path prefix or gateway namespace
+    prefix: String, // controller path prefix or gateway namespace
     start_byte: usize,
     end_byte: usize,
 }
@@ -68,7 +68,11 @@ struct DecoratorHit {
 
 /// Return the 1-indexed line number of `byte_pos` in `s`.
 fn line_at(s: &str, byte_pos: usize) -> u32 {
-    s[..byte_pos.min(s.len())].chars().filter(|&c| c == '\n').count() as u32 + 1
+    s[..byte_pos.min(s.len())]
+        .chars()
+        .filter(|&c| c == '\n')
+        .count() as u32
+        + 1
 }
 
 /// Scan `safe` for decorators named in `names`. Returns one `DecoratorHit` per match.
@@ -87,7 +91,7 @@ fn find_decorators(safe: &str, names: &[&str]) -> Vec<DecoratorHit> {
         if let Some(m) = re.find_at(safe, pos) {
             let at_index = m.start();
             let paren_index = m.end() - 1; // points at the '('
-            // Extract decorator name
+                                           // Extract decorator name
             let inner_at = &safe[at_index + 1..paren_index]; // e.g. "Get"
             let name = inner_at.trim().to_string();
 
@@ -228,9 +232,7 @@ fn parse_controller_prefix(args: &str) -> String {
 fn parse_gateway_namespace(args: &str) -> String {
     // Check for namespace: '...'
     static NS_RE: OnceLock<Regex> = OnceLock::new();
-    let re = NS_RE.get_or_init(|| {
-        Regex::new(r#"namespace\s*:\s*['"`]([^'"`]+)['"`]"#).unwrap()
-    });
+    let re = NS_RE.get_or_init(|| Regex::new(r#"namespace\s*:\s*['"`]([^'"`]+)['"`]"#).unwrap());
     if let Some(cap) = re.captures(args) {
         return cap[1].to_string();
     }
@@ -400,10 +402,7 @@ impl FrameworkResolver for NestJsResolver {
             let handler = method_name_after(&safe, hit.end);
             let handler_name = handler.as_deref().unwrap_or("unknown");
 
-            let route_id = format!(
-                "route:{}:{}:{}:{}",
-                file_str, line, method, full_path
-            );
+            let route_id = format!("route:{}:{}:{}:{}", file_str, line, method, full_path);
 
             nodes.push(Node {
                 id: route_id.clone(),
@@ -444,10 +443,7 @@ impl FrameworkResolver for NestJsResolver {
             let verb = hit.name.to_uppercase();
             let line = line_at(&safe, hit.index);
 
-            let route_id = format!(
-                "route:{}:{}:{}:{}",
-                file_str, line, verb, op_name
-            );
+            let route_id = format!("route:{}:{}:{}:{}", file_str, line, verb, op_name);
 
             nodes.push(Node {
                 id: route_id.clone(),
@@ -488,10 +484,7 @@ impl FrameworkResolver for NestJsResolver {
             let handler = method_name_after(&safe, hit.end);
             let handler_name = handler.as_deref().unwrap_or("unknown");
 
-            let route_id = format!(
-                "route:{}:{}:{}:{}",
-                file_str, line, verb, pattern_val
-            );
+            let route_id = format!("route:{}:{}:{}:{}", file_str, line, verb, pattern_val);
 
             nodes.push(Node {
                 id: route_id.clone(),
@@ -535,10 +528,7 @@ impl FrameworkResolver for NestJsResolver {
             let handler = method_name_after(&safe, hit.end);
             let handler_name = handler.as_deref().unwrap_or("unknown");
 
-            let route_id = format!(
-                "route:{}:{}:WS:{}",
-                file_str, line, full_event
-            );
+            let route_id = format!("route:{}:{}:WS:{}", file_str, line, full_event);
 
             nodes.push(Node {
                 id: route_id.clone(),
@@ -578,7 +568,6 @@ mod tests {
     use super::*;
     use crate::caches::ResolverCaches;
     use crate::path_aliases::PathAliasMap;
-    use codewiki_core::NodeKind;
     use std::path::Path;
 
     fn make_ctx<'a>(
@@ -666,8 +655,14 @@ export class UsersController {
 
         assert_eq!(result.nodes.len(), 2, "two route nodes");
         let names: Vec<_> = result.nodes.iter().map(|n| n.name.as_str()).collect();
-        assert!(names.contains(&"GET /users/:id"), "GET /users/:id present: {names:?}");
-        assert!(names.contains(&"POST /users"), "POST /users present: {names:?}");
+        assert!(
+            names.contains(&"GET /users/:id"),
+            "GET /users/:id present: {names:?}"
+        );
+        assert!(
+            names.contains(&"POST /users"),
+            "POST /users present: {names:?}"
+        );
     }
 
     #[test]
@@ -713,8 +708,17 @@ export class TestController {
             .unwrap();
 
         // Only the Resolver-scoped @Query should produce a route
-        let gql_routes: Vec<_> = result.nodes.iter().filter(|n| n.name.starts_with("QUERY")).collect();
-        assert_eq!(gql_routes.len(), 1, "exactly one QUERY route: {:?}", result.nodes.iter().map(|n| &n.name).collect::<Vec<_>>());
+        let gql_routes: Vec<_> = result
+            .nodes
+            .iter()
+            .filter(|n| n.name.starts_with("QUERY"))
+            .collect();
+        assert_eq!(
+            gql_routes.len(),
+            1,
+            "exactly one QUERY route: {:?}",
+            result.nodes.iter().map(|n| &n.name).collect::<Vec<_>>()
+        );
         assert!(
             gql_routes[0].name.contains("getUsers") || gql_routes[0].name.contains("QUERY"),
             "GQL route name: {}",
@@ -738,7 +742,11 @@ export class MsgController {
             .extract(Path::new("msg.controller.ts"), content, &ctx)
             .unwrap();
 
-        let msg_routes: Vec<_> = result.nodes.iter().filter(|n| n.name.starts_with("MESSAGE")).collect();
+        let msg_routes: Vec<_> = result
+            .nodes
+            .iter()
+            .filter(|n| n.name.starts_with("MESSAGE"))
+            .collect();
         assert_eq!(msg_routes.len(), 1);
         assert_eq!(msg_routes[0].name, "MESSAGE cmd.create");
     }
@@ -759,7 +767,11 @@ export class ChatGateway {
             .extract(Path::new("chat.gateway.ts"), content, &ctx)
             .unwrap();
 
-        let ws_routes: Vec<_> = result.nodes.iter().filter(|n| n.name.starts_with("WS")).collect();
+        let ws_routes: Vec<_> = result
+            .nodes
+            .iter()
+            .filter(|n| n.name.starts_with("WS"))
+            .collect();
         assert_eq!(ws_routes.len(), 1);
         assert_eq!(ws_routes[0].name, "WS chat:join");
     }
@@ -807,7 +819,10 @@ export class ApiController {
 
         assert_eq!(result.nodes.len(), 1);
         let qn = &result.nodes[0].qualified_name;
-        assert!(qn.contains("::GET:/api/ping"), "qualified_name must match express.rs format, got: {qn}");
+        assert!(
+            qn.contains("::GET:/api/ping"),
+            "qualified_name must match express.rs format, got: {qn}"
+        );
     }
 
     #[test]
@@ -844,7 +859,7 @@ export class XController {
 
     #[test]
     fn nestjs_resolve_service_preferred_convention() {
-        use codewiki_core::{Node, NodeKind, Language};
+        use codewiki_core::{Language, Node, NodeKind};
         let caches = ResolverCaches::default_capacity();
         // Put a UsersService class in users.service.ts and one in other.ts
         let service_node = Node {
@@ -943,6 +958,9 @@ export class XController {
             path_aliases: &aliases,
             known_files: &known,
         };
-        assert!(NestJsResolver.detect(&ctx), "must detect via fallback file scan");
+        assert!(
+            NestJsResolver.detect(&ctx),
+            "must detect via fallback file scan"
+        );
     }
 }

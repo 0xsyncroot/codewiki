@@ -78,16 +78,9 @@ pub fn run_restore(snapshot: PathBuf, project_path: Option<PathBuf>) -> Result<(
 
     restore_db(&snapshot, &db_path)?;
 
-    println!(
-        "restored {} to {}",
-        snapshot.display(),
-        db_path.display()
-    );
+    println!("restored {} to {}", snapshot.display(), db_path.display());
     if backup_path.exists() {
-        println!(
-            "previous index backed up at {}",
-            backup_path.display()
-        );
+        println!("previous index backed up at {}", backup_path.display());
     }
     println!("Tip: run `codewiki index` to update the restored index with any recent changes.");
     Ok(())
@@ -197,7 +190,10 @@ mod tests {
     #[test]
     fn snapshot_nonexistent_source_fails() {
         let tmp = TempDir::new().unwrap();
-        let result = snapshot_db(Path::new("/nonexistent/db.sqlite"), &tmp.path().join("out.db"));
+        let result = snapshot_db(
+            Path::new("/nonexistent/db.sqlite"),
+            &tmp.path().join("out.db"),
+        );
         assert!(result.is_err(), "should fail on missing source");
     }
 }

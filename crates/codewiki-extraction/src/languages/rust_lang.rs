@@ -64,8 +64,14 @@ impl Config {
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
         let names: Vec<_> = batch.nodes.iter().map(|n| n.name.as_str()).collect();
-        assert!(batch.nodes.iter().any(|n| n.name == "Config"), "nodes: {names:?}");
-        assert!(batch.nodes.iter().any(|n| n.name == "new"), "nodes: {names:?}");
+        assert!(
+            batch.nodes.iter().any(|n| n.name == "Config"),
+            "nodes: {names:?}"
+        );
+        assert!(
+            batch.nodes.iter().any(|n| n.name == "new"),
+            "nodes: {names:?}"
+        );
     }
 
     #[test]
@@ -104,7 +110,10 @@ impl Registry {
 
         // Methods inside impl blocks must be Method kind, not Function.
         let serialize = batch.nodes.iter().find(|n| n.name == "serialize");
-        assert!(serialize.is_some(), "serialize node missing; nodes: {names:?}");
+        assert!(
+            serialize.is_some(),
+            "serialize node missing; nodes: {names:?}"
+        );
         assert_eq!(
             serialize.unwrap().kind,
             NodeKind::Method,

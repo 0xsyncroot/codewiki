@@ -29,9 +29,7 @@ fn route_regex() -> &'static Regex {
 
 fn controller_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r#"^(\w+)Controller\.(\w+)$"#).expect("controller_regex")
-    })
+    RE.get_or_init(|| Regex::new(r#"^(\w+)Controller\.(\w+)$"#).expect("controller_regex"))
 }
 
 fn service_regex() -> &'static Regex {
@@ -51,8 +49,7 @@ fn extract_tail_ident(expr: &str) -> Option<String> {
         static RE: OnceLock<Regex> = OnceLock::new();
         RE.get_or_init(|| Regex::new(r#"(?:\.|^)([A-Za-z_][A-Za-z0-9_]*)$"#).unwrap())
     };
-    re.captures(cleaned)
-        .map(|c| c[1].to_string())
+    re.captures(cleaned).map(|c| c[1].to_string())
 }
 
 fn detect_language_from_path(file_path: &str) -> CommentLang {
@@ -78,8 +75,7 @@ fn is_middleware_name(name: &str) -> bool {
         "notFound",
     ];
     let lower = name.to_lowercase();
-    patterns.iter().any(|p| lower == p.to_lowercase())
-        || lower.ends_with("middleware")
+    patterns.iter().any(|p| lower == p.to_lowercase()) || lower.ends_with("middleware")
 }
 
 // ─── Resolver ─────────────────────────────────────────────────────────────────
@@ -122,7 +118,10 @@ impl FrameworkResolver for ExpressResolver {
 
         // Scan common route-containing files
         for file in context.known_files {
-            if file.contains("routes") || file.contains("controllers") || file.contains("middleware") {
+            if file.contains("routes")
+                || file.contains("controllers")
+                || file.contains("middleware")
+            {
                 if let Some(content) = context.read_file(file) {
                     if content.contains("express")
                         || content.contains("app.get")
@@ -171,7 +170,9 @@ impl FrameworkResolver for ExpressResolver {
             let method_candidates = context.get_nodes_by_name(method);
             let target = method_candidates.iter().find(|n| {
                 (n.kind == NodeKind::Method || n.kind == NodeKind::Function)
-                    && n.file_path.to_lowercase().contains(&controller.to_lowercase())
+                    && n.file_path
+                        .to_lowercase()
+                        .contains(&controller.to_lowercase())
             });
             if let Some(node) = target {
                 return Ok(Some(make_resolved_edge(
@@ -246,10 +247,7 @@ impl FrameworkResolver for ExpressResolver {
                 continue;
             }
 
-            let line = safe[..cap.get(0).unwrap().start()]
-                .lines()
-                .count() as u32
-                + 1;
+            let line = safe[..cap.get(0).unwrap().start()].lines().count() as u32 + 1;
 
             let route_id = format!(
                 "route:{}:{}:{}:{}",
@@ -262,12 +260,7 @@ impl FrameworkResolver for ExpressResolver {
             let route_node = Node {
                 id: route_id.clone(),
                 name: format!("{} {}", method.to_uppercase(), route_path),
-                qualified_name: format!(
-                    "{}::{}:{}",
-                    file_str,
-                    method.to_uppercase(),
-                    route_path
-                ),
+                qualified_name: format!("{}::{}:{}", file_str, method.to_uppercase(), route_path),
                 kind: NodeKind::Route,
                 language: if file_str.ends_with(".ts") || file_str.ends_with(".tsx") {
                     Language::TypeScript
@@ -282,7 +275,11 @@ impl FrameworkResolver for ExpressResolver {
             nodes.push(route_node);
 
             // Handler is the LAST comma-separated argument
-            let parts: Vec<&str> = handlers_raw.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+            let parts: Vec<&str> = handlers_raw
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect();
             if let Some(last) = parts.last() {
                 if let Some(handler_name) = extract_tail_ident(last) {
                     unresolved_refs.push(UnresolvedRef {
@@ -346,7 +343,11 @@ mod tests {
         assert!(result.nodes[0].name.contains("GET"), "method in node name");
         assert!(result.nodes[0].name.contains("/foo"), "path in node name");
 
-        let refs: Vec<_> = result.unresolved_refs.iter().map(|r| r.reference_name.as_str()).collect();
+        let refs: Vec<_> = result
+            .unresolved_refs
+            .iter()
+            .map(|r| r.reference_name.as_str())
+            .collect();
         assert!(refs.contains(&"getUsers"), "getUsers ref emitted");
         assert!(refs.contains(&"createUser"), "createUser ref emitted");
     }

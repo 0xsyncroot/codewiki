@@ -45,7 +45,11 @@ impl codewiki_extraction::ExtractionStore for StorageAdapter {
             .0
             .store_extraction_batch_bulk_init(batches)
             .map_err(|e| e.to_string())?;
-        Ok((stats.files_written + stats.files_skipped, stats.nodes_inserted, stats.edges_inserted))
+        Ok((
+            stats.files_written + stats.files_skipped,
+            stats.nodes_inserted,
+            stats.edges_inserted,
+        ))
     }
 }
 

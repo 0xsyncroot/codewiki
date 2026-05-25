@@ -90,8 +90,16 @@ impl FrameworkResolver for DjangoResolver {
     ) -> Result<Option<ResolvedEdge>, CodeWikiError> {
         let name = &reference.reference_name;
 
-        if name.ends_with("Model") || name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
-            if let Some(id) = resolve_by_name_kind(name, &[NodeKind::Class], &["models", "app/models"], context) {
+        if name.ends_with("Model")
+            || name
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
+        {
+            if let Some(id) =
+                resolve_by_name_kind(name, &[NodeKind::Class], &["models", "app/models"], context)
+            {
                 return Ok(Some(make_resolved_edge(reference, id, 0.8, self.name())));
             }
         }
@@ -108,7 +116,9 @@ impl FrameworkResolver for DjangoResolver {
         }
 
         if name.ends_with("Form") {
-            if let Some(id) = resolve_by_name_kind(name, &[NodeKind::Class], &["forms", "app/forms"], context) {
+            if let Some(id) =
+                resolve_by_name_kind(name, &[NodeKind::Class], &["forms", "app/forms"], context)
+            {
                 return Ok(Some(make_resolved_edge(reference, id, 0.8, self.name())));
             }
         }
@@ -163,7 +173,11 @@ impl FrameworkResolver for DjangoResolver {
             }
         }
 
-        Ok(FrameworkExtractionResult { nodes, edges: Vec::new(), unresolved_refs })
+        Ok(FrameworkExtractionResult {
+            nodes,
+            edges: Vec::new(),
+            unresolved_refs,
+        })
     }
 }
 
@@ -176,7 +190,10 @@ pub(crate) fn resolve_by_name_kind(
     context: &ResolutionContext<'_>,
 ) -> Option<String> {
     let candidates = context.get_nodes_by_name(name);
-    let kind_filtered: Vec<_> = candidates.iter().filter(|n| kinds.contains(&n.kind)).collect();
+    let kind_filtered: Vec<_> = candidates
+        .iter()
+        .filter(|n| kinds.contains(&n.kind))
+        .collect();
     if kind_filtered.is_empty() {
         return None;
     }
