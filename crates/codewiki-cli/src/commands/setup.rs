@@ -408,14 +408,22 @@ mod tests {
             true, // ascii = true (no unicode issues in CI)
         );
 
-        // Probe the wiring through the target's OWN `is_installed(Global)` while
+        // Probe the wiring through each target's OWN `is_installed(Global)` while
         // HOME/USERPROFILE still point at the sandbox — the target resolves its
         // config path the SAME way the writer did, so test and writer cannot
         // drift apart on any platform. Captured here (before restore) so the
         // probe sees the sandboxed home; asserted after restore so a failure
         // never leaves HOME polluted for sibling serial tests.
-        use crate::installer::targets::{claude::ClaudeTarget, AgentTarget, Location};
-        let claude_wired = ClaudeTarget.is_installed(Location::Global);
+        //
+        // We assert that AT LEAST ONE agent was wired rather than Claude
+        // specifically: `--target auto` resolves to whatever the host has
+        // installed (falling back to Claude only when nothing is detected), and a
+        // CI runner may have a different agent present — the contract under test
+        // is "setup wires an agent globally", not "setup always picks Claude".
+        use crate::installer::targets::{all_targets, Location};
+        let any_agent_wired = all_targets()
+            .iter()
+            .any(|t| t.supports_location(Location::Global) && t.is_installed(Location::Global));
 
         // Restore HOME / USERPROFILE.
         match original_home {
@@ -434,13 +442,12 @@ mod tests {
         let db = project.path().join(".codewiki").join("codewiki.db");
         assert!(db.exists(), ".codewiki/codewiki.db not created");
 
-        // The non-interactive `auto` path falls back to Claude and wires it
-        // globally — platform-robust by construction (no hand-built HOME/XDG
-        // path that could drift on Windows), so the check is no longer gated to
-        // non-Windows.
+        // setup must have wired at least one agent globally. Probed via the
+        // target's own resolution (platform-robust by construction — no hand-built
+        // HOME/XDG path that could drift on Windows).
         assert!(
-            claude_wired,
-            "setup --yes (auto) must wire Claude at the global location"
+            any_agent_wired,
+            "setup --yes (auto) must wire at least one agent at the global location"
         );
     }
 
