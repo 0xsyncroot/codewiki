@@ -1,0 +1,127 @@
+{
+  "_doc": "Context-relevance fixture for codewiki_context. Replaces benchmark/check-context-quality.sh (which only checked one anchor's presence). Each case asserts (a) roots@k precision: the EXPECTED roots that SHOULD appear among the top-k Entry Points, scored as precision over the surfaced roots, and (b) nodes recall: expected-anywhere symbols that must appear somewhere in the context output (Entry Points OR Related Symbols). Matching is by symbol NAME (synthetic-120 names are domain-unique). Synthetic-120 cases are FROZEN (deterministic corpus) and gate the thresholds; real-crate cases are ADVISORY (the crate index is edited by other work and may drift).",
+  "k": 5,
+  "corpora": {
+    "synthetic-120": {
+      "path": "parity/synthetic-120",
+      "gating": true,
+      "cases": [
+        {
+          "id": "auth_flow",
+          "task": "how does authentication and login work",
+          "expected_roots": ["AuthProvider", "JwtAuthProvider", "authenticate"],
+          "expected_anywhere": ["AuthProvider", "JwtAuthProvider", "authenticate", "createAuthProvider", "getUser"]
+        },
+        {
+          "id": "graph_traversal",
+          "task": "how does graph traversal and dfs work",
+          "expected_roots": ["Graph", "dfs", "traverse"],
+          "expected_anywhere": ["Graph", "dfs", "traverse", "add_node", "add_edge", "neighbors"]
+        },
+        {
+          "id": "config_loading",
+          "task": "how does configuration loading and lookup work",
+          "expected_roots": ["IConfigProvider", "EnvironmentConfigProvider", "Get"],
+          "expected_anywhere": ["IConfigProvider", "EnvironmentConfigProvider", "DictionaryConfigProvider", "Get", "TryGet"]
+        },
+        {
+          "id": "user_model_repository",
+          "task": "how are users modeled and persisted in the repository",
+          "expected_roots": ["User", "UserRepository", "Address"],
+          "expected_anywhere": ["User", "UserRepository", "Address", "serialize_users", "to_dict", "from_dict"]
+        },
+        {
+          "id": "animal_hierarchy",
+          "task": "how is the animal class hierarchy and shelter structured",
+          "expected_roots": ["Animal", "Dog", "AnimalShelter"],
+          "expected_anywhere": ["Animal", "Dog", "AnimalShelter", "sound", "addAnimal", "getAnimals"]
+        },
+        {
+          "id": "http_server_routing",
+          "task": "how does the http server start and handle requests",
+          "expected_roots": ["Server", "Handler", "NewServer"],
+          "expected_anywhere": ["Server", "Handler", "NewServer", "Start", "writeJSON", "Response"]
+        },
+        {
+          "id": "greeting",
+          "task": "how does the greeter produce a greeting",
+          "expected_roots": ["Greeter", "FormalGreeter", "makeGreeter"],
+          "expected_anywhere": ["Greeter", "FormalGreeter", "makeGreeter", "greet"]
+        },
+        {
+          "id": "networking_client",
+          "task": "how does the networking api client fetch data",
+          "expected_roots": ["APIClient", "NetworkSession", "URLSession"],
+          "expected_anywhere": ["APIClient", "NetworkSession", "URLSession", "APIError", "fetch"]
+        },
+        {
+          "id": "calculator_arithmetic",
+          "task": "how does the calculator perform addition and division",
+          "expected_roots": ["add", "divide"],
+          "expected_anywhere": ["add", "divide", "main"]
+        },
+        {
+          "id": "matrix_math",
+          "task": "how is matrix multiplication implemented",
+          "expected_roots": ["Matrix"],
+          "expected_anywhere": ["Matrix"]
+        },
+        {
+          "id": "cache_retry_utils",
+          "task": "how does the cache and retry utility work",
+          "expected_roots": ["Cache", "retry"],
+          "expected_anywhere": ["Cache", "retry", "sleep", "get", "set"]
+        },
+        {
+          "id": "rest_api_client_ruby",
+          "task": "how does the rest api client send get and post requests",
+          "expected_roots": ["Client", "API"],
+          "expected_anywhere": ["Client", "API", "get", "post", "build_client"]
+        },
+        {
+          "id": "jwt_decode",
+          "task": "how is a jwt token verified and decoded",
+          "expected_roots": ["JwtAuthProvider", "verify", "decode"],
+          "expected_anywhere": ["JwtAuthProvider", "verify", "decode", "authenticate"]
+        },
+        {
+          "id": "dictionary_config",
+          "task": "how does dictionary based configuration provide values",
+          "expected_roots": ["DictionaryConfigProvider", "Get", "TryGet"],
+          "expected_anywhere": ["DictionaryConfigProvider", "IConfigProvider", "Get", "TryGet"]
+        },
+        {
+          "id": "widget_counter",
+          "task": "how does the widget increment and reset a counter",
+          "expected_roots": ["increment", "reset"],
+          "expected_anywhere": ["increment", "reset"]
+        },
+        {
+          "id": "user_serialization",
+          "task": "how are user objects serialized to and from dictionaries",
+          "expected_roots": ["User", "serialize_users"],
+          "expected_anywhere": ["User", "serialize_users", "to_dict", "from_dict"]
+        }
+      ]
+    },
+    "self-crate": {
+      "path": ".",
+      "gating": false,
+      "_note": "ADVISORY: run against the codewiki repo's own .codewiki index. Not gated because the crates are under active development and symbol names may drift.",
+      "cases": [
+        {
+          "id": "graph_storage",
+          "task": "how is the knowledge graph stored and queried in sqlite",
+          "expected_roots": ["SqliteStorage", "store_batch"],
+          "expected_anywhere": ["store_batch", "get_stats", "find_relevant_context"]
+        },
+        {
+          "id": "mcp_tools",
+          "task": "how are the mcp tools dispatched and rendered",
+          "expected_roots": ["handle_tool_call", "list_tools"],
+          "expected_anywhere": ["handle_tool_call", "list_tools"]
+        }
+      ]
+    }
+  }
+}

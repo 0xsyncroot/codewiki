@@ -43,6 +43,12 @@ impl StorageImpl {
         }
     }
 
+    /// Persist the project root in `project_metadata` so query tools can render
+    /// workspace-relative paths. Pass a forward-slash-normalized absolute root.
+    pub fn set_root_path(&self, root: &str) -> Result<(), CodeWikiError> {
+        self.with_conn(|conn| mq::set_metadata(conn, "root_path", root))
+    }
+
     fn with_conn<F, R>(&self, f: F) -> Result<R, CodeWikiError>
     where
         F: FnOnce(&Connection) -> Result<R, CodeWikiError>,
@@ -1455,6 +1461,15 @@ impl QueryHandle for StorageImpl {
                 Ok(all)
             }
         })
+    }
+
+    fn root_path(&self) -> Option<String> {
+        // Reuse the same project_metadata path that get_files uses to resolve
+        // relative prefixes. Treat an empty value as absent.
+        self.with_conn(|conn| mq::get_metadata(conn, "root_path"))
+            .ok()
+            .flatten()
+            .filter(|s| !s.is_empty())
     }
 
     fn get_affected_nodes(&self, file_paths: &[PathBuf]) -> Result<Vec<Node>, CodeWikiError> {

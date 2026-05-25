@@ -80,4 +80,18 @@ pub trait QueryHandle: Send + Sync {
         &self,
         file_paths: &[std::path::PathBuf],
     ) -> Result<Vec<Node>, CodeWikiError>;
+
+    /// The absolute workspace root recorded for this project (the `root_path`
+    /// key in `project_metadata`), if known.
+    ///
+    /// MCP renderers strip this prefix to emit workspace-relative paths and
+    /// print the absolute root once in a header so paths stay rejoinable.
+    /// Returns `None` when the index predates the metadata key or the project
+    /// is unindexed; renderers must fall back to the stored (absolute) path.
+    ///
+    /// Default implementation returns `None`; the SQLite-backed handle
+    /// overrides it by reading `project_metadata`.
+    fn root_path(&self) -> Option<String> {
+        None
+    }
 }

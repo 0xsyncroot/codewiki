@@ -48,8 +48,10 @@ pub fn list_tools() -> ListToolsResult {
     let tools = vec![
         Tool::new(
             "codewiki_search",
-            "Quick symbol search by name. Returns locations only (no code). \
-             Use codewiki_context instead for comprehensive task context.",
+            "Find symbols by name. Each hit ALREADY includes location, signature, \
+             and the first docstring line — so do NOT chain codewiki_node just to \
+             read a signature you already have here. For a whole task/area use \
+             codewiki_context instead.",
             make_schema(serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -60,8 +62,10 @@ pub fn list_tools() -> ListToolsResult {
                     "kind": {
                         "type": "string",
                         "description": "Filter by node kind",
-                        "enum": ["function", "method", "class", "interface", "type",
-                                 "variable", "route", "component"]
+                        "enum": ["function", "method", "class", "struct", "enum",
+                                 "trait", "interface", "type", "namespace",
+                                 "variable", "constant", "property", "route",
+                                 "component"]
                     },
                     "limit": {
                         "type": "number",
@@ -108,8 +112,11 @@ pub fn list_tools() -> ListToolsResult {
         ),
         Tool::new(
             "codewiki_callers",
-            "Find all functions/methods that call a specific symbol. \
-             Useful for understanding usage patterns and impact of changes.",
+            "Direct (1-hop) callers of a symbol. NOTE: resolves the symbol name to \
+             its TOP search match only — on an ambiguous/overloaded name you get \
+             callers of one definition. An empty result means \"no callers of THIS \
+             match\", NOT \"unused\": to gauge real reach (incl. interface/trait \
+             implementors and transitive use) call codewiki_impact instead.",
             make_schema(serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -132,8 +139,9 @@ pub fn list_tools() -> ListToolsResult {
         ),
         Tool::new(
             "codewiki_callees",
-            "Find all functions/methods that a specific symbol calls. \
-             Useful for understanding dependencies and code flow.",
+            "Direct (1-hop) callees a symbol invokes — its outgoing dependencies / \
+             code flow. Resolves the symbol name to its TOP search match only, so \
+             on an ambiguous name you see one definition's callees.",
             make_schema(serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -156,8 +164,10 @@ pub fn list_tools() -> ListToolsResult {
         ),
         Tool::new(
             "codewiki_impact",
-            "Analyze the impact radius of changing a symbol. \
-             Shows what code could be affected by modifications.",
+            "Blast radius of changing a symbol: the transitive set of dependents \
+             (callers, importers, references, interface/trait usage) up to `depth` \
+             hops. Prefer this over codewiki_callers when you need the FULL reach \
+             of a change or are unsure whether a symbol is actually used.",
             make_schema(serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -180,9 +190,15 @@ pub fn list_tools() -> ListToolsResult {
         ),
         Tool::new(
             "codewiki_node",
-            "Get detailed info about ONE symbol (location, signature, docstring). \
-             Pass includeCode=true for source: a function/method returns its body; \
-             a class/interface/struct/enum returns a compact member OUTLINE.",
+            "Deep-dive ONE named symbol you already have. Returns location, \
+             signature, and docstring (codewiki_search already gives you these, so \
+             don't call node just to re-read a signature). Pass includeCode=true \
+             for source: a function/method returns its body, a \
+             class/interface/struct/enum returns a compact member OUTLINE. Pass \
+             includeCallers/includeCallees=true to fold in the symbol's one-hop \
+             neighbors — collapsing a node→callers→callees chain into one call. \
+             Resolves to the TOP search match. Note: callers/impact are the \
+             accurate path for full reach on ambiguous names.",
             make_schema(serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -195,6 +211,16 @@ pub fn list_tools() -> ListToolsResult {
                         "description": "Include full source code (default: false to minimize context)",
                         "default": false
                     },
+                    "includeCallers": {
+                        "type": "boolean",
+                        "description": "Fold in the symbol's one-hop callers (default: false)",
+                        "default": false
+                    },
+                    "includeCallees": {
+                        "type": "boolean",
+                        "description": "Fold in the symbol's one-hop callees (default: false)",
+                        "default": false
+                    },
                     "projectPath": {
                         "type": "string",
                         "description": "Path to a different project with .codewiki/ initialized."
@@ -205,9 +231,11 @@ pub fn list_tools() -> ListToolsResult {
         ),
         Tool::new(
             "codewiki_explore",
-            "Returns source for SEVERAL related symbols grouped by file, plus a \
-             relationship map, in ONE capped call. Query with specific symbol/file/code \
-             terms, NOT natural-language sentences.",
+            "Source for SEVERAL related symbols grouped by file, plus a relationship \
+             map, in ONE capped call. Typically the SECOND call after \
+             codewiki_context: context maps the area, explore pulls the code. Query \
+             with TERMS — specific symbol names, file names, or short code tokens — \
+             NOT natural-language sentences (those are for codewiki_context).",
             make_schema(serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -335,7 +363,16 @@ pub async fn dispatch(
         "codewiki_node" => {
             let symbol = get_str("symbol").unwrap_or_default();
             let include_code = get_bool("includeCode").unwrap_or(false);
-            node::handle_node(handle, symbol, include_code).await
+            let include_callers = get_bool("includeCallers").unwrap_or(false);
+            let include_callees = get_bool("includeCallees").unwrap_or(false);
+            node::handle_node(
+                handle,
+                symbol,
+                include_code,
+                include_callers,
+                include_callees,
+            )
+            .await
         }
         "codewiki_explore" => {
             let query = get_str("query").unwrap_or_default();
@@ -373,11 +410,145 @@ pub async fn dispatch(
     }
 }
 
-/// Truncate a string to at most `max_chars`, appending an indicator if truncated.
+/// Largest char-boundary index `<= max` within `s`.
+///
+/// `str::floor_char_boundary` is still nightly-only, so we reimplement it.
+/// Slicing/truncating a `String` at a non-char-boundary panics; every byte
+/// cap in this crate must route through this guard (Wave 1d).
+pub fn floor_char_boundary(s: &str, max: usize) -> usize {
+    if max >= s.len() {
+        return s.len();
+    }
+    let mut idx = max;
+    while idx > 0 && !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
+/// Truncate a `&str` to at most `max` bytes, snapping down to a char boundary.
+/// Never panics on multibyte UTF-8.
+pub fn truncate_str(s: &str, max: usize) -> &str {
+    &s[..floor_char_boundary(s, max)]
+}
+
+/// Truncate a string to at most `max_chars` bytes, appending an indicator if
+/// truncated. Snaps to a UTF-8 char boundary so multibyte output never panics.
 pub fn truncate_output(s: String, max_chars: usize) -> String {
     if s.len() <= max_chars {
         return s;
     }
-    let truncated = &s[..max_chars];
+    let truncated = truncate_str(&s, max_chars);
     format!("{truncated}\n...(output truncated to {max_chars} characters)")
+}
+
+/// Strip a forward-slash-normalized root prefix from `path`, returning a
+/// workspace-relative path. Indexed paths are stored '/'-normalized on every
+/// platform, so this deliberately does NOT use `std::path` /
+/// `MAIN_SEPARATOR` — that would break on Windows where the separator is `\`.
+///
+/// Returns `path` unchanged when `root` is `None`, empty, or not a prefix
+/// (e.g. a `projectPath` outside the root). A leading `/` left after stripping
+/// is removed so results are truly relative.
+pub fn rel<'a>(path: &'a str, root: Option<&str>) -> &'a str {
+    let root = match root {
+        Some(r) if !r.is_empty() => r,
+        _ => return path,
+    };
+    let root = root.strip_suffix('/').unwrap_or(root);
+    match path.strip_prefix(root) {
+        Some(rest) => rest.strip_prefix('/').unwrap_or(rest),
+        None => path,
+    }
+}
+
+/// Render a one-line workspace-root header so agents can rejoin relative
+/// paths to absolute ones. Emits nothing when the root is unknown.
+pub fn root_header(root: Option<&str>) -> String {
+    match root {
+        Some(r) if !r.is_empty() => {
+            format!("_Workspace root: `{r}` (paths below are relative)_\n\n")
+        }
+        _ => String::new(),
+    }
+}
+
+/// Render a numbered list of neighbor nodes (callers/callees) as Markdown
+/// bullet lines, capped at `limit` with a "+N more" pointer when truncated.
+///
+/// Shared by `codewiki_callers`, `codewiki_callees`, and the
+/// `includeCallers`/`includeCallees` fold-in of `codewiki_node` so all three
+/// emit identical, root-relative formatting (single source of truth).
+pub fn render_neighbor_list(
+    nodes: &[codewiki_core::Node],
+    limit: usize,
+    root: Option<&str>,
+) -> String {
+    use crate::tools::search::format_kind;
+    let mut out = String::new();
+    let shown = nodes.len().min(limit);
+    for (i, node) in nodes.iter().take(shown).enumerate() {
+        out.push_str(&format!(
+            "{}. **{}** ({}) in `{}:{}`\n",
+            i + 1,
+            node.name,
+            format_kind(&node.kind),
+            rel(&node.file_path, root),
+            node.start_line,
+        ));
+    }
+    if nodes.len() > shown {
+        out.push_str(&format!("...(+{} more)\n", nodes.len() - shown));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rel_strips_forward_slash_root() {
+        let root = Some("/home/u/proj");
+        assert_eq!(rel("/home/u/proj/src/main.rs", root), "src/main.rs");
+        // Trailing slash on the root is tolerated.
+        assert_eq!(
+            rel("/home/u/proj/src/main.rs", Some("/home/u/proj/")),
+            "src/main.rs"
+        );
+    }
+
+    #[test]
+    fn rel_passthrough_when_no_root_or_no_match() {
+        assert_eq!(rel("/a/b/c.rs", None), "/a/b/c.rs");
+        assert_eq!(rel("/a/b/c.rs", Some("")), "/a/b/c.rs");
+        // projectPath outside the root → unchanged.
+        assert_eq!(rel("/other/x.rs", Some("/home/u/proj")), "/other/x.rs");
+    }
+
+    #[test]
+    fn floor_char_boundary_handles_multibyte() {
+        let s = "héllo"; // 'é' is 2 bytes at index 1..3
+                         // max=2 lands inside 'é' → must floor to 1.
+        assert_eq!(floor_char_boundary(s, 2), 1);
+        assert_eq!(floor_char_boundary(s, s.len() + 10), s.len());
+        // truncating there must not panic and must be valid UTF-8.
+        let _ = &s[..floor_char_boundary(s, 2)];
+    }
+
+    #[test]
+    fn truncate_output_no_panic_on_multibyte() {
+        // Build a string whose byte-cap would fall mid-character.
+        let s: String = "🦀".repeat(100); // each crab is 4 bytes
+        let out = truncate_output(s, 10); // 10 is mid-emoji
+        assert!(out.contains("output truncated"));
+        // If we got here without panicking, the boundary guard worked.
+    }
+
+    #[test]
+    fn root_header_emitted_only_when_known() {
+        assert!(root_header(Some("/x")).contains("Workspace root"));
+        assert_eq!(root_header(None), "");
+        assert_eq!(root_header(Some("")), "");
+    }
 }

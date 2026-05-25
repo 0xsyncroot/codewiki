@@ -1,0 +1,25 @@
+{
+  "case_id": "rust_callers",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "callers",
+  "symbol": "write_line_term",
+  "feature_query": "",
+  "required_symbols": [
+    "finish",
+    "sink_slow_multi_line",
+    "sink_slow_multi_line_only_matching",
+    "sink_slow_multi_per_match",
+    "write_colored_line",
+    "write_exceeded_line",
+    "write_line",
+    "write_search_prelude"
+  ],
+  "required_files": [
+    "standard.rs",
+    "summary.rs"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "11 distinct callers total; froze top 8 by name order",
+  "min_required": 10
+}

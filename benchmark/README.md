@@ -161,9 +161,14 @@ Pricing: Claude Sonnet **$3.00 / 1M input tokens**.
 A developer session with ~20 agent interactions saves roughly **$0.24** while the index
 stays current at 21–66 ms per file change. (CodeWiki's `context` output is ranked, so its
 byte/token counts vary ±~5% between cold index builds; `query` / `impact` / `callers`
-are deterministic. The aggregate above is stable across builds. Figures are from a fresh
-clean-index run via [`run-dotnet.sh`](run-dotnet.sh).) The savings compound: the index is built once,
-maintained automatically, and every subsequent query is effectively free.
+are deterministic. The aggregate above is stable across builds.) The savings compound:
+the index is built once, maintained automatically, and every subsequent query is
+effectively free.
+
+> **Note — superseded by the cross-language harness (§4.1).** This .NET-only table was
+> produced by the original `run-dotnet.sh` (now removed). It is retained for historical
+> context; the authoritative, multi-language, recall-scored measurement is
+> [`run-savings.sh`](run-savings.sh) (§4.1), which subsumes it.
 
 **The implements-edge fix in action (Task 3).** Interface→implementation queries now
 traverse real `implements` edges: eShopOnWeb has 67 `implements` edges, so
@@ -174,6 +179,65 @@ the DI registration, and consumer services separately.
 
 Full methodology, per-task traces, and reproduction commands:
 [`DOTNET-REPORT.md`](DOTNET-REPORT.md).
+
+---
+
+## 4.1 Agent savings — cross-language, recall-scored (authoritative)
+
+The agent-savings harness ([`run-savings.sh`](run-savings.sh)) generalises §4 to **6 task
+archetypes × 8 languages = 48 cases** over the same real repos as §1, and adds a
+**deterministic recall score** (no LLM judge): every CodeWiki answer and the equivalent
+grep + read-N-files baseline are scored against a **frozen ground-truth oracle**
+([`oracle/*.json`](oracle/), built once from `sqlite3` graph queries + targeted grep,
+hand-verified). Archetypes: `locate, callers, callees, feature, impl, blast`.
+
+Both sides are measured over the **MCP stdio path** (`codewiki serve --mcp`), the surface
+agents actually use and where the rendering optimisations live. Tokens = bytes / 4;
+`feature` (context) is median-of-3; `explore` + `node` are exercised over MCP as a coverage
+probe (reported separately, not folded into the totals). Scorer:
+[`lib/score.py`](lib/score.py) — recall = required-elements-present / required,
+verdict PASS(≥0.8)/PARTIAL/FAIL plus a wrong-primary correctness gate.
+
+**BEFORE baseline** (pinned `codewiki 0.1.1`, cold index, 2026-05-25):
+
+| Language | Call reduction | Token reduction | CW recall | BL recall |
+|----------|:--------------:|:---------------:|:---------:|:---------:|
+| C++ (json) | 67% | 99% | 0.86 | 1.00 |
+| C# (eShopOnWeb) | 74% | 21% | 0.94 | 0.94 |
+| Go (gin) | 78% | 98% | 0.70 | 0.95 |
+| Java (gson) | 74% | 94% | 0.54 | 0.88 |
+| JavaScript (express) | 57% | 89% | 0.79 | 0.83 |
+| Python (flask) | 74% | 94% | 0.65 | 0.92 |
+| Rust (ripgrep) | 75% | 97% | 0.86 | 0.94 |
+| TypeScript (zod) | 65% | 98% | 0.84 | 0.94 |
+| **Grand total** | **72%** | **97%** | **0.77** | **0.93** |
+
+CW verdicts: 29 PASS / 14 PARTIAL / 5 FAIL. The token reduction (**97%**) exceeds §4's
+83% because the MCP renderers are far more compact than the file-read baseline; the call
+reduction (**72%**) matches §4's 70%. The **recall gap (CW 0.77 vs baseline 0.93)** is the
+honest cost: CodeWiki currently trades some recall for the token win — driven by
+ambiguous-name top-match resolution (`callers`/`impact` pick one same-name node),
+context relevance (the `feature` archetype), and missing `implements` edges for
+structurally-typed languages (Go interfaces). These are the targets of the optimisation
+study; the AFTER run compares against [`results-savings-before.tsv`](results-savings-before.tsv).
+
+C# token reduction is low (24%) only because eShopOnWeb is a small repo, so reading the
+few relevant files is already cheap — the recall stays equal.
+
+Raw: [`results-savings-before.tsv`](results-savings-before.tsv) +
+`results-savings-before-summary.txt`. Reproduce:
+
+```bash
+CW=/path/to/codewiki benchmark/run-savings.sh           # -> results-savings.tsv
+# rebuild + hand-verify oracles (only when adding cases):
+python3 benchmark/lib/build_oracle.py --bench-root /tmp/bench
+python3 benchmark/lib/build_oracle.py --report
+```
+
+A companion **context-relevance fixture** ([`../parity/context-relevance/`](../parity/context-relevance/))
+scores `codewiki_context` roots@5 precision / recall over the frozen `synthetic-120`
+corpus; BEFORE = roots@5 precision 0.33, recall 0.56, nodes recall 0.87 (floors in
+`parity/thresholds.toml [context]`).
 
 ---
 

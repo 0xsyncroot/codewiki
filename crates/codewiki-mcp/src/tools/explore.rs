@@ -249,7 +249,11 @@ pub async fn handle_explore(
     }
 
     // 5. Format output
+    let root = handle.root_path();
+    let root_ref = root.as_deref();
+
     let mut out = format!("## Explore: '{query}'\n\n");
+    out.push_str(&crate::tools::root_header(root_ref));
 
     let selected_files: Vec<&str> = scored_files
         .iter()
@@ -318,7 +322,11 @@ pub async fn handle_explore(
             .map(|(n, _)| format!("{} ({})", n.name, format_kind(&n.kind)))
             .collect();
 
-        let file_header = format!("#### `{file_path}` — {}\n\n", sym_names.join(", "));
+        let file_header = format!(
+            "#### `{}` — {}\n\n",
+            crate::tools::rel(file_path, root_ref),
+            sym_names.join(", ")
+        );
         out.push_str(&file_header);
 
         let mut file_chars = file_header.len();
@@ -347,7 +355,10 @@ pub async fn handle_explore(
             let cap = remaining_file.min(remaining_total);
 
             let chunk = if numbered.len() > cap {
-                format!("{}\n...(trimmed)...\n", &numbered[..cap])
+                format!(
+                    "{}\n...(trimmed)...\n",
+                    crate::tools::truncate_str(&numbered, cap)
+                )
             } else {
                 numbered
             };
@@ -363,7 +374,7 @@ pub async fn handle_explore(
     if budget.include_additional_files && !additional_files.is_empty() {
         out.push_str("### Additional Relevant Files (not shown)\n\n");
         for path in additional_files.iter().take(10) {
-            out.push_str(&format!("- `{path}`\n"));
+            out.push_str(&format!("- `{}`\n", crate::tools::rel(path, root_ref)));
         }
         out.push('\n');
     }
@@ -389,9 +400,12 @@ pub async fn handle_explore(
         ));
     }
 
-    // Final truncation safety net
+    // Final truncation safety net (char-boundary-safe)
     if out.len() > budget.max_output_chars + 200 {
-        out.truncate(budget.max_output_chars);
+        out.truncate(crate::tools::floor_char_boundary(
+            &out,
+            budget.max_output_chars,
+        ));
         out.push_str("\n...(output truncated)...\n");
     }
 

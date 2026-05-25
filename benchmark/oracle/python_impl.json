@@ -1,0 +1,15 @@
+{
+  "case_id": "python_impl",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "impl",
+  "symbol": "SessionInterface",
+  "feature_query": "",
+  "required_symbols": [],
+  "required_files": [
+    "sessions.py"
+  ],
+  "source": "grep:impl-def-pattern (no implements edge in lang)",
+  "notes": "lang has no implements/extends edges; required = source files with a definition implementing/subtyping SessionInterface (pattern: class\\s+\\w+\\s*\\([^)]*\\bSessionInterface\\b); hand-verified",
+  "min_required": 1
+}

@@ -1,0 +1,20 @@
+{
+  "case_id": "typescript_feature",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "feature",
+  "symbol": "ZodType",
+  "feature_query": "how does schema parsing and validation work",
+  "required_symbols": [
+    "ZodType",
+    "parse",
+    "safeParse"
+  ],
+  "required_files": [
+    "parse.ts",
+    "schemas.ts"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['ZodType', 'parse', 'safeParse']",
+  "min_required": 5
+}

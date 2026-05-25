@@ -1,0 +1,25 @@
+{
+  "case_id": "python_callees",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "callees",
+  "symbol": "save_session",
+  "feature_query": "",
+  "required_symbols": [
+    "dumps",
+    "get_cookie_domain",
+    "get_cookie_httponly",
+    "get_cookie_name",
+    "get_cookie_partitioned",
+    "get_cookie_path",
+    "get_cookie_samesite",
+    "get_signing_serializer"
+  ],
+  "required_files": [
+    "sessions.py",
+    "tag.py"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "11 distinct callees total; froze top 8",
+  "min_required": 10
+}

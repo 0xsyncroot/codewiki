@@ -1,0 +1,18 @@
+{
+  "case_id": "typescript_locate",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "locate",
+  "symbol": "safeParse",
+  "feature_query": "",
+  "required_symbols": [
+    "safeParse"
+  ],
+  "required_files": [
+    "parse.ts",
+    "types.ts"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "3 non-test def site(s); answer must name safeParse at its source file",
+  "min_required": 3
+}

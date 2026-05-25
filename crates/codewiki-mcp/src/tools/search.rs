@@ -35,7 +35,11 @@ pub async fn handle_search(
         return Ok(format!("No results found for '{query}'."));
     }
 
+    let root = handle.root_path();
+    let root_ref = root.as_deref();
+
     let mut out = format!("## Search Results for '{query}'\n\n");
+    out.push_str(&crate::tools::root_header(root_ref));
     for (i, sr) in results.iter().enumerate() {
         let n = &sr.node;
         out.push_str(&format!(
@@ -44,7 +48,7 @@ pub async fn handle_search(
             n.name,
             format_kind(&n.kind),
             format_language(&n.language),
-            n.file_path,
+            crate::tools::rel(&n.file_path, root_ref),
             n.start_line,
         ));
         if let Some(sig) = &n.signature {
@@ -65,13 +69,21 @@ pub async fn handle_search(
 }
 
 fn parse_kind_filter(kind: &str) -> Option<NodeKind> {
+    // Keep this in lockstep with the `kind` enum advertised in tools/mod.rs and
+    // with `format_kind` below — an enum value with no arm here silently no-ops.
     match kind {
         "function" => Some(NodeKind::Function),
         "method" => Some(NodeKind::Method),
         "class" => Some(NodeKind::Class),
+        "struct" => Some(NodeKind::Struct),
+        "enum" => Some(NodeKind::Enum),
+        "trait" => Some(NodeKind::Trait),
         "interface" => Some(NodeKind::Interface),
         "type" => Some(NodeKind::Type),
+        "namespace" => Some(NodeKind::Namespace),
         "variable" => Some(NodeKind::Variable),
+        "constant" => Some(NodeKind::Constant),
+        "property" => Some(NodeKind::Property),
         "route" => Some(NodeKind::Route),
         "component" => Some(NodeKind::Component),
         _ => None,

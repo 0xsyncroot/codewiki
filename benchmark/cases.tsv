@@ -1,0 +1,67 @@
+# benchmark/cases.tsv — agent-savings case matrix (Wave 0, D2 design)
+# 6 archetypes x 8 languages = 48 cases over real cold-clonable repos.
+#
+# Archetype -> CodeWiki tool / baseline shape:
+#   locate   "where is X defined"          CW: query        | BL: grep def + read 1 file
+#   callers  "what calls X"                CW: callers      | BL: grep usages + read N files
+#   callees  "what does X call"            CW: callees      | BL: read X's body + grep
+#   feature  "how does <feature> work"     CW: context (x3) | BL: grep feature regex + read N files
+#   impl     "implementers/subtypes of X"  CW: impact       | BL: grep interface + read N impl files
+#   blast    "what breaks if X changes"    CW: impact       | BL: grep symbol + read N dependant files
+#
+# Columns (TAB-separated):
+#   lang  repo  archetype  symbol  feature_query  baseline_regex  oracle_anchors
+# - symbol         : the named symbol the CW tool is invoked with (and grep baseline targets)
+# - feature_query  : NL task for the `feature` archetype's `context` call (empty otherwise)
+# - baseline_regex : the grep -E pattern the baseline agent would run for this task
+# - oracle_anchors : '|'-joined anchor symbol names for the `feature` archetype oracle
+#                    (empty for other archetypes; their oracle is derived from the graph)
+lang	repo	archetype	symbol	feature_query	baseline_regex	oracle_anchors
+python	flask	locate	Flask		\bclass Flask\b
+python	flask	callers	add_url_rule		\badd_url_rule\b
+python	flask	callees	save_session		\bsave_session\b
+python	flask	feature	dispatch_request	how does request dispatching and routing work	dispatch_request|full_dispatch_request|add_url_rule|url_for	dispatch_request|full_dispatch_request|add_url_rule
+python	flask	impl	SessionInterface		class .*SessionInterface
+python	flask	blast	Flask		\bFlask\b
+rust	ripgrep	locate	search_parallel		fn search_parallel
+rust	ripgrep	callers	write_line_term		\bwrite_line_term\b
+rust	ripgrep	callees	search_parallel		\bsearch_parallel\b
+rust	ripgrep	feature	Searcher	how does parallel searching across files work	search_parallel|Searcher|SearchWorker|search_path	search_parallel|Searcher|SearchWorker
+rust	ripgrep	impl	Flag		impl Flag for
+rust	ripgrep	blast	build		\bbuild\b
+javascript	express	locate	init		exports.init
+javascript	express	callers	send		\bsend\b
+javascript	express	callees	init		\binit\b
+javascript	express	feature	handle	how does the router match and dispatch requests	Router|handle|match|dispatch	Router|handle|match
+javascript	express	impl	View		new View
+javascript	express	blast	send		\bsend\b
+typescript	zod	locate	safeParse		safeParse
+typescript	zod	callers	_parseSync		\b_parseSync\b
+typescript	zod	callees	convertBaseSchema		convertBaseSchema
+typescript	zod	feature	ZodType	how does schema parsing and validation work	ZodType|parse|safeParse|_parse	ZodType|parse|safeParse
+typescript	zod	impl	ZodType		extends ZodType
+typescript	zod	blast	safeParse		\bsafeParse\b
+java	gson	locate	fromJson		public .* fromJson
+java	gson	callers	fillBuffer		\bfillBuffer\b
+java	gson	callees	write		\bwrite\b
+java	gson	feature	TypeAdapter	how does type adaptation serialize and deserialize objects	TypeAdapter|fromJson|toJson|read	TypeAdapter|fromJson|toJson
+java	gson	impl	JsonSerializer		implements JsonSerializer
+java	gson	blast	TypeAdapter		\bTypeAdapter\b
+cpp	json	locate	sax_parse		sax_parse
+cpp	json	callers	get_token		\bget_token\b
+cpp	json	callees	sax_parse		\bsax_parse\b
+cpp	json	feature	parse	how does JSON parsing produce values	parse|sax_parse|parse_internal|json_value	parse|sax_parse
+cpp	json	impl	conjunction		struct conjunction
+cpp	json	blast	value		\bvalue\b
+go	gin	locate	RouterGroup		type RouterGroup
+go	gin	callers	New		\bNew\b
+go	gin	callees	setWithProperType		setWithProperType
+go	gin	feature	RouterGroup	how does route registration and grouping work	RouterGroup|Group|handle|addRoute	RouterGroup|Group|handle
+go	gin	impl	Render		\bRender\b
+go	gin	blast	Context		\bContext\b
+csharp	eShopOnWeb	locate	BasketService		class BasketService
+csharp	eShopOnWeb	callers	AddItem		\bAddItem\b
+csharp	eShopOnWeb	callees	GetCatalogItems		GetCatalogItems
+csharp	eShopOnWeb	feature	BasketService	how does the basket service add and manage items	BasketService|AddItem|IBasketService|SetQuantities	BasketService|AddItem|IBasketService
+csharp	eShopOnWeb	impl	IAggregateRoot		IAggregateRoot
+csharp	eShopOnWeb	blast	AddItem		\bAddItem\b

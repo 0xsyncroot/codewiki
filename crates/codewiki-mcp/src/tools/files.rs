@@ -51,33 +51,53 @@ pub async fn handle_files(
         return Ok("No indexed files found matching the filter.".to_string());
     }
 
-    let out = match format.as_str() {
-        "flat" => format_flat(&files, include_metadata),
-        "grouped" => format_grouped(&files, include_metadata),
-        _ => format_tree(&files, include_metadata, max_depth),
+    let root = handle.root_path();
+    let root_ref = root.as_deref();
+
+    let body = match format.as_str() {
+        "flat" => format_flat(&files, include_metadata, root_ref),
+        "grouped" => format_grouped(&files, include_metadata, root_ref),
+        _ => format_tree(&files, include_metadata, max_depth, root_ref),
     };
+
+    let mut out = crate::tools::root_header(root_ref);
+    out.push_str(&body);
 
     Ok(crate::tools::truncate_output(out, MAX_OUTPUT_LENGTH))
 }
 
-fn format_flat(files: &[codewiki_core::FileRecord], include_metadata: bool) -> String {
+/// Convert a `FileRecord` path to a forward-slash-normalized string, then strip
+/// the workspace root so the tree/list renders workspace-relative.
+fn rel_path(f: &codewiki_core::FileRecord, root: Option<&str>) -> String {
+    let normalized = f.path.to_string_lossy().replace('\\', "/");
+    crate::tools::rel(&normalized, root).to_string()
+}
+
+fn format_flat(
+    files: &[codewiki_core::FileRecord],
+    include_metadata: bool,
+    root: Option<&str>,
+) -> String {
     let mut out = format!("## Files ({} total)\n\n", files.len());
     for f in files {
+        let p = rel_path(f, root);
         if include_metadata {
             out.push_str(&format!(
                 "- `{}` ({}, {} nodes)\n",
-                f.path.display(),
-                f.language,
-                f.node_count,
+                p, f.language, f.node_count,
             ));
         } else {
-            out.push_str(&format!("- `{}`\n", f.path.display()));
+            out.push_str(&format!("- `{p}`\n"));
         }
     }
     out
 }
 
-fn format_grouped(files: &[codewiki_core::FileRecord], include_metadata: bool) -> String {
+fn format_grouped(
+    files: &[codewiki_core::FileRecord],
+    include_metadata: bool,
+    root: Option<&str>,
+) -> String {
     let mut by_lang: HashMap<&str, Vec<&codewiki_core::FileRecord>> = HashMap::new();
     for f in files {
         by_lang.entry(f.language.as_str()).or_default().push(f);
@@ -91,14 +111,11 @@ fn format_grouped(files: &[codewiki_core::FileRecord], include_metadata: bool) -
         let group = &by_lang[lang];
         out.push_str(&format!("### {} ({})\n\n", lang, group.len()));
         for f in group.iter() {
+            let p = rel_path(f, root);
             if include_metadata {
-                out.push_str(&format!(
-                    "- `{}` ({} nodes)\n",
-                    f.path.display(),
-                    f.node_count
-                ));
+                out.push_str(&format!("- `{}` ({} nodes)\n", p, f.node_count));
             } else {
-                out.push_str(&format!("- `{}`\n", f.path.display()));
+                out.push_str(&format!("- `{p}`\n"));
             }
         }
         out.push('\n');
@@ -110,23 +127,32 @@ fn format_tree(
     files: &[codewiki_core::FileRecord],
     include_metadata: bool,
     max_depth: Option<usize>,
+    root: Option<&str>,
 ) -> String {
-    // Build directory tree
-    let mut tree: HashMap<String, Vec<&codewiki_core::FileRecord>> = HashMap::new();
+    // Build directory tree keyed on the ROOT-RELATIVE, forward-slash-normalized
+    // directory path. Indent depth is derived from '/' count in that relative
+    // path — NOT MAIN_SEPARATOR on the absolute path (which over-counts the
+    // root's own segments on Unix and is always 0 on Windows where the
+    // separator is '\').
+    let mut tree: HashMap<String, Vec<(String, &codewiki_core::FileRecord)>> = HashMap::new();
     for f in files {
-        let dir = f
-            .path
-            .parent()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| ".".to_string());
-        // Apply max_depth filter
+        let rel = rel_path(f, root);
+        let (dir, fname) = match rel.rsplit_once('/') {
+            Some((d, name)) => (d.to_string(), name.to_string()),
+            None => (".".to_string(), rel.clone()),
+        };
+        // Apply max_depth filter on the relative dir's '/' depth.
         if let Some(max) = max_depth {
-            let depth = dir.matches(std::path::MAIN_SEPARATOR).count();
+            let depth = if dir == "." {
+                0
+            } else {
+                dir.matches('/').count() + 1
+            };
             if depth > max {
                 continue;
             }
         }
-        tree.entry(dir).or_default().push(f);
+        tree.entry(dir).or_default().push((fname, f));
     }
 
     let mut out = format!("## File Tree ({} total)\n\n", files.len());
@@ -138,16 +164,11 @@ fn format_tree(
         let depth = if dir == "." {
             0
         } else {
-            dir.matches(std::path::MAIN_SEPARATOR).count() + 1
+            dir.matches('/').count() + 1
         };
         let indent = "  ".repeat(depth);
         out.push_str(&format!("{indent}**{dir}/**\n"));
-        for f in dir_files.iter() {
-            let fname = f
-                .path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| f.path.to_string_lossy().to_string());
+        for (fname, f) in dir_files.iter() {
             if include_metadata {
                 out.push_str(&format!(
                     "{indent}  - `{fname}` ({}, {} nodes)\n",
@@ -216,5 +237,39 @@ mod tests {
     fn glob_question_mark() {
         assert!(glob_match("foo?.ts", "fooX.ts"));
         assert!(!glob_match("foo?.ts", "foo.ts"));
+    }
+
+    fn fr(path: &str) -> codewiki_core::FileRecord {
+        codewiki_core::FileRecord {
+            path: std::path::PathBuf::from(path),
+            language: "Rust".to_string(),
+            node_count: 1,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn tree_indent_from_root_relative_slash_depth() {
+        // With the root stripped, indent depth = '/' count in the relative dir,
+        // not the absolute path's separator count.
+        let files = vec![fr("/home/u/proj/src/a/b.rs")];
+        let out = format_tree(&files, false, None, Some("/home/u/proj"));
+        // dir is "src/a" (depth 2) → file line indented 6 spaces (2*depth+2).
+        assert!(out.contains("**src/a/**"), "got:\n{out}");
+        assert!(
+            out.contains("      - `b.rs`"),
+            "expected 6-space indent (depth 2), got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn tree_root_relative_no_absolute_prefix() {
+        let files = vec![fr("/home/u/proj/src/main.rs")];
+        let out = format_tree(&files, false, None, Some("/home/u/proj"));
+        assert!(
+            !out.contains("/home/u/proj"),
+            "absolute root leaked:\n{out}"
+        );
+        assert!(out.contains("**src/**"), "got:\n{out}");
     }
 }

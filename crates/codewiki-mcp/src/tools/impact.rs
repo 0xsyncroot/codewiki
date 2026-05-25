@@ -56,7 +56,11 @@ pub async fn handle_impact(
         ));
     }
 
-    let mut out = format!("## Impact Radius of '{}' (depth {})\n\n", symbol, depth);
+    let root = handle.root_path();
+    let root_ref = root.as_deref();
+
+    let mut out = format!("## Impact Radius of '{symbol}' (depth {depth})\n\n");
+    out.push_str(&crate::tools::root_header(root_ref));
     out.push_str(&format!(
         "**{} affected symbols** across {} files, {} edges\n\n",
         all_nodes.len(),
@@ -77,7 +81,7 @@ pub async fn handle_impact(
     files.sort();
 
     for file in &files {
-        out.push_str(&format!("### `{file}`\n\n"));
+        out.push_str(&format!("### `{}`\n\n", crate::tools::rel(file, root_ref)));
         let mut nodes = by_file[file].clone();
         nodes.sort_by_key(|n| n.start_line);
         for node in nodes {

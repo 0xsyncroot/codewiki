@@ -34,3 +34,15 @@ byte_identical         = true
 # MCP tool p50 latency: Rust must be within ±20% of TS (not faster — predictable)
 p50_max_fraction_above_ts = 0.20
 p50_max_fraction_below_ts = 0.20
+
+[context]
+# codewiki_context relevance floors, enforced by parity/context-relevance/run.py against
+# the FROZEN synthetic-120 gating corpus (roots@k, k=5). These are regression floors:
+# the AFTER run (post Wave-3 relevance tuning) must not drop BELOW them. The BEFORE
+# baseline on the pinned v0.1.1 binary measured (2026-05-25, MCP path):
+#   roots@5 precision = 0.33   roots@5 recall = 0.56   nodes recall = 0.87
+# Floors sit just under those so BEFORE passes; Wave 3 (deferred) is expected to raise
+# precision/recall well above. nodes_recall is already strong, so its floor is firm.
+roots_precision_min = 0.30
+roots_recall_min    = 0.52
+nodes_recall_min    = 0.83

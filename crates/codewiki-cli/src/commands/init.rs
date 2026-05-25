@@ -30,6 +30,11 @@ pub fn run(path: Option<PathBuf>, no_index: bool) -> Result<()> {
     let conn = open(&db_path)?;
     tracing::debug!(db = %db_path.display(), "database initialised");
 
+    // Persist the project root so query tools render workspace-relative paths
+    // (stored paths are forward-slash normalized on every platform).
+    let root_norm = root.to_string_lossy().replace('\\', "/");
+    codewiki_storage::queries::meta::set_metadata(&conn, "root_path", &root_norm)?;
+
     if no_index {
         // DB is created but empty — no indexing.
         println!("Initialized (--no-index: skipped indexing).");

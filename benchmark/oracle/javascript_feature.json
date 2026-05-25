@@ -1,0 +1,19 @@
+{
+  "case_id": "javascript_feature",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "feature",
+  "symbol": "handle",
+  "feature_query": "how does the router match and dispatch requests",
+  "required_symbols": [
+    "Router",
+    "handle"
+  ],
+  "required_files": [
+    "application.js",
+    "express.js"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['Router', 'handle', 'match']",
+  "min_required": 4
+}

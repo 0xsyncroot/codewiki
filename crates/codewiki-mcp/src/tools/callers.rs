@@ -3,7 +3,7 @@
 //! Find all functions/methods that call a specific symbol.
 
 use crate::input_limits::validate_query;
-use crate::tools::{search::format_kind, MAX_OUTPUT_LENGTH};
+use crate::tools::MAX_OUTPUT_LENGTH;
 use codewiki_core::CodeWikiError;
 use codewiki_storage::{QueryHandle, SearchOptions};
 use std::collections::HashSet;
@@ -48,19 +48,14 @@ pub async fn handle_callers(
         return Ok(format!("No callers found for '{symbol}'."));
     }
 
-    caller_nodes.truncate(limit);
-
-    let mut out = format!("## Callers of '{}'\n\n", symbol);
-    for (i, node) in caller_nodes.iter().enumerate() {
-        out.push_str(&format!(
-            "{}. **{}** ({}) in `{}:{}`\n",
-            i + 1,
-            node.name,
-            format_kind(&node.kind),
-            node.file_path,
-            node.start_line,
-        ));
-    }
+    let root = handle.root_path();
+    let mut out = format!("## Callers of '{symbol}'\n\n");
+    out.push_str(&crate::tools::root_header(root.as_deref()));
+    out.push_str(&crate::tools::render_neighbor_list(
+        &caller_nodes,
+        limit,
+        root.as_deref(),
+    ));
 
     Ok(crate::tools::truncate_output(out, MAX_OUTPUT_LENGTH))
 }

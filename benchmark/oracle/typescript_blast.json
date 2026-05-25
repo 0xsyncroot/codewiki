@@ -1,0 +1,20 @@
+{
+  "case_id": "typescript_blast",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "blast",
+  "symbol": "safeParse",
+  "feature_query": "",
+  "required_symbols": [
+    "_parse",
+    "isNullable",
+    "isOptional",
+    "parse"
+  ],
+  "required_files": [
+    "types.ts"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "4 direct dependants; froze top 4 as must-contain core",
+  "min_required": 5
+}

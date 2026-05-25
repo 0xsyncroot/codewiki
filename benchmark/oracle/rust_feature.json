@@ -1,0 +1,21 @@
+{
+  "case_id": "rust_feature",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "feature",
+  "symbol": "Searcher",
+  "feature_query": "how does parallel searching across files work",
+  "required_symbols": [
+    "search_parallel",
+    "Searcher",
+    "SearchWorker"
+  ],
+  "required_files": [
+    "main.rs",
+    "mod.rs",
+    "search.rs"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['search_parallel', 'Searcher', 'SearchWorker']",
+  "min_required": 6
+}

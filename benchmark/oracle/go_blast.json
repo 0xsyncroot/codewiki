@@ -1,0 +1,22 @@
+{
+  "case_id": "go_blast",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "blast",
+  "symbol": "Context",
+  "feature_query": "",
+  "required_symbols": [
+    "ClientIP",
+    "Deadline",
+    "Done",
+    "Err",
+    "Value",
+    "hasRequestContext"
+  ],
+  "required_files": [
+    "context.go"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "6 direct dependants; froze top 6 as must-contain core",
+  "min_required": 7
+}

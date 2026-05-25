@@ -1,0 +1,417 @@
+{
+  "k": 5,
+  "binary": "/tmp/codewiki-before-opt",
+  "corpora": {
+    "synthetic-120": {
+      "n": 16,
+      "gating": true,
+      "mean_precision": 0.3271,
+      "mean_roots_recall": 0.5625,
+      "mean_nodes_recall": 0.8656,
+      "cases": [
+        {
+          "id": "auth_flow",
+          "precision": 0.3333,
+          "roots_recall": 0.3333,
+          "nodes_recall": 0.8,
+          "topk_roots": [
+            "Handler",
+            "NetworkSession",
+            "authenticate"
+          ],
+          "expected_roots": [
+            "AuthProvider",
+            "JwtAuthProvider",
+            "authenticate"
+          ],
+          "missing_roots": [
+            "AuthProvider",
+            "JwtAuthProvider"
+          ],
+          "missing_nodes": [
+            "createAuthProvider"
+          ]
+        },
+        {
+          "id": "graph_traversal",
+          "precision": 0.4,
+          "roots_recall": 0.6667,
+          "nodes_recall": 0.8333,
+          "topk_roots": [
+            "Graph",
+            "NetworkSession",
+            "Traversal",
+            "dfs",
+            "dfs_visits_all_reachable"
+          ],
+          "expected_roots": [
+            "Graph",
+            "dfs",
+            "traverse"
+          ],
+          "missing_roots": [
+            "traverse"
+          ],
+          "missing_nodes": [
+            "traverse"
+          ]
+        },
+        {
+          "id": "config_loading",
+          "precision": 0.0,
+          "roots_recall": 0.0,
+          "nodes_recall": 0.0,
+          "topk_roots": [
+            "Handler",
+            "NetworkSession"
+          ],
+          "expected_roots": [
+            "IConfigProvider",
+            "EnvironmentConfigProvider",
+            "Get"
+          ],
+          "missing_roots": [
+            "IConfigProvider",
+            "EnvironmentConfigProvider",
+            "Get"
+          ],
+          "missing_nodes": [
+            "IConfigProvider",
+            "EnvironmentConfigProvider",
+            "DictionaryConfigProvider",
+            "Get",
+            "TryGet"
+          ]
+        },
+        {
+          "id": "user_model_repository",
+          "precision": 0.4,
+          "roots_recall": 0.6667,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "Handler",
+            "User",
+            "UserRepository",
+            "authenticate",
+            "serialize_users"
+          ],
+          "expected_roots": [
+            "User",
+            "UserRepository",
+            "Address"
+          ],
+          "missing_roots": [
+            "Address"
+          ],
+          "missing_nodes": []
+        },
+        {
+          "id": "animal_hierarchy",
+          "precision": 0.5,
+          "roots_recall": 0.6667,
+          "nodes_recall": 0.6667,
+          "topk_roots": [
+            "Animal",
+            "AnimalShelter",
+            "addAnimal",
+            "animals"
+          ],
+          "expected_roots": [
+            "Animal",
+            "Dog",
+            "AnimalShelter"
+          ],
+          "missing_roots": [
+            "Dog"
+          ],
+          "missing_nodes": [
+            "Dog",
+            "getAnimals"
+          ]
+        },
+        {
+          "id": "http_server_routing",
+          "precision": 0.4,
+          "roots_recall": 0.6667,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "ANY /",
+            "Handler",
+            "Server",
+            "Start",
+            "authenticate"
+          ],
+          "expected_roots": [
+            "Server",
+            "Handler",
+            "NewServer"
+          ],
+          "missing_roots": [
+            "NewServer"
+          ],
+          "missing_nodes": []
+        },
+        {
+          "id": "greeting",
+          "precision": 0.25,
+          "roots_recall": 0.3333,
+          "nodes_recall": 0.75,
+          "topk_roots": [
+            "ANY /",
+            "Greeter",
+            "GreetingStyle",
+            "authenticate"
+          ],
+          "expected_roots": [
+            "Greeter",
+            "FormalGreeter",
+            "makeGreeter"
+          ],
+          "missing_roots": [
+            "FormalGreeter",
+            "makeGreeter"
+          ],
+          "missing_nodes": [
+            "greet"
+          ]
+        },
+        {
+          "id": "networking_client",
+          "precision": 0.4,
+          "roots_recall": 0.6667,
+          "nodes_recall": 0.8,
+          "topk_roots": [
+            "API",
+            "APIClient",
+            "APIError",
+            "Client",
+            "NetworkSession"
+          ],
+          "expected_roots": [
+            "APIClient",
+            "NetworkSession",
+            "URLSession"
+          ],
+          "missing_roots": [
+            "URLSession"
+          ],
+          "missing_nodes": [
+            "URLSession"
+          ]
+        },
+        {
+          "id": "calculator_arithmetic",
+          "precision": 0.0,
+          "roots_recall": 0.0,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "ANY /",
+            "Handler",
+            "authenticate"
+          ],
+          "expected_roots": [
+            "add",
+            "divide"
+          ],
+          "missing_roots": [
+            "add",
+            "divide"
+          ],
+          "missing_nodes": []
+        },
+        {
+          "id": "matrix_math",
+          "precision": 0.5,
+          "roots_recall": 1.0,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "Matrix",
+            "T"
+          ],
+          "expected_roots": [
+            "Matrix"
+          ],
+          "missing_roots": [],
+          "missing_nodes": []
+        },
+        {
+          "id": "cache_retry_utils",
+          "precision": 0.5,
+          "roots_recall": 1.0,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "Cache",
+            "NetworkSession",
+            "authenticate",
+            "retry"
+          ],
+          "expected_roots": [
+            "Cache",
+            "retry"
+          ],
+          "missing_roots": [],
+          "missing_nodes": []
+        },
+        {
+          "id": "rest_api_client_ruby",
+          "precision": 0.25,
+          "roots_recall": 0.5,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "API",
+            "Get",
+            "get",
+            "post"
+          ],
+          "expected_roots": [
+            "Client",
+            "API"
+          ],
+          "missing_roots": [
+            "Client"
+          ],
+          "missing_nodes": []
+        },
+        {
+          "id": "jwt_decode",
+          "precision": 0.4,
+          "roots_recall": 0.6667,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "Handler",
+            "JwtAuthProvider",
+            "authenticate",
+            "decode",
+            "getUser"
+          ],
+          "expected_roots": [
+            "JwtAuthProvider",
+            "verify",
+            "decode"
+          ],
+          "missing_roots": [
+            "verify"
+          ],
+          "missing_nodes": []
+        },
+        {
+          "id": "dictionary_config",
+          "precision": 0.2,
+          "roots_recall": 0.3333,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "AuthProvider",
+            "DictionaryConfigProvider",
+            "IConfigProvider",
+            "JwtAuthProvider",
+            "createAuthProvider"
+          ],
+          "expected_roots": [
+            "DictionaryConfigProvider",
+            "Get",
+            "TryGet"
+          ],
+          "missing_roots": [
+            "Get",
+            "TryGet"
+          ],
+          "missing_nodes": []
+        },
+        {
+          "id": "widget_counter",
+          "precision": 0.5,
+          "roots_recall": 1.0,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "authenticate",
+            "increment",
+            "reset",
+            "widget"
+          ],
+          "expected_roots": [
+            "increment",
+            "reset"
+          ],
+          "missing_roots": [],
+          "missing_nodes": []
+        },
+        {
+          "id": "user_serialization",
+          "precision": 0.2,
+          "roots_recall": 0.5,
+          "nodes_recall": 1.0,
+          "topk_roots": [
+            "Handler",
+            "User",
+            "UserRepository",
+            "__init__",
+            "from_dict"
+          ],
+          "expected_roots": [
+            "User",
+            "serialize_users"
+          ],
+          "missing_roots": [
+            "serialize_users"
+          ],
+          "missing_nodes": []
+        }
+      ]
+    },
+    "self-crate": {
+      "n": 2,
+      "gating": false,
+      "mean_precision": 0.2666,
+      "mean_roots_recall": 0.5,
+      "mean_nodes_recall": 0.4166,
+      "cases": [
+        {
+          "id": "graph_storage",
+          "precision": 0.3333,
+          "roots_recall": 0.5,
+          "nodes_recall": 0.3333,
+          "topk_roots": [
+            "QueryHandle",
+            "store",
+            "store_batch"
+          ],
+          "expected_roots": [
+            "SqliteStorage",
+            "store_batch"
+          ],
+          "missing_roots": [
+            "SqliteStorage"
+          ],
+          "missing_nodes": [
+            "get_stats",
+            "find_relevant_context"
+          ]
+        },
+        {
+          "id": "mcp_tools",
+          "precision": 0.2,
+          "roots_recall": 0.5,
+          "nodes_recall": 0.5,
+          "topk_roots": [
+            "bench_mcp_tools",
+            "dispatch",
+            "dispatch_unknown_tool_returns_error",
+            "list_tools",
+            "render_re"
+          ],
+          "expected_roots": [
+            "handle_tool_call",
+            "list_tools"
+          ],
+          "missing_roots": [
+            "handle_tool_call"
+          ],
+          "missing_nodes": [
+            "handle_tool_call"
+          ]
+        }
+      ]
+    }
+  },
+  "gate_failures": []
+}

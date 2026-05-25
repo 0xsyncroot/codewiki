@@ -3,7 +3,7 @@
 //! Find all functions/methods that a specific symbol calls.
 
 use crate::input_limits::validate_query;
-use crate::tools::{search::format_kind, MAX_OUTPUT_LENGTH};
+use crate::tools::MAX_OUTPUT_LENGTH;
 use codewiki_core::CodeWikiError;
 use codewiki_storage::{QueryHandle, SearchOptions};
 use std::collections::HashSet;
@@ -48,19 +48,14 @@ pub async fn handle_callees(
         return Ok(format!("No callees found for '{symbol}'."));
     }
 
-    callee_nodes.truncate(limit);
-
-    let mut out = format!("## Callees of '{}'\n\n", symbol);
-    for (i, node) in callee_nodes.iter().enumerate() {
-        out.push_str(&format!(
-            "{}. **{}** ({}) in `{}:{}`\n",
-            i + 1,
-            node.name,
-            format_kind(&node.kind),
-            node.file_path,
-            node.start_line,
-        ));
-    }
+    let root = handle.root_path();
+    let mut out = format!("## Callees of '{symbol}'\n\n");
+    out.push_str(&crate::tools::root_header(root.as_deref()));
+    out.push_str(&crate::tools::render_neighbor_list(
+        &callee_nodes,
+        limit,
+        root.as_deref(),
+    ));
 
     Ok(crate::tools::truncate_output(out, MAX_OUTPUT_LENGTH))
 }

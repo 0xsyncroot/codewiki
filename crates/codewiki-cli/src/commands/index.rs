@@ -57,6 +57,10 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
     let root = resolve_root(path);
     let storage = Arc::new(open_storage(&root)?);
 
+    // Persist the project root so query tools render workspace-relative paths
+    // (stored paths are forward-slash normalized on every platform).
+    storage.set_root_path(&root.to_string_lossy().replace('\\', "/"))?;
+
     tracing::info!(root = %root.display(), "starting full index");
 
     let bar = ShimmerProgress::new();

@@ -27,6 +27,17 @@ answer. Reach for raw Read/Grep only to confirm a specific detail
 codewiki didn't cover. A direct codewiki answer is typically a handful
 of calls; a grep/read exploration is dozens.
 
+## First call — decision tree
+
+1. A whole task / feature / bug / "how does X work" / unfamiliar area?
+   → `codewiki_context` (PRIMARY). Then `codewiki_explore` for the source.
+2. You already know the ONE symbol name and want its detail/source?
+   → `codewiki_node` (add includeCallers/includeCallees to fold in neighbors).
+3. Just locating a symbol by name? → `codewiki_search` (it already returns
+   signature + docstring — no follow-up `node` needed).
+4. "What's the blast radius / full reach of changing X?" → `codewiki_impact`.
+5. Exploring the file/folder layout? → `codewiki_files`.
+
 ## Tool selection by intent
 
 - **"What is the symbol named X?"** → `codewiki_search`
@@ -47,10 +58,18 @@ of calls; a grep/read exploration is dozens.
 
 ## Anti-patterns
 
+- **Don't call `codewiki_node` for a signature `codewiki_search` already returned.** Search hits carry location + signature + the first docstring line; a follow-up `node` just to read the signature is a wasted round-trip. Use `node` only when you need the body, full docstring, or its one-hop neighbors.
+- **`callers` returning `(none)` does NOT mean "unused".** `codewiki_callers` resolves to the symbol's TOP match and shows direct callers of that one definition; interface/trait implementors, transitive use, and other overloads are invisible to it. To judge whether a change is safe, use `codewiki_impact`.
 - **Don't grep first** when looking up a symbol by name — `codewiki_search` is faster and returns kind + location + signature.
 - **Don't chain `codewiki_search` + `codewiki_node`** when you just want context — `codewiki_context` is one round-trip.
 - **Don't loop `codewiki_node` over many symbols** — one `codewiki_explore` call returns them all grouped by file, while each separate call re-reads the whole context and costs far more. Use `codewiki_node` for a single symbol.
 - **Don't query the index immediately after editing a file** — the watcher needs ~500ms to debounce + sync. Wait for the next turn.
+
+## Working on a feature request?
+
+CodeWiki provides CODE context only. When a task reads like "add / create /
+implement / support X", confirm UX requirements, edge cases, and acceptance
+criteria with the user before implementing — the index can't tell you those.
 
 ## Limitations
 

@@ -1,0 +1,17 @@
+{
+  "case_id": "java_impl",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "impl",
+  "symbol": "JsonSerializer",
+  "feature_query": "",
+  "required_symbols": [
+    "ProtoTypeAdapter"
+  ],
+  "required_files": [
+    "ProtoTypeAdapter.java"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "1 implementers; froze top 1",
+  "min_required": 2
+}

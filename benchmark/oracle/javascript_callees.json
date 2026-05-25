@@ -1,0 +1,17 @@
+{
+  "case_id": "javascript_callees",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "callees",
+  "symbol": "init",
+  "feature_query": "",
+  "required_symbols": [
+    "defaultConfiguration"
+  ],
+  "required_files": [
+    "application.js"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "1 distinct callees total; froze top 1",
+  "min_required": 2
+}

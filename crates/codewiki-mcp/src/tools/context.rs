@@ -8,26 +8,10 @@
 //! - OPT-15: ### Related Files section listing unique file paths not in entry files
 
 use crate::input_limits::validate_query;
-use crate::tools::{search::format_kind, MAX_OUTPUT_LENGTH};
+use crate::tools::{search::format_kind, truncate_str, MAX_OUTPUT_LENGTH};
 use codewiki_core::{CodeWikiError, NodeKind};
 use codewiki_storage::{FindOpts, QueryHandle};
 use std::sync::Arc;
-
-/// Keywords that suggest this is a feature-request query.
-const FEATURE_KEYWORDS: &[&str] = &[
-    "add",
-    "create",
-    "implement",
-    "build",
-    "enable",
-    "allow",
-    "new",
-    "support",
-    "want",
-];
-
-/// Keywords that disqualify a query from the feature-request reminder.
-const EXCLUDE_KEYWORDS: &[&str] = &["fix", "bug", "error", "broken", "crash", "how does", "find"];
 
 /// Container node kinds — don't include their full code in context output.
 const CONTAINER_KINDS: &[NodeKind] = &[
@@ -65,6 +49,10 @@ pub async fn handle_context(
         out.push_str("\nTip: Make sure the project is indexed with `codewiki index`.\n");
         return Ok(out);
     }
+
+    let root = handle.root_path();
+    let root_ref = root.as_deref();
+    out.push_str(&crate::tools::root_header(root_ref));
 
     // Collect entry points (roots) and all nodes
     let entry_ids: std::collections::HashSet<_> = subgraph.roots.iter().collect();
@@ -115,10 +103,10 @@ pub async fn handle_context(
         out.push_str("### Entry Points\n\n");
         for node in &entry_nodes {
             out.push_str(&format!(
-                "- **{}** ({}) in `{}:{}` \n",
+                "- **{}** ({}) in `{}:{}`\n",
                 node.name,
                 format_kind(&node.kind),
-                node.file_path,
+                crate::tools::rel(&node.file_path, root_ref),
                 node.start_line,
             ));
             if let Some(sig) = &node.signature {
@@ -136,22 +124,48 @@ pub async fn handle_context(
         out.push('\n');
     }
 
-    // Related symbols section
+    // Related symbols section — dedup by (name, file, line), skip File nodes,
+    // and group by file so the path is amortized across its symbols.
     if !other_nodes.is_empty() {
-        out.push_str("### Related Symbols\n\n");
-        for node in other_nodes
-            .iter()
-            .take(max_nodes.saturating_sub(entry_nodes.len()))
-        {
-            out.push_str(&format!(
-                "- **{}** ({}) in `{}:{}`\n",
-                node.name,
-                format_kind(&node.kind),
-                node.file_path,
-                node.start_line,
-            ));
+        let mut seen: std::collections::HashSet<(String, String, u32)> =
+            std::collections::HashSet::new();
+        let budget = max_nodes.saturating_sub(entry_nodes.len());
+        let mut by_file: std::collections::BTreeMap<String, Vec<&codewiki_core::Node>> =
+            std::collections::BTreeMap::new();
+        let mut emitted = 0usize;
+        for node in &other_nodes {
+            if emitted >= budget {
+                break;
+            }
+            if matches!(node.kind, NodeKind::File) {
+                continue;
+            }
+            let key = (node.name.clone(), node.file_path.clone(), node.start_line);
+            if !seen.insert(key) {
+                continue;
+            }
+            by_file
+                .entry(node.file_path.clone())
+                .or_default()
+                .push(node);
+            emitted += 1;
         }
-        out.push('\n');
+
+        if !by_file.is_empty() {
+            out.push_str("### Related Symbols\n\n");
+            for (file, nodes) in &by_file {
+                out.push_str(&format!("`{}`\n", crate::tools::rel(file, root_ref)));
+                for node in nodes {
+                    out.push_str(&format!(
+                        "- **{}** ({}) line {}\n",
+                        node.name,
+                        format_kind(&node.kind),
+                        node.start_line,
+                    ));
+                }
+            }
+            out.push('\n');
+        }
     }
 
     // OPT-15: Related Files section — unique files in the subgraph, excluding entry-point files
@@ -171,7 +185,7 @@ pub async fn handle_context(
         if !related_files.is_empty() {
             out.push_str("### Related Files\n\n");
             for fp in &related_files {
-                out.push_str(&format!("- `{fp}`\n"));
+                out.push_str(&format!("- `{}`\n", crate::tools::rel(fp, root_ref)));
             }
             out.push('\n');
         }
@@ -216,15 +230,13 @@ pub async fn handle_context(
             out.push_str("### Key Code\n\n");
             for node in &entry_code_nodes {
                 if let Ok(Some(code)) = handle.get_code(&node.id) {
-                    let truncated = if code.len() > 1500 {
-                        format!("{}\n...(truncated)", &code[..1500])
-                    } else {
-                        code
-                    };
                     out.push_str(&format!(
-                        "#### `{}` ({})\n\n```\n{}\n```\n\n",
-                        node.name, node.file_path, truncated
+                        "#### `{}` ({})\n\n",
+                        node.name,
+                        crate::tools::rel(&node.file_path, root_ref)
                     ));
+                    out.push_str(&sig_doc_lead(node));
+                    out.push_str(&format!("```\n{}\n```\n\n", cap_code(&code, 2_000)));
                 }
             }
         }
@@ -249,31 +261,58 @@ pub async fn handle_context(
                 }
                 for node in non_entry_code_nodes {
                     if let Ok(Some(code)) = handle.get_code(&node.id) {
-                        let truncated = if code.len() > 800 {
-                            format!("{}\n...(truncated)", &code[..800])
-                        } else {
-                            code
-                        };
                         out.push_str(&format!(
-                            "#### `{}` ({})\n\n```\n{}\n```\n\n",
-                            node.name, node.file_path, truncated
+                            "#### `{}` ({})\n\n",
+                            node.name,
+                            crate::tools::rel(&node.file_path, root_ref)
                         ));
+                        out.push_str(&sig_doc_lead(node));
+                        out.push_str(&format!("```\n{}\n```\n\n", cap_code(&code, 800)));
                     }
                 }
             }
         }
     }
 
-    // Feature-request reminder heuristic
-    let task_lower = task.to_lowercase();
-    let is_excluded = EXCLUDE_KEYWORDS.iter().any(|kw| task_lower.contains(kw));
-    if !is_excluded && FEATURE_KEYWORDS.iter().any(|kw| task_lower.contains(kw)) {
-        out.push_str(
-            "\n> **Note:** This looks like a feature request. Codewiki provides CODE \
-             context — make sure to clarify UX requirements, edge cases, and acceptance \
-             criteria with the user before implementing.\n",
-        );
-    }
+    // Feature-request guidance moved to SERVER_INSTRUCTIONS — it's advice for
+    // the agent, not data, so it shouldn't ride along in every context payload.
+
+    // Drop trailing whitespace so the payload doesn't carry dead bytes.
+    let out = out.trim_end().to_string();
 
     Ok(crate::tools::truncate_output(out, MAX_OUTPUT_LENGTH))
+}
+
+/// Lead a Key Code block with the symbol's signature + first docstring line
+/// (high-signal, cheap) before the body.
+fn sig_doc_lead(node: &codewiki_core::Node) -> String {
+    let mut s = String::new();
+    if let Some(sig) = &node.signature {
+        if !sig.is_empty() {
+            s.push_str(&format!("Signature: `{sig}`\n"));
+        }
+    }
+    if let Some(doc) = &node.docstring {
+        if !doc.is_empty() {
+            let first = doc.lines().next().unwrap_or("").trim();
+            if !first.is_empty() {
+                s.push_str(&format!("Doc: {first}\n"));
+            }
+        }
+    }
+    if !s.is_empty() {
+        s.push('\n');
+    }
+    s
+}
+
+/// Cap a code block at `max` bytes, char-boundary-safe, with a "+N more lines"
+/// pointer when trimmed.
+fn cap_code(code: &str, max: usize) -> String {
+    if code.len() <= max {
+        return code.to_string();
+    }
+    let head = truncate_str(code, max);
+    let more = code.lines().count().saturating_sub(head.lines().count());
+    format!("{head}\n...(+{more} more lines)")
 }

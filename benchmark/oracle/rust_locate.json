@@ -1,0 +1,17 @@
+{
+  "case_id": "rust_locate",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "locate",
+  "symbol": "search_parallel",
+  "feature_query": "",
+  "required_symbols": [
+    "search_parallel"
+  ],
+  "required_files": [
+    "main.rs"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "1 non-test def site(s); answer must name search_parallel at its source file",
+  "min_required": 2
+}
