@@ -1,0 +1,231 @@
+# T-445 — Cross-compile release workflow (5 targets).
+# Triggers: manual dispatch or push of a version tag (v*).
+#
+# Matrix: linux-gnu x86_64, linux-arm64 (via cross), macOS arm64, macOS x86_64, Windows MSVC x86_64
+#
+# Signing steps are gated behind secrets so unsigned builds still work for forks.
+# Required secrets (maintainer builds only):
+#   APPLE_DEVELOPER_ID_APPLICATION_CERT  – P12, base64-encoded
+#   APPLE_TEAM_ID                        – Apple Developer Team ID
+#   APPLE_ID                             – Apple ID email
+#   APPLE_NOTARIZATION_PASSWORD          – notarytool app-specific password
+#   WINDOWS_CODESIGN_CERT                – P12/PFX, base64-encoded
+#   WINDOWS_CODESIGN_PASSWORD            – certificate password
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v1.0.0)'
+        required: true
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build — ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: false
+            artifact_name: codewiki
+            archive_ext: tar.gz
+
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+            artifact_name: codewiki
+            archive_ext: tar.gz
+
+          - target: x86_64-apple-darwin
+            os: macos-13
+            use_cross: false
+            artifact_name: codewiki
+            archive_ext: tar.gz
+
+          - target: aarch64-apple-darwin
+            os: macos-14
+            use_cross: false
+            artifact_name: codewiki
+            archive_ext: tar.gz
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            use_cross: false
+            artifact_name: codewiki.exe
+            archive_ext: zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross (Linux ARM)
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build release binary
+        run: |
+          ${{ matrix.use_cross && 'cross' || 'cargo' }} build --release \
+            --target ${{ matrix.target }} \
+            -p codewiki-cli
+        shell: bash
+
+      # ── Strip binary ─────────────────────────────────────────────────────────
+
+      - name: Strip binary (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          if command -v llvm-strip &>/dev/null; then
+            llvm-strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          elif command -v strip &>/dev/null; then
+            strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          fi
+
+      - name: Strip binary (macOS)
+        if: runner.os == 'macOS'
+        run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+      # ── macOS code signing + notarization ────────────────────────────────────
+
+      - name: Import Apple Developer certificate
+        if: runner.os == 'macOS' && env.APPLE_DEVELOPER_ID_APPLICATION_CERT != ''
+        env:
+          APPLE_DEVELOPER_ID_APPLICATION_CERT: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_CERT }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          echo "$APPLE_DEVELOPER_ID_APPLICATION_CERT" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          rm /tmp/cert.p12
+
+      - name: Sign macOS binary
+        if: runner.os == 'macOS' && env.APPLE_TEAM_ID != ''
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          codesign --deep --force --options runtime \
+            --sign "$APPLE_TEAM_ID" \
+            target/${{ matrix.target }}/release/codewiki
+
+      - name: Archive macOS binary for notarization
+        if: runner.os == 'macOS' && env.APPLE_ID != ''
+        run: |
+          cp target/${{ matrix.target }}/release/codewiki codewiki
+          zip codewiki-notarize.zip codewiki
+
+      - name: Notarize macOS binary
+        if: runner.os == 'macOS' && env.APPLE_ID != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+        run: |
+          xcrun notarytool submit codewiki-notarize.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_NOTARIZATION_PASSWORD" \
+            --wait
+
+      # ── Windows code signing ─────────────────────────────────────────────────
+
+      - name: Sign Windows binary
+        if: runner.os == 'Windows' && env.WINDOWS_CODESIGN_CERT != ''
+        env:
+          WINDOWS_CODESIGN_CERT: ${{ secrets.WINDOWS_CODESIGN_CERT }}
+          WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+        run: |
+          echo "$env:WINDOWS_CODESIGN_CERT" | base64 --decode | Set-Content cert.p12 -AsByteStream
+          signtool sign /f cert.p12 /p "$env:WINDOWS_CODESIGN_PASSWORD" `
+            /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
+            target/${{ matrix.target }}/release/codewiki.exe
+          Remove-Item cert.p12
+        shell: pwsh
+
+      # ── Package archives ─────────────────────────────────────────────────────
+
+      - name: Package binary (tar.gz)
+        if: matrix.archive_ext == 'tar.gz'
+        run: |
+          cp target/${{ matrix.target }}/release/codewiki .
+          tar -czf codewiki-${{ matrix.target }}.tar.gz codewiki
+          sha256sum codewiki-${{ matrix.target }}.tar.gz > codewiki-${{ matrix.target }}.tar.gz.sha256
+        shell: bash
+
+      - name: Package binary (zip)
+        if: matrix.archive_ext == 'zip'
+        run: |
+          cp target/${{ matrix.target }}/release/codewiki.exe .
+          Compress-Archive -Path codewiki.exe -DestinationPath codewiki-${{ matrix.target }}.zip
+          $hash = (Get-FileHash -Path codewiki-${{ matrix.target }}.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  codewiki-${{ matrix.target }}.zip" | Set-Content codewiki-${{ matrix.target }}.zip.sha256
+        shell: pwsh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: codewiki-${{ matrix.target }}
+          path: |
+            codewiki-${{ matrix.target }}.${{ matrix.archive_ext }}
+            codewiki-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
+
+  # ── GitHub Release ───────────────────────────────────────────────────────────
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Determine version tag
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: CodeWiki ${{ steps.version.outputs.tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

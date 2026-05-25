@@ -1,0 +1,31 @@
+[package]
+name    = "codewiki-graph"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+codewiki-core    = { path = "../codewiki-core" }
+codewiki-storage = { path = "../codewiki-storage" }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+thiserror        = { workspace = true }
+tracing          = { workspace = true }
+anyhow           = { workspace = true }
+rusqlite         = { workspace = true }
+
+# Web feature — not compiled into the base binary
+axum             = { version = "0.8",  optional = true, features = ["tokio"] }
+tower-http       = { version = "0.6",  features = ["cors"], optional = true }
+tokio            = { workspace = true, optional = true }
+rust-embed       = { version = "8",    optional = true }
+mime_guess       = { version = "2",    optional = true }
+open             = { version = "5",    optional = true }
+
+[features]
+default = []
+web     = ["axum", "tower-http", "tokio", "rust-embed", "mime_guess", "open"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tower    = { version = "0.5", features = ["util"] }

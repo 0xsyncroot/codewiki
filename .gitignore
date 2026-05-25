@@ -1,0 +1,26 @@
+# Rust build artifacts
+target/
+**/target/
+
+# CodeWiki index
+.codewiki/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Editor directories
+.idea/
+.vscode/
+
+# Historical / non-source
+/research-source/
+
+# Regenerable parity test fixtures (run `parity/scripts/generate.sh` to rebuild)
+parity/synthetic-120/
+
+# Environment / secrets
+.env
+.env.local

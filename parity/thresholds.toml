@@ -1,0 +1,36 @@
+# parity/thresholds.toml
+# All values are maximum allowed deviation (absolute or fraction as noted).
+
+[counts]
+# Node and edge counts: ≤1% difference from TS golden
+node_count_fraction    = 0.01
+edge_count_fraction    = 0.01
+
+# Edge kind completeness: ALL of these must be non-zero for any language that has them.
+required_edge_kinds    = ["contains", "calls", "imports", "extends", "implements"]
+
+[search]
+# Symbol names in top-5 results: must be exact match (no fraction — this is structural)
+top5_exact_match       = true
+
+# MRR: Rust MRR must be within 0.10 of TS MRR (absolute delta, not fraction)
+mrr_max_delta          = 0.10
+
+[explore]
+# Node count in explore results: within ±5 nodes of TS output
+node_count_delta       = 5
+
+# All edge kinds from TS output must appear in Rust output (no missing kinds)
+edge_kind_completeness = true
+
+# Entry points: at least 1 of the TS entry points must appear in Rust top-3
+entry_point_overlap_min = 1
+
+[installer]
+# Installer config payloads: byte-identical (no fraction; deterministic generation)
+byte_identical         = true
+
+[latency]
+# MCP tool p50 latency: Rust must be within ±20% of TS (not faster — predictable)
+p50_max_fraction_above_ts = 0.20
+p50_max_fraction_below_ts = 0.20

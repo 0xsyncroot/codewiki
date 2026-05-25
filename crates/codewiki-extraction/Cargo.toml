@@ -1,0 +1,54 @@
+[package]
+name         = "codewiki-extraction"
+version.workspace     = true
+edition.workspace     = true
+rust-version.workspace = true
+publish      = false
+
+[features]
+default           = ["wasmtime-grammars"]
+wasmtime-grammars = ["dep:wasmtime", "tree-sitter/wasm"]
+
+[dependencies]
+codewiki-core        = { path = "../codewiki-core" }
+tree-sitter           = { workspace = true }
+rayon                 = { workspace = true }
+serde                 = { workspace = true }
+serde_json            = { workspace = true }
+thiserror             = { workspace = true }
+tracing               = { workspace = true }
+tracing-subscriber    = { workspace = true }
+clap                  = { workspace = true }
+regex                 = { workspace = true }
+ignore                = { workspace = true }
+unicode-normalization = { workspace = true }
+sha2                  = "0.10"
+hex                   = "0.4"
+crossbeam-channel     = "0.5"
+num_cpus              = "1"
+
+# Native tree-sitter grammar crates (14 languages)
+tree-sitter-typescript  = "0.23"
+tree-sitter-javascript  = "0.23"
+tree-sitter-python      = "0.25"
+tree-sitter-go          = "0.25"
+tree-sitter-rust        = "0.24"
+tree-sitter-java        = "0.23"
+tree-sitter-cpp         = "0.23"
+tree-sitter-c           = "0.24"
+tree-sitter-c-sharp     = "0.23"
+tree-sitter-php         = "0.24"
+tree-sitter-ruby        = "0.23"
+tree-sitter-swift       = "0.7"
+tree-sitter-kotlin-ng   = "1.1"
+tree-sitter-dart        = "0.2"
+
+# WASM runtime for bundled grammars (Lua, Luau, Pascal, Scala)
+wasmtime = { version = "29", optional = true, default-features = false, features = ["cranelift"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[bin]]
+name = "generate-golden"
+path = "src/bin/generate_golden.rs"

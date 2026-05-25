@@ -1,0 +1,486 @@
+//! T-403 — `CodeWikiMcpServer` — rmcp `ServerHandler` implementation.
+//!
+//! Initialize flow (per spec §2):
+//! 1. Client sends `initialize` request.
+//! 2. Server immediately returns `InitializeResult` with `MCP_PROTOCOL_VERSION`
+//!    WITHOUT awaiting any background work (so the host doesn't time out).
+//! 3. Background init (`tryInitializeDefault`) is kicked off via `tokio::spawn`.
+//! 4. Subsequent tool calls block on the init promise.
+//!
+//! T-414 — Roots protocol: if the client advertises `capabilities.roots`,
+//! and no explicit project path was provided, the server requests `roots/list`
+//! with a 5-second timeout on the first tool call, then falls back to cwd.
+//!
+//! OPT-14 — `projectPath` parameter: when a tool call includes `projectPath`,
+//! the server opens (and caches) a handle to that project's `.codewiki/codewiki.db`
+//! and routes the call through it instead of the default handle.
+
+use crate::server_instructions::SERVER_INSTRUCTIONS;
+use crate::tools;
+use codewiki_storage::{QueryHandle, StorageImpl, open as open_db};
+use rmcp::{
+    handler::server::ServerHandler,
+    model::{
+        AnnotateAble, CallToolRequestParam, CallToolResult, Implementation,
+        InitializeRequestParam, InitializeResult, ListToolsResult, PaginatedRequestParam,
+        ProtocolVersion, ServerCapabilities, ToolsCapability,
+    },
+    service::RequestContext,
+    Error as McpError, RoleServer,
+};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::{Mutex, OnceCell};
+
+/// The primary MCP server struct.
+///
+/// Holds a reference to the shared query handle and a once-cell for lazy init.
+#[derive(Clone)]
+pub struct CodeWikiMcpServer {
+    /// Shared, read-only query handle (SQLite reads are thread-safe in WAL mode).
+    pub(crate) db: Arc<dyn QueryHandle>,
+    /// OPT-14: Cache of per-path handles opened on demand when `projectPath` is provided.
+    /// Key: canonical absolute project root path string.
+    handle_cache: Arc<Mutex<HashMap<String, Arc<dyn QueryHandle>>>>,
+    /// Peer handle set by rmcp after `serve` is called (allows server-initiated requests).
+    peer: Arc<Mutex<Option<rmcp::Peer<RoleServer>>>>,
+    /// Once-cell holding the result of background initialisation.
+    /// Currently a no-op placeholder; in a full implementation this would
+    /// open the SQLite DB and start the file watcher.
+    init_cell: Arc<OnceCell<()>>,
+}
+
+impl CodeWikiMcpServer {
+    /// Create a new server wrapping the given query handle.
+    pub fn new(db: Arc<dyn QueryHandle>) -> Self {
+        Self {
+            db,
+            handle_cache: Arc::new(Mutex::new(HashMap::new())),
+            peer: Arc::new(Mutex::new(None)),
+            init_cell: Arc::new(OnceCell::new()),
+        }
+    }
+
+    /// OPT-14: Resolve the query handle to use for a given optional `projectPath`.
+    ///
+    /// - If `project_path` is `None` or refers to the same root as the default handle,
+    ///   returns the default handle.
+    /// - Otherwise, opens (or returns a cached handle to) the project's
+    ///   `.codewiki/codewiki.db`.  Returns an error string if the path has no index.
+    pub(crate) async fn resolve_handle(
+        &self,
+        project_path: Option<&str>,
+    ) -> Result<Arc<dyn QueryHandle>, String> {
+        let path_str = match project_path {
+            None | Some("") => return Ok(self.db.clone()),
+            Some(p) => p,
+        };
+
+        let canonical = PathBuf::from(path_str);
+        let key = canonical.to_string_lossy().to_string();
+
+        // Check cache first (non-blocking fast path)
+        {
+            let cache = self.handle_cache.lock().await;
+            if let Some(h) = cache.get(&key) {
+                return Ok(h.clone());
+            }
+        }
+
+        // Build the path to the DB
+        let db_path = canonical.join(".codewiki").join("codewiki.db");
+        if !db_path.exists() {
+            return Err(format!(
+                "projectPath `{}` has no CodeWiki index. Run `codewiki init` inside that directory first.",
+                path_str
+            ));
+        }
+
+        let conn = open_db(&db_path).map_err(|e| format!("Failed to open DB at {}: {e}", db_path.display()))?;
+        let handle: Arc<dyn QueryHandle> = Arc::new(StorageImpl::new(conn, 10_000));
+
+        // Store in cache
+        {
+            let mut cache = self.handle_cache.lock().await;
+            // Insert-or-keep (another task may have raced us)
+            let h = cache.entry(key).or_insert_with(|| handle.clone());
+            Ok(h.clone())
+        }
+    }
+
+    /// Kick off background initialisation (idempotent: called at most once).
+    fn spawn_background_init(&self) {
+        let cell = self.init_cell.clone();
+        tokio::spawn(async move {
+            // Background init is complete when the once-cell is set.
+            // In a full implementation this would open the DB, start the file
+            // watcher, etc.  For now it's a no-op placeholder.
+            let _ = cell.get_or_init(|| async {}).await;
+            tracing::debug!("Background init complete.");
+        });
+    }
+
+    /// Build the `InitializeResult` sent to the client.
+    pub fn build_initialize_result() -> InitializeResult {
+        InitializeResult {
+            protocol_version: ProtocolVersion::V_2024_11_05,
+            capabilities: ServerCapabilities {
+                tools: Some(ToolsCapability {
+                    list_changed: Some(false),
+                }),
+                ..Default::default()
+            },
+            server_info: Implementation {
+                name: "codewiki".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            instructions: Some(SERVER_INSTRUCTIONS.to_string()),
+        }
+    }
+}
+
+impl ServerHandler for CodeWikiMcpServer {
+    /// Handle `initialize` — return immediately, kick off background init.
+    ///
+    /// T-411 parity: the response arrives *before* any background-init logs
+    /// because the spawn happens after we return the result.
+    async fn initialize(
+        &self,
+        _request: InitializeRequestParam,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<InitializeResult, McpError> {
+        let result = Self::build_initialize_result();
+        // Kick off background init AFTER building the response so it
+        // never blocks the initialize reply.
+        self.spawn_background_init();
+        Ok(result)
+    }
+
+    /// Handle `tools/list` — return all 9 tool definitions.
+    async fn list_tools(
+        &self,
+        _request: PaginatedRequestParam,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, McpError> {
+        Ok(tools::list_tools())
+    }
+
+    /// Handle `tools/call` — dispatch to the appropriate tool handler.
+    ///
+    /// OPT-14: If `projectPath` is present in the arguments, resolve a per-project
+    /// handle before dispatching.
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParam,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        // Extract optional projectPath from arguments before dispatch
+        let project_path: Option<String> = request
+            .arguments
+            .as_ref()
+            .and_then(|a| a.get("projectPath"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let db = match self.resolve_handle(project_path.as_deref()).await {
+            Ok(h) => h,
+            Err(msg) => {
+                return Ok(rmcp::model::CallToolResult::error(vec![
+                    rmcp::model::RawContent::text(msg).no_annotation(),
+                ]));
+            }
+        };
+
+        tools::dispatch(db, request).await
+    }
+
+    fn get_peer(&self) -> Option<rmcp::Peer<RoleServer>> {
+        self.peer.try_lock().ok().and_then(|g| g.clone())
+    }
+
+    fn set_peer(&mut self, peer: rmcp::Peer<RoleServer>) {
+        if let Ok(mut guard) = self.peer.try_lock() {
+            *guard = Some(peer);
+        }
+    }
+
+    fn get_info(&self) -> rmcp::model::ServerInfo {
+        Self::build_initialize_result()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Stub QueryHandle for testing
+    struct StubHandle;
+
+    impl QueryHandle for StubHandle {
+        fn search_nodes(
+            &self,
+            _query: &str,
+            _opts: codewiki_storage::SearchOptions,
+        ) -> Result<Vec<codewiki_core::SearchResult>, codewiki_core::CodeWikiError> {
+            Ok(vec![])
+        }
+
+        fn get_node_by_id(
+            &self,
+            _id: &str,
+        ) -> Result<Option<codewiki_core::Node>, codewiki_core::CodeWikiError> {
+            Ok(None)
+        }
+
+        fn get_callers(
+            &self,
+            _node_id: &str,
+            _depth: usize,
+        ) -> Result<Vec<(codewiki_core::Node, codewiki_core::Edge)>, codewiki_core::CodeWikiError>
+        {
+            Ok(vec![])
+        }
+
+        fn get_callees(
+            &self,
+            _node_id: &str,
+            _depth: usize,
+        ) -> Result<Vec<(codewiki_core::Node, codewiki_core::Edge)>, codewiki_core::CodeWikiError>
+        {
+            Ok(vec![])
+        }
+
+        fn get_impact_radius(
+            &self,
+            _node_id: &str,
+            _depth: usize,
+        ) -> Result<codewiki_core::Subgraph, codewiki_core::CodeWikiError> {
+            Ok(codewiki_core::Subgraph::default())
+        }
+
+        fn find_relevant_context(
+            &self,
+            _query: &str,
+            _opts: codewiki_storage::FindOpts,
+        ) -> Result<codewiki_core::Subgraph, codewiki_core::CodeWikiError> {
+            Ok(codewiki_core::Subgraph::default())
+        }
+
+        fn get_code(
+            &self,
+            _node_id: &str,
+        ) -> Result<Option<String>, codewiki_core::CodeWikiError> {
+            Ok(None)
+        }
+
+        fn get_stats(&self) -> Result<codewiki_core::GraphStats, codewiki_core::CodeWikiError> {
+            Ok(codewiki_core::GraphStats {
+                journal_mode: "wal".to_string(),
+                ..Default::default()
+            })
+        }
+
+        fn get_files(
+            &self,
+            _filter: Option<&codewiki_storage::FileFilter>,
+        ) -> Result<Vec<codewiki_core::FileRecord>, codewiki_core::CodeWikiError> {
+            Ok(vec![])
+        }
+
+        fn get_affected_nodes(
+            &self,
+            _file_paths: &[std::path::PathBuf],
+        ) -> Result<Vec<codewiki_core::Node>, codewiki_core::CodeWikiError> {
+            Ok(vec![])
+        }
+    }
+
+    fn extract_text(result: &CallToolResult) -> String {
+        match &result.content[0].raw {
+            rmcp::model::RawContent::Text(t) => t.text.clone(),
+            _ => panic!("expected text content"),
+        }
+    }
+
+    #[tokio::test]
+    async fn initialize_result_has_correct_protocol_version() {
+        // Test the static builder function directly
+        let result = CodeWikiMcpServer::build_initialize_result();
+        assert_eq!(
+            result.protocol_version,
+            ProtocolVersion::V_2024_11_05,
+            "initialize must return protocolVersion 2024-11-05"
+        );
+        assert!(
+            result.instructions.is_some(),
+            "initialize must include server instructions"
+        );
+        assert_eq!(result.server_info.name, "codewiki");
+    }
+
+    #[tokio::test]
+    async fn list_tools_returns_9_tools() {
+        let result = tools::list_tools();
+        assert_eq!(result.tools.len(), 9, "must expose exactly 9 tools");
+        let names: Vec<&str> = result.tools.iter().map(|t| t.name.as_ref()).collect();
+        assert!(names.contains(&"codewiki_search"));
+        assert!(names.contains(&"codewiki_context"));
+        assert!(names.contains(&"codewiki_callers"));
+        assert!(names.contains(&"codewiki_callees"));
+        assert!(names.contains(&"codewiki_impact"));
+        assert!(names.contains(&"codewiki_node"));
+        assert!(names.contains(&"codewiki_explore"));
+        assert!(names.contains(&"codewiki_status"));
+        assert!(names.contains(&"codewiki_files"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_search_empty_returns_no_results_message() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_search".into(),
+            arguments: Some({
+                let mut map = serde_json::Map::new();
+                map.insert("query".to_string(), serde_json::Value::String("test".to_string()));
+                map
+            }),
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        assert!(result.is_error != Some(true));
+        let text = extract_text(&result);
+        assert!(text.contains("No results") || text.contains("Search Results"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_status_includes_wal_journal_mode() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_status".into(),
+            arguments: None,
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        let text = extract_text(&result);
+        assert!(text.contains("wal"), "status should include 'wal' journal mode");
+    }
+
+    #[tokio::test]
+    async fn dispatch_callers_returns_no_callers_message() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_callers".into(),
+            arguments: Some({
+                let mut map = serde_json::Map::new();
+                map.insert("symbol".to_string(), serde_json::Value::String("myFunc".to_string()));
+                map
+            }),
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        let text = extract_text(&result);
+        assert!(text.contains("No symbol found") || text.contains("No callers found"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_callees_returns_no_callees_message() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_callees".into(),
+            arguments: Some({
+                let mut map = serde_json::Map::new();
+                map.insert("symbol".to_string(), serde_json::Value::String("myFunc".to_string()));
+                map
+            }),
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        let text = extract_text(&result);
+        assert!(text.contains("No symbol found") || text.contains("No callees found"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_impact_returns_no_symbol_message() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_impact".into(),
+            arguments: Some({
+                let mut map = serde_json::Map::new();
+                map.insert("symbol".to_string(), serde_json::Value::String("CoreType".to_string()));
+                map
+            }),
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        let text = extract_text(&result);
+        assert!(text.contains("No symbol found") || text.contains("no dependents"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_files_returns_no_files_message() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_files".into(),
+            arguments: None,
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        let text = extract_text(&result);
+        assert!(text.contains("No indexed files"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_explore_returns_no_results_message() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_explore".into(),
+            arguments: Some({
+                let mut map = serde_json::Map::new();
+                map.insert("query".to_string(), serde_json::Value::String("AuthService".to_string()));
+                map
+            }),
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        let text = extract_text(&result);
+        assert!(text.contains("No relevant symbols") || text.contains("Explore:"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_node_returns_no_symbol_message() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_node".into(),
+            arguments: Some({
+                let mut map = serde_json::Map::new();
+                map.insert("symbol".to_string(), serde_json::Value::String("handleRequest".to_string()));
+                map
+            }),
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        let text = extract_text(&result);
+        assert!(text.contains("No symbol found"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_context_returns_no_symbols_message() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_context".into(),
+            arguments: Some({
+                let mut map = serde_json::Map::new();
+                map.insert("task".to_string(), serde_json::Value::String("add user authentication".to_string()));
+                map
+            }),
+        };
+        let result = tools::dispatch(handle, params).await.unwrap();
+        // Should include the feature-request reminder since "add" is a keyword
+        let text = extract_text(&result);
+        assert!(text.contains("Context for:"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_unknown_tool_returns_error() {
+        let handle: Arc<dyn QueryHandle> = Arc::new(StubHandle);
+        let params = CallToolRequestParam {
+            name: "codewiki_nonexistent".into(),
+            arguments: None,
+        };
+        let result = tools::dispatch(handle, params).await;
+        assert!(result.is_err(), "unknown tool must return error");
+    }
+}

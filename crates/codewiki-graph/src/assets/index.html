@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeWiki Graph</title>
+<link rel="stylesheet" href="style.css">
+<script src="graph.min.js"></script>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <h1>&#9670; CodeWiki Graph</h1>
+  <span id="stats-bar">loading&hellip;</span>
+  <div id="search-wrap">
+    <input id="search-input" type="text" placeholder="Search symbols&hellip;" autocomplete="off" spellcheck="false">
+    <div id="search-dropdown"></div>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div id="filterbar">
+  <span class="filter-label">edges:</span>
+  <span class="chip edge-calls"    data-filter="edge" data-kind="calls">calls</span>
+  <span class="chip edge-imports"  data-filter="edge" data-kind="imports">imports</span>
+  <span class="chip edge-contains off" data-filter="edge" data-kind="contains">contains</span>
+  <span class="chip edge-other"    data-filter="edge" data-kind="other">other</span>
+  <span class="filter-label" style="margin-left:8px">nodes:</span>
+  <span class="chip node-function" data-filter="node" data-kind="function">function</span>
+  <span class="chip node-method"   data-filter="node" data-kind="method">method</span>
+  <span class="chip node-struct"   data-filter="node" data-kind="struct">struct</span>
+  <span class="chip node-other"    data-filter="node" data-kind="node-other">other</span>
+  <button id="btn-clear" class="action-btn">Clear graph</button>
+</div>
+
+<!-- Main content -->
+<div id="main">
+  <!-- Graph canvas -->
+  <div id="graph-wrap">
+    <div id="graph-canvas"></div>
+    <div id="graph-empty">Search for a symbol or wait for top nodes to load&hellip;</div>
+    <button id="load-more-btn">Load more nodes&hellip;</button>
+  </div>
+
+  <!-- Right sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-header" style="display:none">
+      <h2 id="sidebar-name"></h2>
+      <span id="sidebar-kind-badge"></span>
+    </div>
+    <div id="sidebar-body" style="display:none">
+      <div id="sidebar-actions">
+        <button class="action-btn" id="btn-expand">Expand neighborhood</button>
+        <button class="action-btn" id="btn-impact">Show impact</button>
+        <button class="action-btn" id="btn-callers">Callers</button>
+        <button class="action-btn" id="btn-callees">Callees</button>
+      </div>
+      <div>
+        <div class="sidebar-section-title">Location</div>
+        <div class="meta-row"><span class="lbl">File</span><span class="val" id="meta-file"></span></div>
+        <div class="meta-row"><span class="lbl">Lines</span><span class="val" id="meta-lines"></span></div>
+        <div class="meta-row"><span class="lbl">Language</span><span class="val" id="meta-lang"></span></div>
+      </div>
+      <div id="degree-section">
+        <div class="sidebar-section-title">Connectivity</div>
+        <div class="degree-row">
+          <div class="degree-badge">in <span id="deg-in">0</span></div>
+          <div class="degree-badge">out <span id="deg-out">0</span></div>
+          <div class="degree-badge">callers <span id="deg-callers">0</span></div>
+          <div class="degree-badge">callees <span id="deg-callees">0</span></div>
+        </div>
+      </div>
+      <div id="sig-section" style="display:none">
+        <div class="sidebar-section-title">Signature</div>
+        <pre id="signature" style="font-size:11px;white-space:pre-wrap;word-break:break-all;color:#c9d1d9"></pre>
+      </div>
+      <div id="doc-section" style="display:none">
+        <div class="sidebar-section-title">Documentation</div>
+        <div id="docstring"></div>
+      </div>
+      <div id="code-section" style="display:none">
+        <div class="sidebar-section-title">Source</div>
+        <pre id="code-block"></pre>
+      </div>
+    </div>
+    <div id="sidebar-empty">Click a node to see details</div>
+  </div>
+</div>
+
+<!-- Context menu -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-expand">Expand neighborhood</div>
+  <div class="ctx-item" id="ctx-impact">Show impact</div>
+  <div class="ctx-item" id="ctx-callers">Show callers</div>
+  <div class="ctx-item" id="ctx-callees">Show callees</div>
+  <div class="ctx-item" id="ctx-pin">Pin node</div>
+  <div class="ctx-item" id="ctx-remove">Remove from graph</div>
+</div>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────────────
+const state = {
+  graphData: { nodes: [], links: [] },
+  truncated: false,
+  selectedNodeId: null,
+  pinnedIds: new Set(),
+  impactIds: new Set(),
+  impactDepthMap: {},  // id -> depth
+  hiddenEdgeKinds: new Set(['contains']),
+  hiddenNodeKinds: new Set(),
+  ctxNodeId: null,
+};
+
+// ── Node colour palette ────────────────────────────────────────────────────
+const NODE_COLORS = {
+  function:    '#58a6ff',
+  method:      '#3fb950',
+  struct:      '#bc8cff',
+  class:       '#d2a8ff',
+  interface:   '#79c0ff',
+  enum:        '#d29922',
+  type:        '#a5d6ff',
+  variable:    '#ffa657',
+  constant:    '#ff7b72',
+  module:      '#8b949e',
+  namespace:   '#8b949e',
+  file:        '#4d4d4d',
+  default:     '#8b949e',
+};
+
+const EDGE_COLORS = {
+  calls:       '#58a6ff',
+  imports:     '#3fb950',
+  contains:    '#bc8cff',
+  extends:     '#ff7b72',
+  implements:  '#ffa657',
+  default:     '#555',
+};
+
+const IMPACT_COLORS = ['#ff6b6b', '#ff9f43', '#ffd32a', '#7bed9f'];  // depth 1,2,3,4+
+
+function nodeColor(node) {
+  if (state.impactIds.has(node.id)) {
+    const depth = state.impactDepthMap[node.id] || 4;
+    return IMPACT_COLORS[Math.min(depth - 1, 3)];
+  }
+  return NODE_COLORS[node.kind] || NODE_COLORS.default;
+}
+
+function edgeColor(link) {
+  return EDGE_COLORS[link.kind] || EDGE_COLORS.default;
+}
+
+// ── Force graph init ───────────────────────────────────────────────────────
+const Graph = ForceGraph()(document.getElementById('graph-canvas'))
+  .backgroundColor('#0d1117')
+  .nodeId('id')
+  .nodeLabel(n => `${n.kind}: ${n.name}`)
+  .nodeColor(nodeColor)
+  .nodeRelSize(5)
+  .nodeVal(n => state.pinnedIds.has(n.id) ? 12 : 6)
+  .nodeCanvasObjectMode(() => 'after')
+  .nodeCanvasObject((node, ctx, globalScale) => {
+    const label = node.name;
+    const fontSize = Math.min(12, Math.max(8, 12 / globalScale));
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.fillStyle = nodeColor(node);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    if (globalScale > 0.6) {
+      ctx.fillText(label, node.x, node.y + 7);
+    }
+  })
+  .linkSource('source_id')
+  .linkTarget('target_id')
+  .linkColor(edgeColor)
+  .linkDirectionalArrowLength(4)
+  .linkDirectionalArrowRelPos(1)
+  .linkWidth(link => state.hiddenEdgeKinds.has(link.kind) ? 0 : 1)
+  .linkVisibility(link => !state.hiddenEdgeKinds.has(link.kind))
+  .nodeVisibility(node => !state.hiddenNodeKinds.has(node.kind))
+  .onNodeClick((node, event) => {
+    state.selectedNodeId = node.id;
+    loadNodeDetail(node.id);
+    hideCtxMenu();
+  })
+  .onNodeRightClick((node, event) => {
+    event.preventDefault();
+    state.ctxNodeId = node.id;
+    showCtxMenu(event.clientX, event.clientY);
+  })
+  .onBackgroundClick(() => {
+    hideCtxMenu();
+  });
+
+// Resize observer
+const resizeObserver = new ResizeObserver(() => {
+  const wrap = document.getElementById('graph-wrap');
+  Graph.width(wrap.clientWidth).height(wrap.clientHeight);
+});
+resizeObserver.observe(document.getElementById('graph-wrap'));
+
+// ── Graph data helpers ─────────────────────────────────────────────────────
+function currentNodeIds() {
+  return state.graphData.nodes.map(n => n.id);
+}
+
+function mergeSubgraph(subgraph) {
+  const existingIds = new Set(state.graphData.nodes.map(n => n.id));
+  const existingEdgeIds = new Set(state.graphData.links.map(e => e.id));
+
+  const newNodes = Object.values(subgraph.nodes || {}).filter(n => !existingIds.has(n.id));
+  const newEdges = (subgraph.edges || []).filter(e => !existingEdgeIds.has(e.id));
+
+  state.graphData.nodes.push(...newNodes);
+  state.graphData.links.push(...newEdges);
+  Graph.graphData({ nodes: [...state.graphData.nodes], links: [...state.graphData.links] });
+  updateEmptyState();
+}
+
+function replaceGraph(subgraph, roots) {
+  state.graphData.nodes = Object.values(subgraph.nodes || {});
+  state.graphData.links = (subgraph.edges || []);
+  state.impactIds.clear();
+  state.impactDepthMap = {};
+  Graph.graphData({ nodes: [...state.graphData.nodes], links: [...state.graphData.links] });
+  if (roots && roots[0]) {
+    const root = state.graphData.nodes.find(n => n.id === roots[0]);
+    if (root) Graph.centerAt(root.x, root.y, 500);
+  }
+  updateEmptyState();
+}
+
+function updateEmptyState() {
+  document.getElementById('graph-empty').style.display =
+    state.graphData.nodes.length === 0 ? 'flex' : 'none';
+  document.getElementById('load-more-btn').style.display =
+    state.truncated ? 'block' : 'none';
+}
+
+// ── API helpers ────────────────────────────────────────────────────────────
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// ── EP-1: stats ────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await api('/api/stats');
+    document.getElementById('stats-bar').textContent =
+      `nodes: ${s.node_count.toLocaleString()} · edges: ${s.edge_count.toLocaleString()} · files: ${s.file_count.toLocaleString()}`;
+  } catch(e) {
+    document.getElementById('stats-bar').textContent = 'stats unavailable';
+  }
+}
+
+// ── EP-10: top nodes seed ─────────────────────────────────────────────────
+async function loadTopNodes() {
+  try {
+    const r = await api('/api/top-nodes?limit=20');
+    if (r.nodes && r.nodes.length > 0) {
+      const fakeSubgraph = {
+        nodes: Object.fromEntries(r.nodes.map(e => [e.node.id, e.node])),
+        edges: [],
+      };
+      replaceGraph(fakeSubgraph, [r.nodes[0].node.id]);
+    }
+  } catch(e) {
+    console.warn('top-nodes failed:', e);
+  }
+}
+
+// ── EP-4: neighborhood ────────────────────────────────────────────────────
+async function fetchNeighborhood(id, depth = 1, merge = false) {
+  const exclude = merge ? currentNodeIds().join(',') : '';
+  const url = `/api/neighborhood/${encodeURIComponent(id)}?depth=${depth}` +
+    (exclude ? `&exclude=${encodeURIComponent(exclude)}` : '');
+  const r = await api(url);
+  state.truncated = r.truncated;
+  if (merge) {
+    mergeSubgraph(r.subgraph);
+  } else {
+    replaceGraph(r.subgraph, r.subgraph.roots);
+  }
+  updateEmptyState();
+}
+
+// ── EP-3: node detail ─────────────────────────────────────────────────────
+async function loadNodeDetail(id) {
+  try {
+    const r = await api(`/api/node/${encodeURIComponent(id)}`);
+    const n = r.node;
+
+    document.getElementById('sidebar-header').style.display = 'flex';
+    document.getElementById('sidebar-body').style.display   = 'flex';
+    document.getElementById('sidebar-empty').style.display  = 'none';
+
+    document.getElementById('sidebar-name').textContent = n.name;
+    document.getElementById('sidebar-kind-badge').textContent = n.kind;
+
+    const fileEl = document.getElementById('meta-file');
+    fileEl.innerHTML = `<a href="file://${n.file_path}" title="${n.file_path}">${n.file_path.split('/').slice(-2).join('/')}</a>`;
+    document.getElementById('meta-lines').textContent = `${n.start_line}–${n.end_line}`;
+    document.getElementById('meta-lang').textContent = n.language;
+
+    document.getElementById('deg-in').textContent      = r.in_degree;
+    document.getElementById('deg-out').textContent     = r.out_degree;
+    document.getElementById('deg-callers').textContent = r.caller_count;
+    document.getElementById('deg-callees').textContent = r.callee_count;
+
+    const sigSection = document.getElementById('sig-section');
+    if (n.signature) {
+      document.getElementById('signature').textContent = n.signature;
+      sigSection.style.display = 'block';
+    } else {
+      sigSection.style.display = 'none';
+    }
+
+    const docSection = document.getElementById('doc-section');
+    if (n.docstring) {
+      document.getElementById('docstring').textContent = n.docstring;
+      docSection.style.display = 'block';
+    } else {
+      docSection.style.display = 'none';
+    }
+
+    const codeSection = document.getElementById('code-section');
+    if (r.code) {
+      document.getElementById('code-block').textContent = r.code;
+      codeSection.style.display = 'block';
+    } else {
+      codeSection.style.display = 'none';
+    }
+  } catch(e) {
+    console.warn('node detail failed:', e);
+  }
+}
+
+// ── EP-5: impact ──────────────────────────────────────────────────────────
+async function showImpact(id) {
+  try {
+    const r = await api(`/api/impact/${encodeURIComponent(id)}?depth=3`);
+    state.impactIds.clear();
+    state.impactDepthMap = {};
+    // Assign depth colours based on hop from root
+    const nodes = Object.values(r.subgraph.nodes);
+    nodes.forEach((n, i) => {
+      state.impactIds.add(n.id);
+      state.impactDepthMap[n.id] = 1; // simplification: depth from BFS order
+    });
+    mergeSubgraph(r.subgraph);
+    Graph.graphData({ nodes: [...state.graphData.nodes], links: [...state.graphData.links] });
+  } catch(e) {
+    console.warn('impact failed:', e);
+  }
+}
+
+// ── Load more ─────────────────────────────────────────────────────────────
+document.getElementById('load-more-btn').addEventListener('click', async () => {
+  if (state.selectedNodeId) {
+    await fetchNeighborhood(state.selectedNodeId, 1, true);
+  }
+});
+
+// ── Clear graph ───────────────────────────────────────────────────────────
+document.getElementById('btn-clear').addEventListener('click', () => {
+  state.graphData = { nodes: [], links: [] };
+  state.impactIds.clear();
+  state.impactDepthMap = {};
+  state.truncated = false;
+  Graph.graphData({ nodes: [], links: [] });
+  updateEmptyState();
+  loadTopNodes();
+});
+
+// ── Sidebar action buttons ─────────────────────────────────────────────────
+document.getElementById('btn-expand').addEventListener('click', () => {
+  if (state.selectedNodeId) fetchNeighborhood(state.selectedNodeId, 1, true);
+});
+document.getElementById('btn-impact').addEventListener('click', () => {
+  if (state.selectedNodeId) showImpact(state.selectedNodeId);
+});
+document.getElementById('btn-callers').addEventListener('click', async () => {
+  if (!state.selectedNodeId) return;
+  try {
+    const r = await api(`/api/callers/${encodeURIComponent(state.selectedNodeId)}?depth=1`);
+    const nodes = Object.fromEntries(r.items.map(item => [item.node.id, item.node]));
+    const edges = r.items.map(item => item.edge);
+    mergeSubgraph({ nodes, edges });
+  } catch(e) { console.warn(e); }
+});
+document.getElementById('btn-callees').addEventListener('click', async () => {
+  if (!state.selectedNodeId) return;
+  try {
+    const r = await api(`/api/callees/${encodeURIComponent(state.selectedNodeId)}?depth=1`);
+    const nodes = Object.fromEntries(r.items.map(item => [item.node.id, item.node]));
+    const edges = r.items.map(item => item.edge);
+    mergeSubgraph({ nodes, edges });
+  } catch(e) { console.warn(e); }
+});
+
+// ── Context menu ──────────────────────────────────────────────────────────
+function showCtxMenu(x, y) {
+  const menu = document.getElementById('ctx-menu');
+  menu.style.left = x + 'px';
+  menu.style.top  = y + 'px';
+  menu.classList.add('visible');
+}
+function hideCtxMenu() {
+  document.getElementById('ctx-menu').classList.remove('visible');
+}
+document.addEventListener('click', hideCtxMenu);
+
+document.getElementById('ctx-expand').addEventListener('click', () => {
+  if (state.ctxNodeId) fetchNeighborhood(state.ctxNodeId, 1, true);
+});
+document.getElementById('ctx-impact').addEventListener('click', () => {
+  if (state.ctxNodeId) showImpact(state.ctxNodeId);
+});
+document.getElementById('ctx-callers').addEventListener('click', async () => {
+  if (!state.ctxNodeId) return;
+  try {
+    const r = await api(`/api/callers/${encodeURIComponent(state.ctxNodeId)}?depth=1`);
+    const nodes = Object.fromEntries(r.items.map(item => [item.node.id, item.node]));
+    mergeSubgraph({ nodes, edges: r.items.map(i => i.edge) });
+  } catch(e) { console.warn(e); }
+});
+document.getElementById('ctx-callees').addEventListener('click', async () => {
+  if (!state.ctxNodeId) return;
+  try {
+    const r = await api(`/api/callees/${encodeURIComponent(state.ctxNodeId)}?depth=1`);
+    const nodes = Object.fromEntries(r.items.map(item => [item.node.id, item.node]));
+    mergeSubgraph({ nodes, edges: r.items.map(i => i.edge) });
+  } catch(e) { console.warn(e); }
+});
+document.getElementById('ctx-pin').addEventListener('click', () => {
+  if (state.ctxNodeId) {
+    state.pinnedIds.has(state.ctxNodeId)
+      ? state.pinnedIds.delete(state.ctxNodeId)
+      : state.pinnedIds.add(state.ctxNodeId);
+    Graph.graphData({ nodes: [...state.graphData.nodes], links: [...state.graphData.links] });
+  }
+});
+document.getElementById('ctx-remove').addEventListener('click', () => {
+  if (state.ctxNodeId) {
+    const id = state.ctxNodeId;
+    state.graphData.nodes = state.graphData.nodes.filter(n => n.id !== id);
+    state.graphData.links = state.graphData.links.filter(
+      e => e.source_id !== id && e.target_id !== id
+    );
+    Graph.graphData({ nodes: [...state.graphData.nodes], links: [...state.graphData.links] });
+    updateEmptyState();
+  }
+});
+
+// ── Search bar ────────────────────────────────────────────────────────────
+let searchTimer = null;
+const searchInput = document.getElementById('search-input');
+const dropdown    = document.getElementById('search-dropdown');
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if (!q) { dropdown.innerHTML = ''; dropdown.classList.remove('visible'); return; }
+  searchTimer = setTimeout(() => doSearch(q), 300);
+});
+
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    dropdown.innerHTML = '';
+    dropdown.classList.remove('visible');
+  }
+});
+
+async function doSearch(q) {
+  try {
+    const r = await api(`/api/search?q=${encodeURIComponent(q)}&limit=10`);
+    renderDropdown(r.results || []);
+  } catch(e) {
+    console.warn('search error', e);
+  }
+}
+
+function kindClass(kind) {
+  const map = {
+    function: 'edge-calls', method: 'edge-imports', struct: 'node-struct',
+    class: 'node-struct', interface: 'edge-contains', enum: 'edge-other',
+  };
+  return map[kind] || 'node-other';
+}
+
+function renderDropdown(results) {
+  if (!results.length) {
+    dropdown.innerHTML = '<div class="search-item" style="color:#8b949e">No results</div>';
+    dropdown.classList.add('visible');
+    return;
+  }
+  dropdown.innerHTML = results.map(r => `
+    <div class="search-item" data-id="${escHtml(r.node.id)}">
+      <span class="chip ${kindClass(r.node.kind)}" style="font-size:9px;padding:1px 5px">${escHtml(r.node.kind)}</span>
+      <div>
+        <div class="search-item-name">${escHtml(r.node.name)}</div>
+        <div class="search-item-path">${escHtml(r.node.file_path)}</div>
+      </div>
+    </div>
+  `).join('');
+  dropdown.classList.add('visible');
+
+  dropdown.querySelectorAll('.search-item[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-id');
+      dropdown.innerHTML = '';
+      dropdown.classList.remove('visible');
+      searchInput.value = '';
+      selectNode(id);
+    });
+  });
+}
+
+async function selectNode(id) {
+  state.selectedNodeId = id;
+  await fetchNeighborhood(id, 1, false);
+  await loadNodeDetail(id);
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── Filter chips ──────────────────────────────────────────────────────────
+document.querySelectorAll('.chip[data-filter]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const filter = chip.dataset.filter;
+    const kind   = chip.dataset.kind;
+    chip.classList.toggle('off');
+    if (filter === 'edge') {
+      if (chip.classList.contains('off')) {
+        // 'other' = any edge not in the explicit list
+        if (kind === 'other') {
+          ['extends','implements','uses','references','instantiates','exports','renders','resolves','unknown']
+            .forEach(k => state.hiddenEdgeKinds.add(k));
+        } else {
+          state.hiddenEdgeKinds.add(kind);
+        }
+      } else {
+        if (kind === 'other') {
+          ['extends','implements','uses','references','instantiates','exports','renders','resolves','unknown']
+            .forEach(k => state.hiddenEdgeKinds.delete(k));
+        } else {
+          state.hiddenEdgeKinds.delete(kind);
+        }
+      }
+    } else {
+      if (chip.classList.contains('off')) {
+        if (kind === 'node-other') {
+          ['class','interface','enum','type','variable','constant','module','namespace',
+           'property','field','constructor','getter','setter','file','component','route','unknown']
+            .forEach(k => state.hiddenNodeKinds.add(k));
+        } else {
+          state.hiddenNodeKinds.add(kind);
+        }
+      } else {
+        if (kind === 'node-other') {
+          ['class','interface','enum','type','variable','constant','module','namespace',
+           'property','field','constructor','getter','setter','file','component','route','unknown']
+            .forEach(k => state.hiddenNodeKinds.delete(k));
+        } else {
+          state.hiddenNodeKinds.delete(kind);
+        }
+      }
+    }
+    Graph.graphData({ nodes: [...state.graphData.nodes], links: [...state.graphData.links] });
+  });
+});
+
+// Close dropdown on outside click
+document.addEventListener('click', e => {
+  if (!document.getElementById('search-wrap').contains(e.target)) {
+    dropdown.innerHTML = '';
+    dropdown.classList.remove('visible');
+  }
+});
+
+// ── Startup ────────────────────────────────────────────────────────────────
+(async () => {
+  await loadStats();
+  await loadTopNodes();
+})();
+</script>
+</body>
+</html>

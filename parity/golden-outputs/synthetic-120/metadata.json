@@ -1,0 +1,11 @@
+{
+  "baseline_tag": "rust-baseline",
+  "generated_at": "2026-05-24T00:00:00Z",
+  "generator": "codewiki-rs (T-var-fix: suppress function-local variable nodes, parity with TS extractor)",
+  "note": "Regenerated after fixing function-local variable suppression. Variables dropped from 18 to 4 in synthetic-120 (function-local let/const/local no longer indexed). TS parity: only top-level/module variables are indexed.",
+  "codebase": "synthetic-120",
+  "node_count": 120,
+  "edge_count": 139,
+  "languages": ["ruby", "typescript", "python", "go", "rust", "javascript"],
+  "ts_commit": "N/A (rust-baseline; TS implementation not available in this environment)"
+}

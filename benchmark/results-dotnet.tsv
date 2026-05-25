@@ -1,0 +1,6 @@
+repo	cs_files	sha	index_time_s	files_s	peak_rss_mb	db_size_kb	nodes	edges	unresolved_refs	search_p50_ms	callers_p50_ms	impact_p50_ms	context_p50_ms	sync_ms
+mediatr	151	c3e2419	0.11	1372	35.4	2400	1377	1855	2086	1	2	2	4	n/a
+eShopOnWeb	254	4da8212	0.11	2309	35.4	2584	1381	1484	2431	1	2	2	6	28
+jellyfin	2065	498d265	2.16	956	207.1	50232	17812	37615	57727	1	3	10	9	61
+orchardcore	5203	39c2d68	8.19	635	620.8	171028	67286	204760	51512	1	7	8	38	n/a
+abp/framework/src	3497	ecf83f4e	2.02	1731	148.8	38568	22651	35916	11630	1	n/a	n/a	n/a	n/a

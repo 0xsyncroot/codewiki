@@ -1,0 +1,8 @@
+{
+  "baseline_tag": "rust-baseline",
+  "generated_at": "2026-05-24T00:00:00Z",
+  "generator": "codegraph-rs v0.1.0 (T-505 P5 golden regeneration)",
+  "note": "Elasticsearch golden outputs. Currently contains installer-configs.json as rust-baseline. Full node/edge/search golden files require Elasticsearch codebase indexing (not available in this environment; planned for v1.1 eval pipeline).",
+  "ts_commit": "N/A (rust-baseline; TS implementation not available in this environment)",
+  "available_files": ["installer-configs.json", "metadata.json"]
+}

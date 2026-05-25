@@ -1,0 +1,62 @@
+{
+  "baseline_tag": "rust-baseline",
+  "generated_at": "2026-05-24T00:00:00Z",
+  "generator": "codegraph-rs v0.1.0 (T-505/T-020 P5 golden regeneration)",
+  "note": "Generated from Rust implementation constants. This is the rust-baseline for installer config parity. Future TS-vs-Rust comparison will diff against this.",
+  "configs": [
+    {
+      "target": "claude",
+      "location": "global",
+      "config_key": "mcpServers.codegraph",
+      "args": ["serve", "--mcp"],
+      "command": "codegraph"
+    },
+    {
+      "target": "claude",
+      "location": "local",
+      "config_key": "mcpServers.codegraph",
+      "args": ["serve", "--mcp"],
+      "command": "codegraph"
+    },
+    {
+      "target": "cursor",
+      "location": "global",
+      "config_key": "mcpServers.codegraph",
+      "args": ["serve", "--mcp"],
+      "command": "codegraph"
+    },
+    {
+      "target": "cursor",
+      "location": "local",
+      "config_key": "mcpServers.codegraph",
+      "args": ["serve", "--mcp", "--path"],
+      "command": "codegraph",
+      "note": "local install appends project path at runtime"
+    },
+    {
+      "target": "codex",
+      "location": "global",
+      "config_key": "mcp_servers.codegraph",
+      "args": ["serve", "--mcp"],
+      "command": "codegraph",
+      "format": "toml"
+    },
+    {
+      "target": "opencode",
+      "location": "global",
+      "config_key": "mcp.codegraph",
+      "args": ["serve", "--mcp"],
+      "type": "local",
+      "command": ["codegraph", "serve", "--mcp"],
+      "format": "jsonc"
+    },
+    {
+      "target": "hermes",
+      "location": "global",
+      "config_key": "mcp_servers.codegraph",
+      "args": ["serve", "--mcp"],
+      "command": "codegraph",
+      "format": "yaml"
+    }
+  ]
+}

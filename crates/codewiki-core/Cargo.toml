@@ -1,0 +1,17 @@
+[package]
+name         = "codewiki-core"
+version.workspace     = true
+edition.workspace     = true
+rust-version.workspace = true
+publish      = false
+
+[dependencies]
+thiserror  = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+rusqlite   = { workspace = true }
+toml       = { workspace = true }
+moka       = { workspace = true }
+
+[dev-dependencies]
+serial_test = "3"

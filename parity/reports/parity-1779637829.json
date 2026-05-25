@@ -1,0 +1,48 @@
+{
+  "baseline_tag": "rust-baseline",
+  "generated_at": 1779637829,
+  "results": [
+    {
+      "check": "metadata/rust-baseline",
+      "details": null,
+      "reason": "",
+      "status": "pass"
+    },
+    {
+      "check": "node_count/rust-baseline (120)",
+      "details": null,
+      "reason": "",
+      "status": "pass"
+    },
+    {
+      "check": "edge_count/rust-baseline (139 edges)",
+      "details": null,
+      "reason": "",
+      "status": "pass"
+    },
+    {
+      "check": "edge_kinds/rust-baseline",
+      "details": null,
+      "reason": "missing edge kinds: calls, imports (may be expected for this corpus)",
+      "status": "skip"
+    },
+    {
+      "check": "search_results/rust-baseline (6 results)",
+      "details": null,
+      "reason": "",
+      "status": "pass"
+    },
+    {
+      "check": "installer_configs (7 configs)",
+      "details": null,
+      "reason": "",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "failed": 0,
+    "passed": 5,
+    "skipped": 1,
+    "total": 6
+  }
+}

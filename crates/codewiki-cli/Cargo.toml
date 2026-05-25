@@ -1,0 +1,72 @@
+[package]
+name         = "codewiki-cli"
+version.workspace     = true
+edition.workspace     = true
+rust-version.workspace = true
+publish      = false
+
+[features]
+default           = ["bundled-sqlite", "wasmtime-grammars", "web"]
+bundled-sqlite    = ["codewiki-storage/bundled-sqlite"]
+wasmtime-grammars = ["codewiki-extraction/wasmtime-grammars"]
+telemetry         = ["codewiki-mcp/telemetry"]
+web               = ["codewiki-graph/web"]
+
+[[bin]]
+name = "codewiki"
+path = "src/main.rs"
+
+[[bin]]
+name = "parity-runner"
+path = "src/bin/parity_runner.rs"
+
+[lib]
+name = "codewiki_cli"
+path = "src/lib.rs"
+
+[dependencies]
+codewiki-core       = { path = "../codewiki-core" }
+codewiki-mcp        = { path = "../codewiki-mcp" }
+codewiki-storage    = { path = "../codewiki-storage" }
+codewiki-extraction = { path = "../codewiki-extraction" }
+codewiki-sync       = { path = "../codewiki-sync" }
+codewiki-resolution = { path = "../codewiki-resolution" }
+codewiki-graph      = { path = "../codewiki-graph" }
+rusqlite             = { workspace = true }
+ignore             = { workspace = true }
+clap               = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio              = { workspace = true }
+thiserror          = { workspace = true }
+anyhow             = { workspace = true }
+toml               = { workspace = true }
+
+# Installer / UI
+cliclack    = "0.3"
+indicatif   = "0.17"
+home        = "0.5"
+dirs        = "5"
+tempfile    = { workspace = true }
+serde_yaml  = "0.9"
+libc        = "0.2"
+
+[dev-dependencies]
+tempfile           = { workspace = true }
+serial_test        = "3"
+codewiki-testutil = { path = "../codewiki-testutil" }
+criterion          = { workspace = true }
+
+[[bench]]
+name    = "cold_index"
+harness = false
+
+[[bench]]
+name    = "incremental_sync"
+harness = false
+
+[[bench]]
+name    = "mcp_tools"
+harness = false

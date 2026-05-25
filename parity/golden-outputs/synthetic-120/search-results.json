@@ -1,0 +1,126 @@
+{
+  "query": "function add",
+  "baseline_tag": "rust-baseline",
+  "results": [
+    {
+      "node": {
+        "id": "da19541064d1d8ed",
+        "name": "Address",
+        "qualified_name": "Address",
+        "kind": "class",
+        "language": "python",
+        "file_path": "/root/develop/code-wiki/parity/synthetic-120/models.py",
+        "start_line": 9,
+        "end_line": 12,
+        "start_col": 0,
+        "end_col": 23,
+        "is_exported": false,
+        "docstring": null,
+        "signature": null,
+        "metadata": null
+      },
+      "score": 3.5,
+      "rank": 1
+    },
+    {
+      "node": {
+        "id": "83a9ee8f93fbdb8b",
+        "name": "add",
+        "qualified_name": "UserRepository::add",
+        "kind": "method",
+        "language": "python",
+        "file_path": "/root/develop/code-wiki/parity/synthetic-120/models.py",
+        "start_line": 42,
+        "end_line": 43,
+        "start_col": 4,
+        "end_col": 35,
+        "is_exported": false,
+        "docstring": null,
+        "signature": null,
+        "metadata": null
+      },
+      "score": 3.5,
+      "rank": 2
+    },
+    {
+      "node": {
+        "id": "5158061df9bf1403",
+        "name": "add",
+        "qualified_name": "add",
+        "kind": "function",
+        "language": "c",
+        "file_path": "/root/develop/code-wiki/parity/synthetic-120/calculator.c",
+        "start_line": 11,
+        "end_line": 16,
+        "start_col": 0,
+        "end_col": 1,
+        "is_exported": false,
+        "docstring": null,
+        "signature": null,
+        "metadata": null
+      },
+      "score": 3.5,
+      "rank": 3
+    },
+    {
+      "node": {
+        "id": "262bd7f985de4e97",
+        "name": "addAnimal",
+        "qualified_name": "AnimalShelter::addAnimal",
+        "kind": "method",
+        "language": "java",
+        "file_path": "/root/develop/code-wiki/parity/synthetic-120/Animal.java",
+        "start_line": 57,
+        "end_line": 59,
+        "start_col": 4,
+        "end_col": 5,
+        "is_exported": false,
+        "docstring": null,
+        "signature": null,
+        "metadata": null
+      },
+      "score": 3.5,
+      "rank": 4
+    },
+    {
+      "node": {
+        "id": "9d074ca83513a346",
+        "name": "add_edge",
+        "qualified_name": "add_edge",
+        "kind": "function",
+        "language": "rust",
+        "file_path": "/root/develop/code-wiki/parity/synthetic-120/graph.rs",
+        "start_line": 25,
+        "end_line": 27,
+        "start_col": 4,
+        "end_col": 5,
+        "is_exported": false,
+        "docstring": null,
+        "signature": null,
+        "metadata": null
+      },
+      "score": 3.5,
+      "rank": 5
+    },
+    {
+      "node": {
+        "id": "505dbe846f7fa502",
+        "name": "add_node",
+        "qualified_name": "add_node",
+        "kind": "function",
+        "language": "rust",
+        "file_path": "/root/develop/code-wiki/parity/synthetic-120/graph.rs",
+        "start_line": 19,
+        "end_line": 23,
+        "start_col": 4,
+        "end_col": 5,
+        "is_exported": false,
+        "docstring": null,
+        "signature": null,
+        "metadata": null
+      },
+      "score": 3.5,
+      "rank": 6
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+# codewiki/Cargo.toml
+# Workspace root — do NOT put [dependencies] here; use crate-level Cargo.toml files.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/codewiki-cli",
+    "crates/codewiki-mcp",
+    "crates/codewiki-extraction",
+    "crates/codewiki-storage",
+    "crates/codewiki-resolution",
+    "crates/codewiki-sync",
+    "crates/codewiki-core",
+    "crates/codewiki-testutil",
+    "crates/codewiki-graph",
+]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.78"
+license      = "MIT"
+repository   = "https://github.com/0xsyncroot/codewiki"
+publish      = false
+
+# ── Shared dependency versions ───────────────────────────────────────────────
+# Pin shared crate versions here; individual crates use { workspace = true }.
+
+[workspace.dependencies]
+# Async
+tokio              = { version = "1", features = ["full"] }
+# CPU-parallel
+rayon              = "1"
+# SQLite
+rusqlite           = { version = "0.31", features = ["bundled", "backup"] }
+# Tree-sitter core — updated to 0.24 to match published grammar crates (0.22 grammar crates
+# use LanguageFn API from tree-sitter-language 0.1 which requires tree-sitter >= 0.23)
+tree-sitter        = "0.25"
+# Async-friendly LRU (A4 + A2 shared)
+moka               = { version = "0.12", features = ["sync"] }
+# String interning
+lasso              = "0.7"
+# mmap source files
+memmap2            = "0.9"
+# Error handling
+thiserror          = "1"
+anyhow             = "1"
+# CLI
+clap               = { version = "4", features = ["derive"] }
+# Logging/tracing
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# Serialization (golden-output diffs, MCP JSON-RPC)
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+# Config
+toml               = "0.8"
+# File watching (A5)
+notify             = { version = "6", features = ["macos_fsevent"] }
+# Gitignore walking (A5)
+ignore             = "0.4"
+# WASM runtime for bundled grammars (feature-gated; pinned to 20 per A7-resolutions)
+# Note: declared per-crate as optional dep; listed here for version reference only
+wasmtime           = "20"
+# Unicode normalization (T-019 macOS NFC/NFD paths)
+unicode-normalization = "0.1"
+# Glob matching
+globset            = "0.4"
+# String similarity (fuzzy search fallback)
+strsim             = "0.11"
+# Temporary files/dirs (tests)
+tempfile           = "3"
+# Regex
+regex              = "1"
+# MCP server
+rmcp               = { version = "0.1", features = ["server", "transport-io"] }
+# Benchmarks (dev-dep only)
+criterion          = { version = "0.5", features = ["html_reports"] }
+
+# ── Profiles ─────────────────────────────────────────────────────────────────
+
+[profile.release]
+panic         = "abort"   # M10: no unwind through C FFI
+lto           = "thin"    # Cross-crate inlining without full LTO compile time
+codegen-units = 1         # Single CGU for maximum inlining + dead-code elim
+strip         = "symbols" # Remove debug symbols from final binary (~30% size)
+opt-level     = 3         # Default, explicit for clarity
+
+[profile.bench]
+# Inherit release settings; do NOT strip symbols (criterion needs them for flamegraph)
+inherits = "release"
+strip    = "none"
+debug    = 1              # Line-number info for perf profiling
+
+[profile.dev]
+# Fast iteration; keep unwind for dev panics
+panic     = "unwind"
+opt-level = 0
+debug     = true
