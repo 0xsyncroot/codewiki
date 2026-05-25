@@ -174,7 +174,12 @@ jobs:
         run: |
           cp target/${{ matrix.target }}/release/codewiki .
           tar -czf codewiki-${{ matrix.target }}.tar.gz codewiki
-          sha256sum codewiki-${{ matrix.target }}.tar.gz > codewiki-${{ matrix.target }}.tar.gz.sha256
+          # `sha256sum` exists on Linux; macOS runners only have `shasum`.
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum codewiki-${{ matrix.target }}.tar.gz > codewiki-${{ matrix.target }}.tar.gz.sha256
+          else
+            shasum -a 256 codewiki-${{ matrix.target }}.tar.gz > codewiki-${{ matrix.target }}.tar.gz.sha256
+          fi
         shell: bash
 
       - name: Package binary (zip)
