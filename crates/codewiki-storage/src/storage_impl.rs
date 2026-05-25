@@ -127,8 +127,36 @@ impl StorageImpl {
                     nq::delete_nodes_by_file(conn, &path_str)?;
                     uq::delete_unresolved_by_node(conn, &path_str).ok();
                     nq::insert_nodes_batch(conn, &batch.nodes)?;
+
+                    // FK backstop (mirrors `commit_resolved_batch`): an extraction
+                    // bug can emit an *orphan* edge whose source/target node id was
+                    // never created (e.g. a malformed C++ template). The edges table
+                    // has `FOREIGN KEY (source|target) REFERENCES nodes(id)`, so
+                    // inserting such an edge raises a SQLite FOREIGN KEY violation
+                    // that aborts the entire single-transaction bulk load — zeroing
+                    // the whole repo. Build the set of node ids for this batch first
+                    // and skip any edge that references an id outside it, so valid
+                    // nodes/edges still commit instead of failing wholesale.
+                    let batch_node_ids: std::collections::HashSet<&str> =
+                        batch.nodes.iter().map(|n| n.id.as_str()).collect();
+                    let mut skipped_edges = 0usize;
                     for edge in &batch.edges {
+                        if !batch_node_ids.contains(edge.source_id.as_str())
+                            || !batch_node_ids.contains(edge.target_id.as_str())
+                        {
+                            skipped_edges += 1;
+                            continue;
+                        }
                         eq::insert_edge(conn, edge)?;
+                    }
+                    if skipped_edges > 0 {
+                        tracing::warn!(
+                            path = %path_str,
+                            skipped = skipped_edges,
+                            total = batch.edges.len(),
+                            "skipped orphan edge(s) referencing a node id absent from the batch \
+                             (FK backstop); valid nodes/edges still committed"
+                        );
                     }
                     uq::insert_unresolved_refs_batch(conn, &batch.unresolved_refs)?;
                     let mut file = batch.file.clone();
@@ -137,7 +165,7 @@ impl StorageImpl {
 
                     stats.files_written += 1;
                     stats.nodes_inserted += batch.nodes.len();
-                    stats.edges_inserted += batch.edges.len();
+                    stats.edges_inserted += batch.edges.len() - skipped_edges;
                 }
                 Ok(())
             })();
@@ -1722,6 +1750,63 @@ mod tests {
         assert_eq!(stats.files_written, 2);
         assert_eq!(stats.files_skipped, 0);
         assert_eq!(stats.nodes_inserted, 8);
+    }
+
+    /// Regression test: orphan-edge FK backstop in the bulk-init path.
+    ///
+    /// Real-world QA found that a single orphan edge (source/target id that was
+    /// never created — e.g. from a C++ extraction bug) raised a SQLite FOREIGN
+    /// KEY violation that rolled back the *entire* single-transaction bulk load,
+    /// so a whole repo indexed 0 files. The backstop must skip orphan edges and
+    /// still commit the valid nodes/edges.
+    #[test]
+    fn bulk_init_skips_orphan_edge_and_still_commits() {
+        use codewiki_core::{Edge, EdgeKind};
+
+        let storage = make_storage();
+
+        // A batch with 2 real nodes, one valid intra-batch edge, and one ORPHAN
+        // edge whose target id was never created.
+        let mut batch = make_batch("src/orphan.ts", "h_orphan", 2);
+        batch.edges = vec![
+            Edge {
+                id: "e_valid".to_string(),
+                source_id: "src/orphan.ts-node0".to_string(),
+                target_id: "src/orphan.ts-node1".to_string(),
+                kind: EdgeKind::Calls,
+                ..Default::default()
+            },
+            Edge {
+                id: "e_orphan".to_string(),
+                source_id: "src/orphan.ts-node0".to_string(),
+                target_id: "ghost-node-never-created".to_string(), // FK violator
+                kind: EdgeKind::Calls,
+                ..Default::default()
+            },
+        ];
+
+        // Also include a second, completely normal file in the same bulk call so
+        // we prove the orphan does NOT zero the whole transaction.
+        let normal = make_batch("src/normal.ts", "h_normal", 3);
+
+        let stats = storage
+            .store_extraction_batch_bulk_init(vec![batch, normal])
+            .expect("bulk init must not fail wholesale on an orphan edge");
+
+        // Both files committed; only the valid edge counted (orphan skipped).
+        assert_eq!(stats.files_written, 2, "both files must be written");
+        assert_eq!(stats.nodes_inserted, 5, "all 5 nodes must be inserted");
+        assert_eq!(stats.edges_inserted, 1, "only the valid edge is counted");
+
+        // The valid nodes are actually queryable (index not zeroed).
+        assert!(storage
+            .get_node_by_id("src/orphan.ts-node0")
+            .unwrap()
+            .is_some());
+        assert!(storage
+            .get_node_by_id("src/normal.ts-node0")
+            .unwrap()
+            .is_some());
     }
 
     #[test]

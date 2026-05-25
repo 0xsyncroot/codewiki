@@ -9,7 +9,6 @@ publish      = false
 default           = ["bundled-sqlite", "wasmtime-grammars", "web"]
 bundled-sqlite    = ["codewiki-storage/bundled-sqlite"]
 wasmtime-grammars = ["codewiki-extraction/wasmtime-grammars"]
-telemetry         = ["codewiki-mcp/telemetry"]
 web               = ["codewiki-graph/web"]
 
 [[bin]]

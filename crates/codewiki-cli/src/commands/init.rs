@@ -45,6 +45,18 @@ pub fn run(path: Option<PathBuf>, no_index: bool) -> Result<()> {
     let t0 = Instant::now();
     let counts = orchestrator.index_all(&root);
 
+    // Guard against silent total data loss: a repo with source files that
+    // indexed nothing (or a store error) is a real failure → non-zero exit.
+    // A repo with no source files is a clean, informational success.
+    if !crate::commands::index::check_index_outcome(&counts)? {
+        println!(
+            "Initialized. No source files to index under {}.",
+            root.display()
+        );
+        println!("Run `codewiki index` after adding source files.");
+        return Ok(());
+    }
+
     // Run WAL checkpoint + PRAGMA optimize after bulk insert (OPT-7).
     storage.run_maintenance_pub();
 

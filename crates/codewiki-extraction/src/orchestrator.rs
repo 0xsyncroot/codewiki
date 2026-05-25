@@ -19,6 +19,16 @@ pub struct IndexCounts {
     pub files: usize,
     pub nodes: usize,
     pub edges: usize,
+    /// Number of source files discovered and queued for parsing (after the
+    /// filter pass: supported language + under the size cap). Lets callers
+    /// distinguish "no source files to index" (clean 0) from "found source
+    /// files but indexed none" (a real failure).
+    pub discovered: usize,
+    /// Number of `flush_bulk` calls that returned an error. With the FK
+    /// backstop in the storage layer these should be rare, but a non-zero
+    /// value means at least one chunk of parsed files failed to persist and
+    /// must NOT be reported as a silent success.
+    pub store_errors: usize,
 }
 
 /// Trait that the orchestrator uses to persist extraction results.
@@ -156,50 +166,55 @@ impl ExtractionOrchestratorImpl {
             })
             .collect();
 
+        // Number of source files that survived the filter pass and will be
+        // parsed. Captured before `work` is moved into the rayon scope so the
+        // caller can tell "no source files found" apart from "found files but
+        // indexed none" (a genuine failure that must exit non-zero).
+        let discovered = work.len();
+
         // Set up bounded channel between rayon workers and the writer thread.
         let (tx, rx) = std::sync::mpsc::sync_channel::<ExtractionBatch>(EXTRACTION_CHANNEL_DEPTH);
 
         let total_files = Arc::new(AtomicUsize::new(0));
         let total_nodes = Arc::new(AtomicUsize::new(0));
         let total_edges = Arc::new(AtomicUsize::new(0));
+        let store_errors = Arc::new(AtomicUsize::new(0));
 
         let store = Arc::clone(&self.store);
         let tf = Arc::clone(&total_files);
         let tn = Arc::clone(&total_nodes);
         let te = Arc::clone(&total_edges);
+        let se = Arc::clone(&store_errors);
 
         // Spawn the writer thread before starting rayon so it's ready to drain.
         let writer = std::thread::spawn(move || {
+            // Flush one chunk; record counts on success or bump the error
+            // counter (and log an ERROR) on failure. A failed flush is a real
+            // problem — never swallow it as a silent success.
+            let flush = |chunk: Vec<ExtractionBatch>| match store.flush_bulk(chunk) {
+                Ok((f, n, e)) => {
+                    tf.fetch_add(f, Ordering::Relaxed);
+                    tn.fetch_add(n, Ordering::Relaxed);
+                    te.fetch_add(e, Ordering::Relaxed);
+                }
+                Err(err) => {
+                    se.fetch_add(1, Ordering::Relaxed);
+                    tracing::error!(err = %err, "flush_bulk failed during index_all; this chunk was not persisted");
+                }
+            };
+
             let mut pending: Vec<ExtractionBatch> = Vec::with_capacity(FLUSH_BULK_SIZE);
             for batch in rx {
                 pending.push(batch);
                 if pending.len() >= FLUSH_BULK_SIZE {
                     let chunk =
                         std::mem::replace(&mut pending, Vec::with_capacity(FLUSH_BULK_SIZE));
-                    match store.flush_bulk(chunk) {
-                        Ok((f, n, e)) => {
-                            tf.fetch_add(f, Ordering::Relaxed);
-                            tn.fetch_add(n, Ordering::Relaxed);
-                            te.fetch_add(e, Ordering::Relaxed);
-                        }
-                        Err(err) => {
-                            tracing::warn!(err = %err, "flush_bulk error during index_all");
-                        }
-                    }
+                    flush(chunk);
                 }
             }
             // Drain remainder.
             if !pending.is_empty() {
-                match store.flush_bulk(pending) {
-                    Ok((f, n, e)) => {
-                        tf.fetch_add(f, Ordering::Relaxed);
-                        tn.fetch_add(n, Ordering::Relaxed);
-                        te.fetch_add(e, Ordering::Relaxed);
-                    }
-                    Err(err) => {
-                        tracing::warn!(err = %err, "flush_bulk error draining remainder");
-                    }
-                }
+                flush(pending);
             }
         });
 
@@ -235,6 +250,8 @@ impl ExtractionOrchestratorImpl {
             files: total_files.load(Ordering::Relaxed),
             nodes: total_nodes.load(Ordering::Relaxed),
             edges: total_edges.load(Ordering::Relaxed),
+            discovered,
+            store_errors: store_errors.load(Ordering::Relaxed),
         }
     }
 

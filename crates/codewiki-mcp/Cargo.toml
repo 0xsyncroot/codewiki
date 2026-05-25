@@ -6,8 +6,7 @@ rust-version.workspace = true
 publish      = false
 
 [features]
-default   = []
-telemetry = ["dep:opentelemetry", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
+default = []
 
 [dependencies]
 codewiki-core    = { path = "../codewiki-core" }
@@ -23,10 +22,6 @@ tokio-util         = "0.7"
 # PPID watchdog (T-404/T-405) — POSIX process liveness checks
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
-# Optional: telemetry feature
-opentelemetry         = { version = "0.27", optional = true }
-opentelemetry-otlp    = { version = "0.27", optional = true }
-tracing-opentelemetry = { version = "0.29", optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

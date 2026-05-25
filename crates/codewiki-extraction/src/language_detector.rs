@@ -20,10 +20,12 @@ pub fn detect_language(path: &Path) -> Option<Language> {
         "rs" => Some(Language::Rust),
         // Java
         "java" => Some(Language::Java),
-        // C++
-        "cpp" | "cc" | "cxx" | "c++" | "hpp" | "hxx" | "h++" => Some(Language::Cpp),
+        // C++  (`.h` is ambiguous C/C++; route it to the C++ grammar, which is a
+        // superset that parses C headers fine, so header-only C++ libraries —
+        // which overwhelmingly use `.h` — get their classes/templates/namespaces.)
+        "cpp" | "cc" | "cxx" | "c++" | "h" | "hpp" | "hxx" | "h++" => Some(Language::Cpp),
         // C
-        "c" | "h" => Some(Language::C),
+        "c" => Some(Language::C),
         // C#
         "cs" => Some(Language::CSharp),
         // PHP

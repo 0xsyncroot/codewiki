@@ -24,3 +24,12 @@ parity/synthetic-120/
 # Environment / secrets
 .env
 .env.local
+
+# Internal working docs (QA plans, design specs, analyses) — never public
+/.internal/
+
+# Project conventions for AI assistants (must stay at repo root for Claude Code)
+/CLAUDE.md
+
+# Local Claude Code state
+/.claude/

@@ -841,7 +841,7 @@ fn extract_name_from_node(node: &tree_sitter::Node, source: &[u8], name_field: &
     String::new()
 }
 
-fn is_exported(node: &tree_sitter::Node) -> bool {
+pub fn is_exported(node: &tree_sitter::Node) -> bool {
     let mut current = node.parent();
     while let Some(p) = current {
         if p.kind() == "export_statement" || p.kind() == "export_declaration" {
