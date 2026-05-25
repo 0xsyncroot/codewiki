@@ -57,33 +57,62 @@ async fn run_mcp_real(
     project_root: PathBuf,
     no_watch: bool,
 ) -> Result<(), codewiki_core::CodeWikiError> {
-    // Open the storage (requires `codewiki init` to have been run).
-    // This read handle is what the MCP server serves queries through.
-    let storage = open_storage(&project_root)
-        .map_err(|e| codewiki_core::CodeWikiError::Other(e.to_string()))?;
-    let query_handle: Arc<dyn QueryHandle> = Arc::new(storage);
+    // §4-A — Graceful unindexed mode. With a single machine-wide MCP
+    // registration (args `serve --mcp`), this server is launched in EVERY
+    // project the agent opens — including ones never `codewiki init`'d. We must
+    // NOT crash there. When the resolved root has no `.codewiki/codewiki.db`,
+    // start the server in "unindexed" mode: the handshake still succeeds and
+    // every tool call returns a friendly "run `codewiki init`" message. We do
+    // NOT auto-index (silently indexing a huge/wrong cwd would be worse).
+    let db_path = project_root.join(".codewiki").join("codewiki.db");
 
-    // Start the live-on-save watcher unless --no-watch. The watcher runs on its
-    // own dedicated background thread (see `spawn_live_sync`), so it never
-    // blocks the JSON-RPC serve loop below. `_watcher` is held for the lifetime
-    // of `serve_stdio`; dropping it after serve returns stops the watcher.
-    //
-    // The watcher is started here (around the transport) rather than from a
-    // server-handler hook because `rmcp`'s server transport consumes the
-    // `initialize` handshake internally and never dispatches it to the handler.
-    let _watcher: Option<LiveSyncHandle> = if no_watch {
-        tracing::info!(
-            "live-sync watcher disabled (--no-watch); index updates require manual `codewiki sync` or git hooks"
-        );
-        None
+    // `_watcher` is held for the lifetime of `serve_stdio`; dropping it after
+    // serve returns stops the watcher. It only runs in indexed mode — there is
+    // nothing to sync in an unindexed project.
+    let mut _watcher: Option<LiveSyncHandle> = None;
+
+    let server = if index_exists(&db_path) {
+        // Open the storage. This read handle is what the MCP server serves
+        // queries through.
+        let storage = open_storage(&project_root)
+            .map_err(|e| codewiki_core::CodeWikiError::Other(e.to_string()))?;
+        let query_handle: Arc<dyn QueryHandle> = Arc::new(storage);
+
+        // Start the live-on-save watcher unless --no-watch. The watcher runs on
+        // its own dedicated background thread (see `spawn_live_sync`), so it
+        // never blocks the JSON-RPC serve loop below.
+        //
+        // The watcher is started here (around the transport) rather than from a
+        // server-handler hook because `rmcp`'s server transport consumes the
+        // `initialize` handshake internally and never dispatches it to the
+        // handler.
+        if no_watch {
+            tracing::info!(
+                "live-sync watcher disabled (--no-watch); index updates require manual `codewiki sync` or git hooks"
+            );
+        } else {
+            _watcher = start_live_sync(&project_root);
+        }
+
+        codewiki_mcp::server::CodeWikiMcpServer::new(query_handle)
     } else {
-        start_live_sync(&project_root)
+        tracing::info!(
+            root = %project_root.display(),
+            "no CodeWiki index found — serving in unindexed mode (tools will prompt to run `codewiki init`)"
+        );
+        codewiki_mcp::server::CodeWikiMcpServer::new_unindexed(project_root)
     };
 
-    // Run the real MCP server on stdio.
+    // Run the MCP server on stdio.
     // The rmcp transport exits cleanly when stdin closes (host disconnect).
-    let server = codewiki_mcp::server::CodeWikiMcpServer::new(query_handle);
     codewiki_mcp::transport::serve_stdio(server).await
+}
+
+/// §4-A — Whether a usable CodeWiki index exists at `db_path`
+/// (`<root>/.codewiki/codewiki.db`). When this returns `false`, the MCP server
+/// is started in unindexed mode instead of crashing.
+fn index_exists(db_path: &Path) -> bool {
+    db_path.exists()
 }
 
 /// Build and start the live-on-save sync loop for `project_root`.
@@ -151,5 +180,27 @@ mod tests {
         // The non-MCP path just prints text and exits; no side effects.
         let result = run(false, None, false);
         assert!(result.is_ok());
+    }
+
+    /// §4-A — a directory with no `.codewiki/` index is detected as unindexed,
+    /// so `serve --mcp` starts in graceful unindexed mode rather than crashing.
+    /// (The unindexed tool-call message itself is asserted in
+    /// `codewiki-mcp/src/server.rs`, which can reach the `pub(crate)` internals.)
+    #[test]
+    fn unindexed_dir_is_detected() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join(".codewiki").join("codewiki.db");
+        assert!(
+            !index_exists(&db_path),
+            "a fresh dir with no .codewiki/ must be reported unindexed"
+        );
+
+        // The server `serve --mcp` constructs for this root in unindexed mode is
+        // buildable and its handshake builder works — i.e. the server stays
+        // usable instead of crashing on a missing DB.
+        let _server =
+            codewiki_mcp::server::CodeWikiMcpServer::new_unindexed(dir.path().to_path_buf());
+        let init = codewiki_mcp::server::CodeWikiMcpServer::build_initialize_result();
+        assert_eq!(init.server_info.name, "codewiki");
     }
 }

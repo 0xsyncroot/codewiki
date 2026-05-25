@@ -144,7 +144,8 @@ body {
 .chip.edge-other    { background: #3a2a15; color: var(--yellow); border-color: var(--yellow); }
 .chip.node-function { background: #1c3a5e; color: var(--cyan); border-color: var(--cyan); }
 .chip.node-method   { background: #1e3a2a; color: var(--green); border-color: var(--green); }
-.chip.node-struct   { background: #2a1e3a; color: var(--purple); border-color: var(--purple); }
+.chip.node-type     { background: #2a1e3a; color: var(--purple); border-color: var(--purple); }
+.chip.node-route    { background: #3a1e30; color: #f778ba; border-color: #f778ba; }
 .chip.node-other    { background: var(--bg3); color: var(--text2); }
 
 #btn-clear { margin-left: auto; }

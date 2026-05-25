@@ -39,6 +39,15 @@ use tokio::sync::Mutex;
 ///
 /// Holds a reference to the shared, read-only query handle.
 ///
+/// §4-A — Graceful "unindexed" mode: with a single machine-wide MCP
+/// registration (args `serve --mcp`), the server is launched in EVERY project
+/// the agent opens — including ones that were never `codewiki init`'d. Rather
+/// than crash there (a dead server in those projects), the server starts with
+/// `db = None`. The `initialize` handshake and `tools/list` still succeed, and
+/// every `tools/call` short-circuits with a clear, structured message pointing
+/// the user at `codewiki init`. A tool call that supplies an explicit
+/// `projectPath` to a *different*, indexed project still works.
+///
 /// Live-on-save auto-sync is **not** owned here: `rmcp`'s server transport
 /// consumes the `initialize` handshake internally and replies via `get_info()`
 /// rather than dispatching to a handler method, so there is no
@@ -48,7 +57,13 @@ use tokio::sync::Mutex;
 #[derive(Clone)]
 pub struct CodeWikiMcpServer {
     /// Shared, read-only query handle (SQLite reads are thread-safe in WAL mode).
-    pub(crate) db: Arc<dyn QueryHandle>,
+    ///
+    /// `None` when the resolved project root has no `.codewiki/` index yet
+    /// (§4-A unindexed mode); tool calls without an explicit `projectPath`
+    /// then return the friendly "run `codewiki init`" message.
+    pub(crate) db: Option<Arc<dyn QueryHandle>>,
+    /// Resolved project root, used to render the unindexed-mode hint.
+    project_root: PathBuf,
     /// OPT-14: Cache of per-path handles opened on demand when `projectPath` is provided.
     /// Key: canonical absolute project root path string.
     handle_cache: Arc<Mutex<HashMap<String, Arc<dyn QueryHandle>>>>,
@@ -57,19 +72,46 @@ pub struct CodeWikiMcpServer {
 }
 
 impl CodeWikiMcpServer {
-    /// Create a new server wrapping the given query handle.
+    /// Create a new server wrapping the given query handle for an indexed project.
     pub fn new(db: Arc<dyn QueryHandle>) -> Self {
         Self {
-            db,
+            db: Some(db),
+            // `project_root` is only read by `unindexed_message()`, which the
+            // indexed server never reaches — this placeholder is unused here.
+            project_root: PathBuf::from("."),
             handle_cache: Arc::new(Mutex::new(HashMap::new())),
             peer: Arc::new(Mutex::new(None)),
         }
     }
 
+    /// §4-A — Create a server for a project that has no `.codewiki/` index yet.
+    ///
+    /// The server stays alive and responsive: the handshake succeeds and tool
+    /// calls (without an explicit `projectPath`) return the friendly message
+    /// produced by [`Self::unindexed_message`].
+    pub fn new_unindexed(project_root: PathBuf) -> Self {
+        Self {
+            db: None,
+            project_root,
+            handle_cache: Arc::new(Mutex::new(HashMap::new())),
+            peer: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// The structured, user-facing message returned by every tool when the
+    /// resolved project has no index (§4-A).
+    pub(crate) fn unindexed_message(&self) -> String {
+        format!(
+            "This project has no CodeWiki index yet. \
+             Run `codewiki init` in {} to enable code intelligence.",
+            self.project_root.display()
+        )
+    }
+
     /// OPT-14: Resolve the query handle to use for a given optional `projectPath`.
     ///
-    /// - If `project_path` is `None` or refers to the same root as the default handle,
-    ///   returns the default handle.
+    /// - If `project_path` is `None` or empty, returns the default handle — or
+    ///   the §4-A unindexed message when this server started without an index.
     /// - Otherwise, opens (or returns a cached handle to) the project's
     ///   `.codewiki/codewiki.db`.  Returns an error string if the path has no index.
     pub(crate) async fn resolve_handle(
@@ -77,7 +119,12 @@ impl CodeWikiMcpServer {
         project_path: Option<&str>,
     ) -> Result<Arc<dyn QueryHandle>, String> {
         let path_str = match project_path {
-            None | Some("") => return Ok(self.db.clone()),
+            None | Some("") => {
+                return match &self.db {
+                    Some(db) => Ok(db.clone()),
+                    None => Err(self.unindexed_message()),
+                };
+            }
             Some(p) => p,
         };
 
@@ -174,6 +221,22 @@ impl ServerHandler for CodeWikiMcpServer {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
+        // §4-A — Unindexed mode: when this server has no default index and the
+        // call did not target a different, indexed project via `projectPath`,
+        // short-circuit every tool with the friendly "run `codewiki init`"
+        // message. Returned as a successful (non-error) result so agents render
+        // it as normal guidance rather than a tool failure.
+        let targets_default = project_path.as_deref().map(str::is_empty).unwrap_or(true);
+        if self.db.is_none() && targets_default {
+            return Ok(rmcp::model::CallToolResult::success(vec![
+                rmcp::model::RawContent::text(self.unindexed_message()).no_annotation(),
+            ]));
+        }
+
+        // Deliberate asymmetry: the default-root unindexed case above returns
+        // `success` (expected first-run state → guidance, not failure), whereas an
+        // explicit `projectPath` that can't be resolved is a caller error and is
+        // returned as `error` here.
         let db = match self.resolve_handle(project_path.as_deref()).await {
             Ok(h) => h,
             Err(msg) => {
@@ -483,6 +546,45 @@ mod tests {
         // Should include the feature-request reminder since "add" is a keyword
         let text = extract_text(&result);
         assert!(text.contains("Context for:"));
+    }
+
+    #[tokio::test]
+    async fn unindexed_server_resolve_handle_returns_friendly_message() {
+        // §4-A — a server started without an index must NOT crash. Resolving the
+        // default handle (no projectPath) yields the friendly hint string that
+        // `call_tool` surfaces to the agent.
+        let server = CodeWikiMcpServer::new_unindexed(PathBuf::from("/tmp/unindexed-proj"));
+
+        let msg = match server.resolve_handle(None).await {
+            Ok(_) => panic!("default handle must be absent in unindexed mode"),
+            Err(msg) => msg,
+        };
+        assert!(
+            msg.contains("no CodeWiki index") && msg.contains("codewiki init"),
+            "unindexed message must guide the user to `codewiki init`, got: {msg}"
+        );
+        assert!(
+            msg.contains("/tmp/unindexed-proj"),
+            "message must name the resolved project root, got: {msg}"
+        );
+
+        // Empty-string projectPath also routes to the default (unindexed) handle.
+        assert!(server.resolve_handle(Some("")).await.is_err());
+
+        // The handshake builder still works (server stays usable) and
+        // tools/list returns the full tool set in unindexed mode.
+        let init = CodeWikiMcpServer::build_initialize_result();
+        assert_eq!(init.server_info.name, "codewiki");
+        assert_eq!(tools::list_tools().tools.len(), 9);
+    }
+
+    #[test]
+    fn unindexed_message_names_root_and_init() {
+        let server = CodeWikiMcpServer::new_unindexed(PathBuf::from("/some/project"));
+        let msg = server.unindexed_message();
+        assert!(msg.contains("/some/project"));
+        assert!(msg.contains("codewiki init"));
+        assert!(msg.contains("code intelligence"));
     }
 
     #[tokio::test]

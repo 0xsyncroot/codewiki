@@ -408,6 +408,15 @@ mod tests {
             true, // ascii = true (no unicode issues in CI)
         );
 
+        // Probe the wiring through the target's OWN `is_installed(Global)` while
+        // HOME/USERPROFILE still point at the sandbox — the target resolves its
+        // config path the SAME way the writer did, so test and writer cannot
+        // drift apart on any platform. Captured here (before restore) so the
+        // probe sees the sandboxed home; asserted after restore so a failure
+        // never leaves HOME polluted for sibling serial tests.
+        use crate::installer::targets::{claude::ClaudeTarget, AgentTarget, Location};
+        let claude_wired = ClaudeTarget.is_installed(Location::Global);
+
         // Restore HOME / USERPROFILE.
         match original_home {
             Some(h) => std::env::set_var("HOME", h),
@@ -425,23 +434,14 @@ mod tests {
         let db = project.path().join(".codewiki").join("codewiki.db");
         assert!(db.exists(), ".codewiki/codewiki.db not created");
 
-        // At least one agent config file should be written (Claude writes
-        // ~/.claude.json globally). We can reliably redirect the home dir via
-        // HOME on Unix; on Windows `home::home_dir()` resolves through the Win32
-        // known-folder API and does not reliably honor a test-set sandbox, so we
-        // assert the home-location only off-Windows. The per-target writers
-        // themselves are covered cross-platform by tests/installer_targets.rs.
-        #[cfg(not(windows))]
-        {
-            let home_contents: Vec<_> = fs::read_dir(home_dir.path())
-                .unwrap()
-                .filter_map(|e| e.ok())
-                .collect();
-            assert!(
-                !home_contents.is_empty(),
-                "no agent config files written under HOME"
-            );
-        }
+        // The non-interactive `auto` path falls back to Claude and wires it
+        // globally — platform-robust by construction (no hand-built HOME/XDG
+        // path that could drift on Windows), so the check is no longer gated to
+        // non-Windows.
+        assert!(
+            claude_wired,
+            "setup --yes (auto) must wire Claude at the global location"
+        );
     }
 
     /// F8 (b): running `setup --yes` twice is idempotent (exits 0 both times).

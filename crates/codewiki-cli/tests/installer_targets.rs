@@ -44,6 +44,26 @@ fn install_opts(auto_allow: bool) -> InstallOptions {
     }
 }
 
+/// Resolve a target's file path through the target's OWN `describe_paths`, by
+/// matching on file name. This guarantees the test and the writer agree on the
+/// path BY CONSTRUCTION — they share the same resolution logic — so the test is
+/// platform-robust (Windows `home::home_dir()` vs `XDG_CONFIG_HOME` divergence
+/// can no longer drift the test's expectation away from where the writer wrote).
+fn described_path(target: &dyn AgentTarget, loc: Location, file_name: &str) -> PathBuf {
+    target
+        .describe_paths(loc)
+        .into_iter()
+        .find(|p| p.file_name().map(|n| n == file_name).unwrap_or(false))
+        .unwrap_or_else(|| {
+            panic!(
+                "{} describe_paths({:?}) did not list a file named {file_name}; got {:?}",
+                target.id(),
+                loc,
+                target.describe_paths(loc)
+            )
+        })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Constants assertion (T-443 §args_match_canonical_constants)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,7 +75,7 @@ fn claude_args_match_global_constant() {
     let target = ClaudeTarget;
     let opts = install_opts(false);
     let result = target.install(Location::Global, &opts).unwrap();
-    let mcp_file: PathBuf = home::home_dir().unwrap().join(".claude.json");
+    let mcp_file = described_path(&target, Location::Global, ".claude.json");
     assert!(mcp_file.exists(), ".claude.json should be created");
 
     let config = read_json_file(&mcp_file);
@@ -79,7 +99,7 @@ fn cursor_global_args_prefix_matches_with_path_constant() {
     let target = CursorTarget;
     let opts = install_opts(false);
     let result = target.install(Location::Global, &opts).unwrap();
-    let mcp_file: PathBuf = home::home_dir().unwrap().join(".cursor").join("mcp.json");
+    let mcp_file = described_path(&target, Location::Global, "mcp.json");
     assert!(mcp_file.exists(), "~/.cursor/mcp.json should be created");
 
     let config = read_json_file(&mcp_file);
@@ -182,7 +202,7 @@ fn claude_uninstall_reverses_install() {
     let target = ClaudeTarget;
     let opts = install_opts(false);
     target.install(Location::Global, &opts).unwrap();
-    let mcp_file = home::home_dir().unwrap().join(".claude.json");
+    let mcp_file = described_path(&target, Location::Global, ".claude.json");
     assert!(mcp_file.exists());
 
     target.uninstall(Location::Global).unwrap();
@@ -202,7 +222,7 @@ fn cursor_uninstall_removes_mcp_entry() {
     target.install(Location::Global, &opts).unwrap();
 
     target.uninstall(Location::Global).unwrap();
-    let mcp_file = home::home_dir().unwrap().join(".cursor").join("mcp.json");
+    let mcp_file = described_path(&target, Location::Global, "mcp.json");
     if mcp_file.exists() {
         let config = read_json_file(&mcp_file);
         assert!(config.pointer("/mcpServers/codewiki").is_none());
@@ -218,7 +238,7 @@ fn codex_uninstall_removes_toml_block() {
     target.install(Location::Global, &opts).unwrap();
 
     target.uninstall(Location::Global).unwrap();
-    let toml_path = home::home_dir().unwrap().join(".codex").join("config.toml");
+    let toml_path = described_path(&target, Location::Global, "config.toml");
     if toml_path.exists() {
         let content = fs::read_to_string(&toml_path).unwrap();
         assert!(
@@ -236,10 +256,7 @@ fn hermes_uninstall_removes_mcp_entry() {
     let opts = install_opts(false);
     target.install(Location::Global, &opts).unwrap();
 
-    let hermes_cfg = home::home_dir()
-        .unwrap()
-        .join(".hermes")
-        .join("config.yaml");
+    let hermes_cfg = described_path(&target, Location::Global, "config.yaml");
     assert!(
         hermes_cfg.exists(),
         "config.yaml should be created on install"
@@ -261,7 +278,8 @@ fn hermes_uninstall_removes_mcp_entry() {
 #[serial]
 fn claude_install_preserves_sibling_mcp_servers() {
     let _home = setup_home();
-    let mcp_file = home::home_dir().unwrap().join(".claude.json");
+    let target = ClaudeTarget;
+    let mcp_file = described_path(&target, Location::Global, ".claude.json");
 
     // Pre-populate with a sibling server.
     let pre = serde_json::json!({
@@ -275,7 +293,6 @@ fn claude_install_preserves_sibling_mcp_servers() {
     });
     codewiki_cli::installer::shared::write_json_file(&mcp_file, &pre).unwrap();
 
-    let target = ClaudeTarget;
     target
         .install(Location::Global, &install_opts(false))
         .unwrap();
@@ -300,7 +317,7 @@ fn claude_uninstall_preserves_sibling_mcp_servers() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    let mcp_file = home::home_dir().unwrap().join(".claude.json");
+    let mcp_file = described_path(&target, Location::Global, ".claude.json");
     let mut config = read_json_file(&mcp_file);
     config["mcpServers"]["other"] = serde_json::json!({
         "type": "stdio",
@@ -335,10 +352,7 @@ fn claude_install_adds_permissions_when_auto_allow() {
         .install(Location::Global, &install_opts(true))
         .unwrap();
 
-    let settings_path = home::home_dir()
-        .unwrap()
-        .join(".claude")
-        .join("settings.json");
+    let settings_path = described_path(&target, Location::Global, "settings.json");
     assert!(settings_path.exists(), "settings.json should be created");
     let settings = read_json_file(&settings_path);
     let allow = settings["permissions"]["allow"].as_array().unwrap();
@@ -359,10 +373,7 @@ fn claude_install_no_auto_allow_skips_permissions() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    let settings_path = home::home_dir()
-        .unwrap()
-        .join(".claude")
-        .join("settings.json");
+    let settings_path = described_path(&target, Location::Global, "settings.json");
     // File may or may not exist; if it does, codewiki perms must not be present.
     if settings_path.exists() {
         let settings = read_json_file(&settings_path);
@@ -394,7 +405,7 @@ fn claude_install_writes_claude_md() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    let md_path = home::home_dir().unwrap().join(".claude").join("CLAUDE.md");
+    let md_path = described_path(&target, Location::Global, "CLAUDE.md");
     assert!(md_path.exists(), "CLAUDE.md should be created");
     let content = fs::read_to_string(&md_path).unwrap();
     assert!(content.contains(CODEWIKI_SECTION_START));
@@ -410,7 +421,7 @@ fn claude_md_idempotent_on_reinstall() {
     let opts = install_opts(false);
     target.install(Location::Global, &opts).unwrap();
 
-    let md_path = home::home_dir().unwrap().join(".claude").join("CLAUDE.md");
+    let md_path = described_path(&target, Location::Global, "CLAUDE.md");
     let content1 = fs::read_to_string(&md_path).unwrap();
 
     target.install(Location::Global, &opts).unwrap();
@@ -430,7 +441,7 @@ fn codex_install_writes_agents_md() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    let md_path = home::home_dir().unwrap().join(".codex").join("AGENTS.md");
+    let md_path = described_path(&target, Location::Global, "AGENTS.md");
     assert!(md_path.exists(), "AGENTS.md should be created");
     let content = fs::read_to_string(&md_path).unwrap();
     assert!(content.contains(CODEWIKI_SECTION_START));
@@ -445,14 +456,14 @@ fn opencode_install_writes_agents_md() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    // opencode resolves its global config dir from XDG_CONFIG_HOME (pinned by
-    // setup_home), so derive the expected path the same way the writer does —
-    // `home::home_dir()` does not honor a test-set sandbox on Windows.
-    let config_base = PathBuf::from(std::env::var_os("XDG_CONFIG_HOME").unwrap());
-    let md_path = config_base.join("opencode").join("AGENTS.md");
+    // Resolve the AGENTS.md path through the target's OWN describe_paths so the
+    // test reads the exact file the writer wrote (no per-platform re-derivation
+    // of XDG/home that could drift on Windows).
+    let md_path = described_path(&target, Location::Global, "AGENTS.md");
     assert!(
         md_path.exists(),
-        "AGENTS.md should be created for opencode global"
+        "AGENTS.md should be created for opencode global at {}",
+        md_path.display()
     );
     let content = fs::read_to_string(&md_path).unwrap();
     assert!(content.contains(CODEWIKI_SECTION_START));
@@ -488,8 +499,12 @@ fn codex_toml_has_correct_structure() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    let toml_path = home::home_dir().unwrap().join(".codex").join("config.toml");
-    assert!(toml_path.exists());
+    let toml_path = described_path(&target, Location::Global, "config.toml");
+    assert!(
+        toml_path.exists(),
+        "config.toml should exist at {}",
+        toml_path.display()
+    );
     let content = fs::read_to_string(&toml_path).unwrap();
     assert!(content.contains("[mcp_servers.codewiki]"));
     assert!(content.contains("command = \"codewiki\""));
@@ -510,11 +525,12 @@ fn hermes_yaml_has_mcp_servers_and_toolset() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    let yaml_path = home::home_dir()
-        .unwrap()
-        .join(".hermes")
-        .join("config.yaml");
-    assert!(yaml_path.exists());
+    let yaml_path = described_path(&target, Location::Global, "config.yaml");
+    assert!(
+        yaml_path.exists(),
+        "config.yaml should exist at {}",
+        yaml_path.display()
+    );
     let content = fs::read_to_string(&yaml_path).unwrap();
     assert!(
         content.contains("mcp_servers:"),
@@ -540,9 +556,12 @@ fn opencode_jsonc_has_correct_shape() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    let config_base = PathBuf::from(std::env::var_os("XDG_CONFIG_HOME").unwrap());
-    let jsonc_path = config_base.join("opencode").join("opencode.jsonc");
-    assert!(jsonc_path.exists(), "opencode.jsonc should exist");
+    let jsonc_path = described_path(&target, Location::Global, "opencode.jsonc");
+    assert!(
+        jsonc_path.exists(),
+        "opencode.jsonc should exist at {}",
+        jsonc_path.display()
+    );
     let content = fs::read_to_string(&jsonc_path).unwrap();
     let val: serde_json::Value = serde_json::from_str(&content).unwrap();
 
@@ -618,7 +637,6 @@ fn cursor_supports_both_locations() {
 #[serial]
 fn install_target_claude_skips_target_prompt() {
     let _home = setup_home();
-    let home = home::home_dir().unwrap();
 
     let opts = codewiki_cli::installer::InstallerOpts {
         yes: true,
@@ -629,41 +647,32 @@ fn install_target_claude_skips_target_prompt() {
     };
     codewiki_cli::installer::run_installer(opts).expect("installer must succeed");
 
-    // Claude config must exist.
-    assert!(
-        home.join(".claude.json").exists(),
-        "~/.claude.json must be created for --target claude"
-    );
-
-    // Other targets must NOT be written.
-    assert!(
-        !home.join(".cursor").join("mcp.json").exists(),
-        "~/.cursor/mcp.json must NOT be created when --target claude"
-    );
-    assert!(
-        !home.join(".codex").join("config.toml").exists(),
-        "~/.codex/config.toml must NOT be created when --target claude"
-    );
-    assert!(
-        !home
-            .join(".config")
-            .join("opencode")
-            .join("opencode.jsonc")
-            .exists(),
-        "opencode.jsonc must NOT be created when --target claude"
-    );
-    assert!(
-        !home.join(".hermes").join("config.yaml").exists(),
-        "~/.hermes/config.yaml must NOT be created when --target claude"
-    );
+    // Asserted through each target's own `is_installed(Global)` so the check
+    // reads exactly where the writer would have written — platform-robust by
+    // construction. Only Claude must be wired; the others must remain absent.
+    for target in codewiki_cli::installer::targets::all_targets() {
+        let wired = target.is_installed(Location::Global);
+        if target.id() == "claude" {
+            assert!(wired, "claude must be wired for --target claude");
+        } else {
+            assert!(
+                !wired,
+                "{} must NOT be wired when --target claude",
+                target.id()
+            );
+        }
+    }
 }
 
 /// `--target all` must write configs for all five targets.
+///
+/// Asserted through each target's own `is_installed(Global)` — which reads the
+/// config back via the SAME path resolution the writer used — so the check can
+/// never drift from where the file was actually written on any platform.
 #[test]
 #[serial]
 fn install_target_all_selects_all_targets() {
     let _home = setup_home();
-    let home = home::home_dir().unwrap();
 
     let opts = codewiki_cli::installer::InstallerOpts {
         yes: true,
@@ -674,29 +683,12 @@ fn install_target_all_selects_all_targets() {
     };
     codewiki_cli::installer::run_installer(opts).expect("installer must succeed");
 
-    // All five target config files must exist.
-    assert!(
-        home.join(".claude.json").exists(),
-        "~/.claude.json (Claude)"
-    );
-    assert!(
-        home.join(".cursor").join("mcp.json").exists(),
-        "~/.cursor/mcp.json (Cursor)"
-    );
-    assert!(
-        home.join(".codex").join("config.toml").exists(),
-        "~/.codex/config.toml (Codex)"
-    );
-    let opencode_base = PathBuf::from(std::env::var_os("XDG_CONFIG_HOME").unwrap());
-    assert!(
-        opencode_base
-            .join("opencode")
-            .join("opencode.jsonc")
-            .exists(),
-        "opencode.jsonc (opencode)"
-    );
-    assert!(
-        home.join(".hermes").join("config.yaml").exists(),
-        "~/.hermes/config.yaml (Hermes)"
-    );
+    // All five targets must report codewiki wired at the global location.
+    for target in codewiki_cli::installer::targets::all_targets() {
+        assert!(
+            target.is_installed(Location::Global),
+            "{} must be installed (wired) at global after --target all",
+            target.id()
+        );
+    }
 }

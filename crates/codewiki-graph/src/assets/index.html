@@ -29,7 +29,8 @@
   <span class="filter-label" style="margin-left:8px">nodes:</span>
   <span class="chip node-function" data-filter="node" data-kind="function">function</span>
   <span class="chip node-method"   data-filter="node" data-kind="method">method</span>
-  <span class="chip node-struct"   data-filter="node" data-kind="struct">struct</span>
+  <span class="chip node-type"     data-filter="node" data-kind="type-def">class</span>
+  <span class="chip node-route"    data-filter="node" data-kind="route">route</span>
   <span class="chip node-other"    data-filter="node" data-kind="node-other">other</span>
   <button id="btn-clear" class="action-btn">Clear graph</button>
 </div>
@@ -116,18 +117,19 @@ const state = {
 
 // ── Node colour palette ────────────────────────────────────────────────────
 const NODE_COLORS = {
-  function:    '#58a6ff',
+  function:    '#79c0ff',
   method:      '#3fb950',
   struct:      '#bc8cff',
-  class:       '#d2a8ff',
-  interface:   '#79c0ff',
-  enum:        '#d29922',
-  type:        '#a5d6ff',
+  class:       '#bc8cff',
+  interface:   '#bc8cff',
+  enum:        '#bc8cff',
+  type:        '#bc8cff',
   variable:    '#ffa657',
   constant:    '#ff7b72',
+  route:       '#f778ba',
   module:      '#8b949e',
   namespace:   '#8b949e',
-  file:        '#4d4d4d',
+  file:        '#768390',
   default:     '#8b949e',
 };
 
@@ -488,8 +490,9 @@ async function doSearch(q) {
 
 function kindClass(kind) {
   const map = {
-    function: 'edge-calls', method: 'edge-imports', struct: 'node-struct',
-    class: 'node-struct', interface: 'edge-contains', enum: 'edge-other',
+    function: 'node-function', method: 'node-method',
+    struct: 'node-type', class: 'node-type', interface: 'node-type',
+    enum: 'node-type', type: 'node-type', route: 'node-route',
   };
   return map[kind] || 'node-other';
 }
@@ -560,22 +563,21 @@ document.querySelectorAll('.chip[data-filter]').forEach(chip => {
         }
       }
     } else {
+      // Node-kind groups. 'type-def' covers the type-definition family
+      // (class/struct/interface/enum/type) so the legend works across
+      // languages — Rust emits `struct`, Python/TS/Java emit `class`, etc.
+      // 'node-other' is everything not given its own chip.
+      const TYPE_DEF = ['class','struct','interface','enum','type'];
+      const NODE_OTHER = ['variable','constant','module','namespace',
+        'property','field','constructor','getter','setter','file','component','unknown'];
+      const kinds =
+        kind === 'type-def'   ? TYPE_DEF :
+        kind === 'node-other' ? NODE_OTHER :
+        [kind];
       if (chip.classList.contains('off')) {
-        if (kind === 'node-other') {
-          ['class','interface','enum','type','variable','constant','module','namespace',
-           'property','field','constructor','getter','setter','file','component','route','unknown']
-            .forEach(k => state.hiddenNodeKinds.add(k));
-        } else {
-          state.hiddenNodeKinds.add(kind);
-        }
+        kinds.forEach(k => state.hiddenNodeKinds.add(k));
       } else {
-        if (kind === 'node-other') {
-          ['class','interface','enum','type','variable','constant','module','namespace',
-           'property','field','constructor','getter','setter','file','component','route','unknown']
-            .forEach(k => state.hiddenNodeKinds.delete(k));
-        } else {
-          state.hiddenNodeKinds.delete(kind);
-        }
+        kinds.forEach(k => state.hiddenNodeKinds.delete(k));
       }
     }
     Graph.graphData({ nodes: [...state.graphData.nodes], links: [...state.graphData.links] });

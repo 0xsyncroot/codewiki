@@ -138,29 +138,54 @@ cargo build --release   # binary: ./target/release/codewiki
 
 ## Quick start
 
-**One command does everything** — detects project, indexes, wires MCP into your agent:
+CodeWiki is **wired into your agent once, machine-wide**, and then works in
+every project you index. Two steps get you productive:
+
+**1. Wire your agent once (machine-wide).** Run this a single time per machine —
+not per project:
+
+```sh
+codewiki install --target claude
+# (or: cursor | codex | opencode | hermes | all)
+```
+
+This registers `codewiki serve --mcp` as an MCP server in your agent's global
+config. One registration serves **every** project you open.
+
+**2. Index each project.** In each repository you want code intelligence for:
+
+```sh
+codewiki init
+# Creates + indexes ./.codewiki/ (DB + git hooks).
+# Indexed 141 files — 2025 nodes, 1884 edges (0.3s).
+```
+
+That's it — restart your agent once after step 1, and from then on every
+`codewiki init`'d project is instantly available.
+
+**Why this works.** The MCP server is **cwd-aware**: it resolves the
+`.codewiki/` index from the project the agent is working in. So a single global
+registration transparently serves all your projects. Open a project you haven't
+indexed yet and the tools stay live — they simply prompt you to run
+`codewiki init` to enable code intelligence there. After you `codewiki init` a
+project that was already open, restart your agent (or reconnect the MCP server)
+so it picks up the new index.
+
+**Shortcut.** To do both steps for the current project in one command:
 
 ```sh
 codewiki setup
-# Indexed 141 files — 2025 nodes, 1884 edges (0.3s).
-# Restart Claude Code (or any configured agent) to activate the MCP tools.
+# Indexes this project and wires your detected agent(s).
 ```
 
-Or run the steps individually:
+Verify everything is healthy at any time:
 
 ```sh
-# 1. Index this project
-codewiki init
-
-# 2. Wire into your agent (Claude, Cursor, Codex, opencode, Hermes)
-codewiki install --target claude
-
-# 3. Verify everything is healthy
 codewiki doctor
 ```
 
 `codewiki doctor` runs 6 checks: binary on PATH, index initialized, index non-empty,
-freshness, agent wired, git hook installed.
+freshness, agent wired (global or local), git hook installed.
 
 ---
 

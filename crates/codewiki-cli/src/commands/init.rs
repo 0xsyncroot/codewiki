@@ -75,6 +75,10 @@ pub fn run(path: Option<PathBuf>, no_index: bool) -> Result<()> {
         }
     }
 
-    println!("Done. Run `codewiki install --target <agent>` to enable in AI tools.");
+    println!(
+        "Wire your AI agent once (machine-wide) with `codewiki install --target <agent>` \
+         (or `codewiki setup` to do both). Every project you `codewiki init` then works \
+         automatically."
+    );
     Ok(())
 }

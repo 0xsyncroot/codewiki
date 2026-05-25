@@ -140,7 +140,7 @@ fn run_all_checks(root: &Path) -> Vec<CheckResult> {
         check_index_exists(root),
         check_index_non_empty(root),
         check_index_freshness(root),
-        check_agent_wired(),
+        check_agent_wired(root),
         check_git_hook(root),
     ]
 }
@@ -293,23 +293,48 @@ fn check_index_freshness(root: &Path) -> CheckResult {
     }
 }
 
-/// Check 5: at least one agent wired (MCP config present).
-fn check_agent_wired() -> CheckResult {
+/// Check 5: at least one agent wired (MCP config present) at EITHER Global or
+/// Local scope.
+///
+/// §4-C — a global registration (`codewiki install`) serves every project, but
+/// a user may instead pin CodeWiki to this project with `--location local`.
+/// Probing only Global would wrongly report a working local install as "no AI
+/// agent configured", so we accept an agent wired at either location.
+fn check_agent_wired(root: &Path) -> CheckResult {
     use crate::installer::targets::{all_targets, Location};
 
-    let loc = Location::Global;
-    // detect_installed_agents checks if the agent binary is present.
-    // is_installed checks if codewiki is already wired into the agent config.
-    let wired: Vec<String> = all_targets()
-        .iter()
-        .filter(|t| t.supports_location(loc) && t.is_installed(loc))
-        .map(|t| t.display_name().to_string())
-        .collect();
+    // Local install detection resolves the per-project config from the current
+    // working directory (the targets read cwd, not an arbitrary root), so only
+    // probe Local when `root` IS the cwd. For `doctor --path <other>` we report
+    // Global-only (cwd-independent) rather than inspect the wrong project's local
+    // config. A global registration serves every project regardless of location.
+    let check_local = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| cwd.canonicalize().ok())
+        .zip(root.canonicalize().ok())
+        .map(|(cwd, r)| cwd == r)
+        .unwrap_or(false);
+
+    // is_installed checks whether codewiki is already wired into the agent
+    // config at the given location.
+    let mut wired: Vec<String> = Vec::new();
+    for t in all_targets() {
+        let global = t.supports_location(Location::Global) && t.is_installed(Location::Global);
+        let local =
+            check_local && t.supports_location(Location::Local) && t.is_installed(Location::Local);
+        if global && local {
+            wired.push(format!("{} (global + local)", t.display_name()));
+        } else if global {
+            wired.push(format!("{} (global)", t.display_name()));
+        } else if local {
+            wired.push(format!("{} (local)", t.display_name()));
+        }
+    }
 
     if wired.is_empty() {
         CheckResult::fail(
             "agent wired",
-            "no AI agent has CodeWiki configured",
+            "no AI agent has CodeWiki configured (global or local)",
             "codewiki setup",
         )
     } else {

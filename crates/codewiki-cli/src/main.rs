@@ -34,7 +34,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     // ── Common ────────────────────────────────────────────────────────────────
-    /// Set up CodeWiki for this project and your AI agents  [START HERE]
+    /// [START HERE] Index this project and wire your AI agent
     #[command(next_help_heading = "Common")]
     Setup {
         /// Skip all prompts and accept defaults
@@ -98,7 +98,7 @@ enum Commands {
     },
 
     // ── Advanced ──────────────────────────────────────────────────────────────
-    /// Initialize CodeWiki index for this project
+    /// Create + index this project's .codewiki/ (DB + git hooks)
     #[command(next_help_heading = "Advanced")]
     Init {
         /// Interactive mode: prompts for options
@@ -114,7 +114,7 @@ enum Commands {
         no_index: bool,
     },
 
-    /// Re-index all files in the current project (or --path)
+    /// Rebuild the full index (run `codewiki init` first)
     #[command(next_help_heading = "Advanced")]
     Index {
         /// Path to project root
@@ -207,7 +207,7 @@ enum Commands {
     },
 
     // ── Management ────────────────────────────────────────────────────────────
-    /// Wire CodeWiki into AI agent configs (subset of setup)
+    /// Wire CodeWiki into an AI agent (machine-wide by default; --location local to pin this project)
     #[command(next_help_heading = "Management")]
     Install {
         /// Skip all prompts and use defaults
