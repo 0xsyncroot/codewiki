@@ -425,16 +425,23 @@ mod tests {
         let db = project.path().join(".codewiki").join("codewiki.db");
         assert!(db.exists(), ".codewiki/codewiki.db not created");
 
-        // At least one agent config file should be written.
-        // Claude writes ~/.claude.json (global) — check that the home_dir has something.
-        let home_contents: Vec<_> = fs::read_dir(home_dir.path())
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .collect();
-        assert!(
-            !home_contents.is_empty(),
-            "no agent config files written under HOME"
-        );
+        // At least one agent config file should be written (Claude writes
+        // ~/.claude.json globally). We can reliably redirect the home dir via
+        // HOME on Unix; on Windows `home::home_dir()` resolves through the Win32
+        // known-folder API and does not reliably honor a test-set sandbox, so we
+        // assert the home-location only off-Windows. The per-target writers
+        // themselves are covered cross-platform by tests/installer_targets.rs.
+        #[cfg(not(windows))]
+        {
+            let home_contents: Vec<_> = fs::read_dir(home_dir.path())
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .collect();
+            assert!(
+                !home_contents.is_empty(),
+                "no agent config files written under HOME"
+            );
+        }
     }
 
     /// F8 (b): running `setup --yes` twice is idempotent (exits 0 both times).
