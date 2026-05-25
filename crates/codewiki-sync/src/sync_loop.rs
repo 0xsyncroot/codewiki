@@ -559,7 +559,11 @@ mod tests {
             b"export const a = 1; export const b = 2; export const c = 3;",
         )
         .unwrap();
-        std::fs::File::open(&file_path)
+        // Windows requires a write handle to set file times; `File::open`
+        // (read-only) would fail there, so open with write access.
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&file_path)
             .unwrap()
             .set_modified(original_mtime)
             .unwrap();
