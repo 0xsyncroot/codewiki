@@ -803,6 +803,43 @@ Binary sha256: `__________`  •  Version: `__________`  •  Date: `__________`
 | I9 | mcp graceful unindexed | | | | | |
 | I10 | mcp valid handshake | | | | | |
 
-**Totals:** PASS ___ / FAIL ___ / BLOCKED ___ (per agent).
-**Top FAILs / regressions to escalate:** ___________________________________________
-**Discrepancies (non-unanimous rows):** _________________________________________
+**Totals:** ~90 case-checks each — Agent1 / Agent2 / Agent3 all PASS the core
+engine; 7 distinct defects FAILed unanimously; 0 BLOCKED.
+
+---
+
+## Execution Results — 3 independent agents (2026-05-25)
+
+Binary under test: `codewiki 0.1.0`, sha256 `1d3a581e…` (all three agents verified
+the same build, commit `25bcb06`). Workspaces `/tmp/qc{1,2,3}`, ports 7101-7103.
+
+### Unanimously CONFIRMED defects (all 3 agents agree)
+
+| ID | Defect | Severity | Evidence (concordant across agents) |
+|----|--------|:--------:|--------------------------------------|
+| C-CS-3 / D1 / E-ASP-1 | **C# `implements` = 0** for `class Greeter : IGreeter` and synthetic DI `UserService : IUserService` | High | `edges WHERE kind='implements'` empty in all three runs. (Real eShopOnWeb DI yielded 13, ripgrep Rust 116 — so the edge kind works; the C# base-list / synthetic-DI path doesn't emit the ref.) |
+| C-CPP-1/2/3 | **C++ extraction near-broken** | High | Only class nodes + a stray `variable`; methods, free functions, `extends`, and all `calls` edges MISSING |
+| H4 | **Unicode/Vietnamese identifiers stripped to ASCII** | High | `MáyTính`→`MayTinh`, `cộng`→`cong` in node names (hex/byte-verified, not display) |
+| C-RS-4 | **Rust duplicate nodes** | Medium | each trait/impl fn emitted as BOTH `function` AND `method` (same line range); `calls` edge duplicated |
+| C-JAVA-1/3 | **Java `interface` mis-kinded as `class`; `implements` = 0** | Medium | + duplicate `speak` node |
+| C-TS-3 | **TypeScript `implements` = 0** | Medium | `class Dog implements Animal` → no implements edge |
+| E-EXP-1 / E-DJ-1 / E-ASP-2 | **No `route` nodes on minimal synthetic samples** | Low | real `expressjs/express` clone DID produce 266 route nodes — resolver fires on real router patterns, not the minimal `app.get('/p', fn)` form |
+
+### Confirmed WORKING (all 3 agents PASS)
+init/index/uninit, git hooks, `--no-index`; Python/Rust/Go/JS/Vue + 9 "rest"
+languages basic extraction + calls; full incremental sync incl. the
+mtime-preserved-content-change case; all 9 MCP tools over JSON-RPC + CLI parity;
+graph UI + all API routes; graceful `serve --mcp` in an unindexed dir (friendly
+non-error message, no crash); robustness (empty repo, binary-ignore, 5k-fn file,
+gitignore); real-repo scale (Flask 2110 / ripgrep 4987 / Express 2291 nodes).
+
+### Clarified NON-defects (test-plan artifacts, not product bugs)
+- `codewiki_node` takes arg **`symbol`** (not `name`/`id`); Agent1's apparent
+  FAIL was the plan example using the wrong arg name → **doc fix**.
+- F-MCP raw JSON-RPC needs the `notifications/initialized` message + slow stdin
+  feed; the single-pipe helper closes stdin too early → **test-harness timing**.
+- Go structural interface satisfaction → no `implements` edge: **design decision**.
+- Angular/Vue `component` overlay node co-existing with the `class` node: by design.
+
+**Discrepancies (non-unanimous):** none of substance — the only divergence was
+the `codewiki_node` arg-name artifact above, resolved in favor of `symbol`.

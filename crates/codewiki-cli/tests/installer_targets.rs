@@ -638,6 +638,16 @@ fn cursor_supports_both_locations() {
 fn install_target_claude_skips_target_prompt() {
     let _home = setup_home();
 
+    // Clean slate. On platforms where `home::home_dir()` doesn't honor the
+    // test-set sandbox (Windows CI uses the Win32 known-folder API), an earlier
+    // serial test (e.g. install-all) may have written agent configs to the real
+    // profile. Uninstall every target first — via the same resolution the writer
+    // uses — so this test's "only Claude is wired" assertion is self-contained
+    // and not confounded by leftover global state.
+    for target in codewiki_cli::installer::targets::all_targets() {
+        let _ = target.uninstall(Location::Global);
+    }
+
     let opts = codewiki_cli::installer::InstallerOpts {
         yes: true,
         target: "claude".to_string(),
