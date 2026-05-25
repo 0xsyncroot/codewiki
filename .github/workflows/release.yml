@@ -97,11 +97,14 @@ jobs:
 
       - name: Strip binary (Linux)
         if: runner.os == 'Linux'
+        # Best-effort: stripping only shrinks the binary. The host `strip` cannot
+        # process a cross-compiled aarch64 ELF, so never let a strip failure fail
+        # the release — ship the (slightly larger) unstripped binary instead.
         run: |
           if command -v llvm-strip &>/dev/null; then
-            llvm-strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+            llvm-strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }} || true
           elif command -v strip &>/dev/null; then
-            strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+            strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }} || true
           fi
 
       - name: Strip binary (macOS)
