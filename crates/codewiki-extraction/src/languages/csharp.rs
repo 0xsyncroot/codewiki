@@ -4,7 +4,10 @@
 //! GAP-2: namespace_declaration + file_scoped_namespace_declaration push a scope
 //!         so qualified names become `Namespace.Class.Method`.
 
-use crate::ast_walker::{DocCommentStyle, LanguageConfig, LanguageExtractor};
+use crate::ast_walker::{
+    generate_node_id, DocCommentStyle, ExtractCtx, LanguageConfig, LanguageExtractor,
+};
+use codewiki_core::{NodeKind, UnresolvedRef};
 
 pub struct CSharpExtractor;
 
@@ -41,6 +44,85 @@ static CONFIG: LanguageConfig = LanguageConfig {
 impl LanguageExtractor for CSharpExtractor {
     fn config(&self) -> &LanguageConfig {
         &CONFIG
+    }
+
+    fn visit_node_hook(&self, node: &tree_sitter::Node, ctx: &mut ExtractCtx) -> bool {
+        // C-CS-3 / D1: `class C : Base, IFoo` → implements refs.
+        //
+        // C# syntax can't distinguish a base class from interfaces in the
+        // base_list, so we emit `implements` for every entry (eShopOnWeb-style
+        // `: IFoo` is overwhelmingly interfaces, matching QC expectations).
+        //
+        // Return `false` so `extract_class` still emits the class node + recurses.
+        // The class node id is deterministic, so it can be pre-computed here.
+        // D6: when there is no base_list we emit nothing (no spurious edges).
+        if node.kind() == "class_declaration" {
+            let src = ctx.source.as_bytes();
+            if let Some(name_node) = node.child_by_field_name("name") {
+                let cname = name_node.utf8_text(src).unwrap_or("").to_string();
+                if !cname.is_empty() {
+                    let line = node.start_position().row as u32 + 1;
+                    let from_id = generate_node_id(ctx.file_path, &NodeKind::Class, &cname, line);
+
+                    // base_list is a (non-field) child of class_declaration.
+                    let mut cursor = node.walk();
+                    for child in node.named_children(&mut cursor) {
+                        if child.kind() != "base_list" {
+                            continue;
+                        }
+                        let mut bc = child.walk();
+                        for entry in child.named_children(&mut bc) {
+                            // base_list children are the base type names. In this
+                            // grammar a simple base is an `identifier`; generic /
+                            // qualified bases appear as `generic_name` /
+                            // `qualified_name`; an explicit `type` wrapper or a
+                            // `primary_constructor_base_type` may also occur. The
+                            // only non-type child is `argument_list` (primary-ctor
+                            // call args), which we skip.
+                            let ty = match entry.kind() {
+                                "argument_list" => None,
+                                "primary_constructor_base_type" => {
+                                    entry.child_by_field_name("type").or(Some(entry))
+                                }
+                                _ => Some(entry),
+                            };
+                            if let Some(ty) = ty {
+                                let raw = ty.utf8_text(src).unwrap_or("").trim();
+                                // Strip generic args: `IRepo<T>` → `IRepo`; keep the
+                                // trailing dotted segment: `App.IFoo` → `IFoo`.
+                                let bare = raw.split('<').next().unwrap_or(raw).trim();
+                                let bare = bare.rsplit('.').next().unwrap_or(bare).trim();
+                                // A primary_constructor_base_type's text may include
+                                // an argument list `Base(x)`; cut at '('.
+                                let bare = bare.split('(').next().unwrap_or(bare).trim();
+                                if !bare.is_empty() {
+                                    let bline = ty.start_position().row as u32 + 1;
+                                    let ref_id = generate_node_id(
+                                        ctx.file_path,
+                                        &NodeKind::Class,
+                                        &format!("implements:{cname}:{bare}"),
+                                        bline,
+                                    );
+                                    ctx.unresolved.push(UnresolvedRef {
+                                        id: ref_id,
+                                        from_node_id: from_id.clone(),
+                                        reference_name: bare.to_string(),
+                                        reference_kind: "implements".to_string(),
+                                        file_path: ctx.file_path.to_string(),
+                                        line: Some(bline),
+                                        col: None,
+                                        metadata: None,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return false; // let extract_class emit the class node + recurse
+        }
+
+        false
     }
 }
 
@@ -256,5 +338,72 @@ namespace MyApp {
             meta.contains("\"is_async\":true"),
             "CreateOrderAsync metadata should have is_async:true, got: {meta}"
         );
+    }
+
+    // C-CS-3 / D1: `class Greeter : IGreeter` must emit an implements ref.
+    #[test]
+    fn extract_csharp_class_implements() {
+        let source = r#"
+namespace App
+{
+    public interface IGreeter
+    {
+        string Greet();
+    }
+
+    public class Greeter : IGreeter
+    {
+        public string Greet()
+        {
+            return "Hello";
+        }
+    }
+
+    public class Service
+    {
+        public string Run()
+        {
+            return "x";
+        }
+    }
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let impls: Vec<&str> = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_kind == "implements")
+            .map(|r| r.reference_name.as_str())
+            .collect();
+        assert_eq!(
+            impls,
+            vec!["IGreeter"],
+            "Greeter should implement IGreeter exactly once; impls: {impls:?}"
+        );
+    }
+
+    // D6: a class with no base list must NOT emit any implements ref.
+    #[test]
+    fn extract_csharp_no_base_no_spurious_implements() {
+        let source = r#"
+namespace App
+{
+    public class Plain
+    {
+        public void Noop() {}
+    }
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let impls = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_kind == "implements")
+            .count();
+        assert_eq!(impls, 0, "no base list must yield no implements refs");
     }
 }

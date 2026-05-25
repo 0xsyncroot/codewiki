@@ -584,17 +584,27 @@ mod tests {
     }
 
     #[test]
-    fn fts_vn_d_stroke_matches() {
+    fn fts_vn_d_stroke_preserves_raw_name() {
+        // The canonical `nodes` columns must store the RAW identifier verbatim.
+        // Previously `insert_node` folded the non-decomposable `đ` stroke
+        // (U+0111 → 'd') at write time, corrupting the stored name to
+        // `dang_nhap` and breaking edge resolution that matches on raw symbol
+        // names. After the fix, the raw `đăng_nhập` is preserved exactly.
+        //
+        // Note: the FTS5 `unicode61 remove_diacritics 2` tokenizer strips
+        // decomposable combining marks but does NOT fold the `đ` stroke, so
+        // `đ`-stroke identifiers are not reachable via the ASCII form through
+        // FTS — that is an accepted tradeoff of keeping canonical names intact.
         let conn = open_in_memory().unwrap();
         insert_node(&conn, &make_node("vn2", "đăng_nhập")).unwrap();
-        let opts = SearchOptions {
-            limit: 10,
-            ..Default::default()
-        };
-        let results = search_nodes_fts(&conn, "dang_nhap", &opts).unwrap();
-        assert!(
-            !results.is_empty(),
-            "đ-stroke query must match after normalization"
+        let stored: String = conn
+            .query_row("SELECT name FROM nodes WHERE id = ?1", ["vn2"], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(
+            stored, "đăng_nhập",
+            "canonical name column must store the raw đ-stroke identifier verbatim"
         );
     }
 

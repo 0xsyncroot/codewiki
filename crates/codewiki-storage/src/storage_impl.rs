@@ -1384,8 +1384,12 @@ impl QueryHandle for StorageImpl {
                 // project_metadata so `--prefix src/extraction` works even though
                 // the DB stores absolute paths.
                 let resolved_prefix: Option<String> = if let Some(p) = &f.path_prefix {
-                    if std::path::Path::new(p).is_absolute() {
-                        Some(p.clone())
+                    // Indexed paths are stored with forward slashes on every
+                    // platform, so the resolved prefix must use them too — a
+                    // leading '/' counts as absolute, and any backslashes a
+                    // Windows `Path::join` introduces are normalized back to '/'.
+                    if p.starts_with('/') || std::path::Path::new(p).is_absolute() {
+                        Some(p.replace('\\', "/"))
                     } else {
                         // Look up root_path from project_metadata; fall back to
                         // trying the raw prefix (works if DB paths happen to match).
@@ -1393,10 +1397,10 @@ impl QueryHandle for StorageImpl {
                             .unwrap_or(None)
                             .unwrap_or_default();
                         if root.is_empty() {
-                            Some(p.clone())
+                            Some(p.replace('\\', "/"))
                         } else {
                             let joined = std::path::Path::new(&root).join(p);
-                            Some(joined.to_string_lossy().to_string())
+                            Some(joined.to_string_lossy().replace('\\', "/"))
                         }
                     }
                 } else {

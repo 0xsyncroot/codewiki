@@ -1,4 +1,3 @@
-use crate::search::normalize_for_fts;
 /// Prepared-statement helpers for node CRUD operations.
 use codewiki_core::{CodeWikiError, Node, NodeKind};
 use rusqlite::{params, Connection};
@@ -88,22 +87,24 @@ pub fn insert_node(conn: &Connection, node: &Node) -> Result<(), CodeWikiError> 
            VALUES
             (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,NULL,?13,?15,0,0,?16,NULL,?14)"#,
     )?;
-    let norm_name = normalize_for_fts(&node.name);
-    let norm_qname = normalize_for_fts(&node.qualified_name);
-    let norm_doc = node.docstring.as_deref().map(normalize_for_fts);
-
+    // Store RAW names/qualified_names/docstrings in the canonical `nodes`
+    // columns. Diacritic-insensitive search is handled entirely by the
+    // `nodes_fts` FTS5 table (tokenize='unicode61 remove_diacritics 2'), which
+    // sync triggers populate from these raw columns. Folding here would corrupt
+    // canonical identifiers (e.g. `MáyTính` → `MayTinh`) and break edge
+    // resolution that matches on raw symbol names.
     stmt.execute(params![
         node.id,
         node_kind_str(node),
-        norm_name,
-        norm_qname,
+        node.name,
+        node.qualified_name,
         node.file_path,
         node_lang_str(node),
         node.start_line as i64,
         node.end_line as i64,
         node.start_col as i64,
         node.end_col as i64,
-        norm_doc,
+        node.docstring,
         node.signature,
         node.is_exported as i64,
         now_ms(),

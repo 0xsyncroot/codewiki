@@ -758,7 +758,7 @@ pub fn walk_node(
     } else if cfg.call_types.contains(&node_type) {
         extract_call(node, ctx);
     } else if node_type == "impl_item" {
-        extract_rust_impl(node, ctx, extractor);
+        skip_children = extract_rust_impl(node, ctx, extractor);
     }
 
     if !skip_children {
@@ -1317,7 +1317,7 @@ fn extract_rust_impl(
     node: &tree_sitter::Node,
     ctx: &mut ExtractCtx,
     extractor: &dyn LanguageExtractor,
-) {
+) -> bool {
     let source_bytes = ctx.source.as_bytes();
     let mut type_idents: Vec<String> = Vec::new();
     let mut cursor = node.walk();
@@ -1436,6 +1436,11 @@ fn extract_rust_impl(
     if !impl_type.is_empty() {
         ctx.scope.pop();
     }
+    // `extract_rust_impl` fully owns traversal of the impl body (it walks the
+    // body's named children above), so the caller must NOT recurse into the
+    // impl's children again — otherwise each `function_item` would be emitted a
+    // second time at file scope as a top-level `Function` (with duplicate calls).
+    true
 }
 
 // ── Top-level entry point ─────────────────────────────────────────────────────

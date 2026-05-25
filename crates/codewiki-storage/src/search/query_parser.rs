@@ -14,8 +14,11 @@ use unicode_normalization::UnicodeNormalization;
 ///      - ø (U+00F8) → o,  Ø (U+00D8) → O
 ///      - ł (U+0142) → l,  Ł (U+0141) → L
 ///
-/// Applied at both write time (insert_node) and query time (parse_query).
-/// ASCII input (U+0000–U+007F) is returned unchanged (fast path).
+/// Applied only at query time (parse_query). The canonical `nodes` columns
+/// store RAW (un-folded) names; the `nodes_fts` FTS5 table folds diacritics at
+/// index time via `tokenize='unicode61 remove_diacritics 2'`, so folding the
+/// query here lets accented and un-accented queries both match the indexed
+/// tokens. ASCII input (U+0000–U+007F) is returned unchanged (fast path).
 pub fn normalize_for_fts(input: &str) -> String {
     // Fast path: pure ASCII — nothing to do.
     if input.is_ascii() {

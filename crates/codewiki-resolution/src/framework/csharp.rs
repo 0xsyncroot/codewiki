@@ -168,7 +168,27 @@ fn method_decl_regex() -> &'static Regex {
     })
 }
 
+/// Detection-only markers: a class deriving `: ControllerBase` / `: Controller`.
+fn controller_base_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r#":\s*[A-Za-z0-9_,\s<>]*\bController(?:Base)?\b"#)
+            .expect("aspnet controller_base_regex")
+    })
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/// Return true if `.cs` content shows ASP.NET attribute-routing / controller
+/// markers: `[Route(`, `[ApiController]`, an `[Http<Verb>]` attribute, or a
+/// class deriving `: ControllerBase` / `: Controller`. Detection-only — the
+/// extract() regexes decide what actually becomes a route.
+fn cs_content_has_aspnet_markers(content: &str) -> bool {
+    content.contains("[Route(")
+        || content.contains("[ApiController]")
+        || http_attr_regex().is_match(content)
+        || controller_base_regex().is_match(content)
+}
 
 /// Extract the trailing identifier from a C# handler expression.
 /// Returns None for lambdas (contain `=>`), anonymous delegates, or async lambdas.
@@ -386,10 +406,31 @@ impl FrameworkResolver for AspNetResolver {
             return true;
         }
         // Controller files in conventional location
-        context
+        if context
             .known_files
             .iter()
             .any(|f| f.contains("/Controllers/") && f.ends_with("Controller.cs"))
+        {
+            return true;
+        }
+
+        // In-file usage signal: scan any indexed `.cs` file for attribute
+        // routing / controller markers. This makes detection work on minimal
+        // samples (e.g. a single controller with `[Route]`/`[HttpGet]`) that
+        // lack a .csproj, Program.cs, or Controllers/ convention. extract()'s
+        // regexes still constrain what becomes a route.
+        for file in context.known_files {
+            if !file.ends_with(".cs") {
+                continue;
+            }
+            if let Some(content) = context.read_file(file) {
+                if cs_content_has_aspnet_markers(&content) {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     fn resolve(

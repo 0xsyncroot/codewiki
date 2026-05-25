@@ -18,8 +18,10 @@ fn route_regex() -> &'static Regex {
     RE.get_or_init(|| {
         // path('url', handler, name=...) / re_path(r'...', handler) / url(r'...', handler)
         // Handler may contain a single balanced () pair (e.g. View.as_view(), include('x.y'))
+        // The URL pattern uses `*` (not `+`) so Django's root route `path('', home)`
+        // — an empty URL string — is matched.
         Regex::new(
-            r#"\b(?:path|re_path|url)\s*\(\s*r?['"]([^'"]+)['"]\s*,\s*([\w.]+(?:\s*\([^)]*\))?)"#,
+            r#"\b(?:path|re_path|url)\s*\(\s*r?['"]([^'"]*)['"]\s*,\s*([\w.]+(?:\s*\([^)]*\))?)"#,
         )
         .expect("django route_regex")
     })
@@ -73,6 +75,7 @@ impl FrameworkResolver for DjangoResolver {
     }
 
     fn detect(&self, context: &ResolutionContext<'_>) -> bool {
+        // Manifest / project-marker fast-paths.
         for f in &["requirements.txt", "setup.py", "pyproject.toml"] {
             if let Some(content) = context.read_file(f) {
                 if content.to_lowercase().contains("django") {
@@ -80,7 +83,29 @@ impl FrameworkResolver for DjangoResolver {
                 }
             }
         }
-        context.file_exists("manage.py")
+        if context.file_exists("manage.py") {
+            return true;
+        }
+
+        // In-file usage signal: scan any indexed `.py` file for Django URL
+        // routing markers. This makes detection work on minimal samples (e.g.
+        // a bare `urls.py` with `path('', home)`) that lack a manifest or
+        // manage.py. extract()'s regexes still constrain what becomes a route.
+        for file in context.known_files {
+            if !file.ends_with(".py") {
+                continue;
+            }
+            if let Some(content) = context.read_file(file) {
+                if content.contains("from django.urls import")
+                    || content.contains("django.urls")
+                    || content.contains("urlpatterns =")
+                {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     fn resolve(

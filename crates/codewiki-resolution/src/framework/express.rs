@@ -39,7 +39,26 @@ fn service_regex() -> &'static Regex {
     })
 }
 
+/// In-file usage signal regex: `app.<verb>(` / `router.<verb>(` calls.
+fn usage_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r#"(?:app|router)\.(?:get|post|put|delete|patch|use|all)\s*\("#)
+            .expect("express usage_regex")
+    })
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/// Return true if `content` shows Express usage: an `express` import/require
+/// or an `(app|router).<verb>(` router call.
+fn content_has_express_usage(content: &str) -> bool {
+    content.contains("require('express')")
+        || content.contains("require(\"express\")")
+        || content.contains("from 'express'")
+        || content.contains("from \"express\"")
+        || usage_regex().is_match(content)
+}
 
 /// Extract the trailing identifier from a handler expression.
 /// e.g. `getUsers`, `userController.list`, `userController.list.bind(this)` → `list`.
@@ -116,19 +135,24 @@ impl FrameworkResolver for ExpressResolver {
             }
         }
 
-        // Scan common route-containing files
+        // In-file usage signal: scan any indexed JS/TS file for Express imports
+        // or router calls. This makes detection work on minimal samples that
+        // lack a package.json (e.g. a bare `app.js` with `app.get('/x', fn)`),
+        // while extract()'s regexes still constrain what becomes a route so
+        // non-framework JS won't spuriously gain routes.
         for file in context.known_files {
-            if file.contains("routes")
-                || file.contains("controllers")
-                || file.contains("middleware")
+            if !(file.ends_with(".js")
+                || file.ends_with(".ts")
+                || file.ends_with(".jsx")
+                || file.ends_with(".tsx")
+                || file.ends_with(".mjs")
+                || file.ends_with(".cjs"))
             {
-                if let Some(content) = context.read_file(file) {
-                    if content.contains("express")
-                        || content.contains("app.get")
-                        || content.contains("router.get")
-                    {
-                        return true;
-                    }
+                continue;
+            }
+            if let Some(content) = context.read_file(file) {
+                if content_has_express_usage(&content) {
+                    return true;
                 }
             }
         }
