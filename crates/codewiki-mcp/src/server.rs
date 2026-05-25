@@ -4,8 +4,10 @@
 //! 1. Client sends `initialize` request.
 //! 2. Server immediately returns `InitializeResult` with `MCP_PROTOCOL_VERSION`
 //!    WITHOUT awaiting any background work (so the host doesn't time out).
-//! 3. Background init (`tryInitializeDefault`) is kicked off via `tokio::spawn`.
-//! 4. Subsequent tool calls block on the init promise.
+//! 3. The live-on-save file watcher is started via `tokio::spawn` (when a
+//!    `WatcherStarter` was wired and watching is enabled). Starting it is
+//!    non-blocking: the watcher runs on its own dedicated background thread, so
+//!    the JSON-RPC serve path is never blocked by extraction/sync work.
 //!
 //! T-414 — Roots protocol: if the client advertises `capabilities.roots`,
 //! and no explicit project path was provided, the server requests `roots/list`
@@ -31,11 +33,18 @@ use rmcp::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::Mutex;
 
 /// The primary MCP server struct.
 ///
-/// Holds a reference to the shared query handle and a once-cell for lazy init.
+/// Holds a reference to the shared, read-only query handle.
+///
+/// Live-on-save auto-sync is **not** owned here: `rmcp`'s server transport
+/// consumes the `initialize` handshake internally and replies via `get_info()`
+/// rather than dispatching to a handler method, so there is no
+/// server-side hook from which to start a watcher. The file watcher is instead
+/// started by the serve entrypoint (`codewiki serve --mcp`) for the duration of
+/// the transport — see `codewiki-cli/src/commands/serve.rs`.
 #[derive(Clone)]
 pub struct CodeWikiMcpServer {
     /// Shared, read-only query handle (SQLite reads are thread-safe in WAL mode).
@@ -45,10 +54,6 @@ pub struct CodeWikiMcpServer {
     handle_cache: Arc<Mutex<HashMap<String, Arc<dyn QueryHandle>>>>,
     /// Peer handle set by rmcp after `serve` is called (allows server-initiated requests).
     peer: Arc<Mutex<Option<rmcp::Peer<RoleServer>>>>,
-    /// Once-cell holding the result of background initialisation.
-    /// Currently a no-op placeholder; in a full implementation this would
-    /// open the SQLite DB and start the file watcher.
-    init_cell: Arc<OnceCell<()>>,
 }
 
 impl CodeWikiMcpServer {
@@ -58,7 +63,6 @@ impl CodeWikiMcpServer {
             db,
             handle_cache: Arc::new(Mutex::new(HashMap::new())),
             peer: Arc::new(Mutex::new(None)),
-            init_cell: Arc::new(OnceCell::new()),
         }
     }
 
@@ -110,18 +114,6 @@ impl CodeWikiMcpServer {
         }
     }
 
-    /// Kick off background initialisation (idempotent: called at most once).
-    fn spawn_background_init(&self) {
-        let cell = self.init_cell.clone();
-        tokio::spawn(async move {
-            // Background init is complete when the once-cell is set.
-            // In a full implementation this would open the DB, start the file
-            // watcher, etc.  For now it's a no-op placeholder.
-            let _ = cell.get_or_init(|| async {}).await;
-            tracing::debug!("Background init complete.");
-        });
-    }
-
     /// Build the `InitializeResult` sent to the client.
     pub fn build_initialize_result() -> InitializeResult {
         InitializeResult {
@@ -142,20 +134,18 @@ impl CodeWikiMcpServer {
 }
 
 impl ServerHandler for CodeWikiMcpServer {
-    /// Handle `initialize` — return immediately, kick off background init.
+    /// Handle a redundant in-session `initialize` request.
     ///
-    /// T-411 parity: the response arrives *before* any background-init logs
-    /// because the spawn happens after we return the result.
+    /// Note: `rmcp`'s server transport handles the *startup* handshake itself
+    /// (it consumes the first `initialize` message and replies via `get_info`),
+    /// so this method only fires if a client re-sends `initialize` mid-session.
+    /// It returns the same `InitializeResult` either path produces.
     async fn initialize(
         &self,
         _request: InitializeRequestParam,
         _context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, McpError> {
-        let result = Self::build_initialize_result();
-        // Kick off background init AFTER building the response so it
-        // never blocks the initialize reply.
-        self.spawn_background_init();
-        Ok(result)
+        Ok(Self::build_initialize_result())
     }
 
     /// Handle `tools/list` — return all 9 tool definitions.

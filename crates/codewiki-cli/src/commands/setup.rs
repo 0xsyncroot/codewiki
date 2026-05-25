@@ -393,9 +393,13 @@ mod tests {
         let project = tiny_project();
         let home_dir = tempfile::tempdir().unwrap();
 
-        // Override HOME so agent config files land in our tmpdir.
+        // Override HOME (Unix) and USERPROFILE (Windows) so agent config files
+        // land in our tmpdir on every platform — `home::home_dir()` resolves via
+        // USERPROFILE on Windows.
         let original_home = std::env::var_os("HOME");
+        let original_userprofile = std::env::var_os("USERPROFILE");
         std::env::set_var("HOME", home_dir.path());
+        std::env::set_var("USERPROFILE", home_dir.path());
 
         let result = run(
             true, // yes = true (no prompts)
@@ -404,10 +408,14 @@ mod tests {
             true, // ascii = true (no unicode issues in CI)
         );
 
-        // Restore HOME.
+        // Restore HOME / USERPROFILE.
         match original_home {
             Some(h) => std::env::set_var("HOME", h),
             None => std::env::remove_var("HOME"),
+        }
+        match original_userprofile {
+            Some(h) => std::env::set_var("USERPROFILE", h),
+            None => std::env::remove_var("USERPROFILE"),
         }
 
         // Setup must succeed.
@@ -437,7 +445,9 @@ mod tests {
         let home_dir = tempfile::tempdir().unwrap();
 
         let original_home = std::env::var_os("HOME");
+        let original_userprofile = std::env::var_os("USERPROFILE");
         std::env::set_var("HOME", home_dir.path());
+        std::env::set_var("USERPROFILE", home_dir.path());
 
         // First run.
         let r1 = run(
@@ -457,6 +467,10 @@ mod tests {
         match original_home {
             Some(h) => std::env::set_var("HOME", h),
             None => std::env::remove_var("HOME"),
+        }
+        match original_userprofile {
+            Some(h) => std::env::set_var("USERPROFILE", h),
+            None => std::env::remove_var("USERPROFILE"),
         }
 
         assert!(r1.is_ok(), "first setup run failed: {:?}", r1);

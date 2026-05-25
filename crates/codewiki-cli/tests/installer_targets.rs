@@ -11,9 +11,18 @@ use serial_test::serial;
 use tempfile::TempDir;
 
 // Helper to set HOME so path helpers resolve into the tempdir.
+//
+// opencode's global config path is XDG-aware (uses `XDG_CONFIG_HOME` when set),
+// so we also pin `XDG_CONFIG_HOME` under the temp HOME — otherwise CI runners
+// that export `XDG_CONFIG_HOME` would write opencode's files outside the sandbox
+// and the assertions would not find them.
 fn setup_home() -> TempDir {
     let dir = tempfile::tempdir().unwrap();
     std::env::set_var("HOME", dir.path());
+    // `home::home_dir()` resolves via USERPROFILE on Windows, HOME on Unix —
+    // pin both so the sandbox holds on every platform.
+    std::env::set_var("USERPROFILE", dir.path());
+    std::env::set_var("XDG_CONFIG_HOME", dir.path().join(".config"));
     dir
 }
 

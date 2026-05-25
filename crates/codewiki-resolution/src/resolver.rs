@@ -740,6 +740,34 @@ fn language_from_file_path(path: &str) -> Language {
     }
 }
 
+/// Map an extraction-time `reference_kind` string to its semantic [`EdgeKind`].
+///
+/// GAP-3: name-matched and framework-resolved edges previously hardcoded
+/// [`EdgeKind::References`], discarding the relationship the extractor recorded
+/// (e.g. C#/.NET `implements` refs from `services.AddScoped<IFoo, Foo>()`). This
+/// is the inverse of the canonical `EdgeKind → str` mapping used elsewhere
+/// (`codewiki-mcp::tools::explore::format_edge_kind`); keep the two in sync.
+///
+/// Unknown / generic kinds fall back to [`EdgeKind::References`] rather than
+/// inventing a variant. `"inherits"` is accepted as a synonym for `"extends"`
+/// because some extractors phrase class inheritance that way.
+pub(crate) fn edge_kind_from_reference_kind(reference_kind: &str) -> EdgeKind {
+    match reference_kind {
+        "calls" => EdgeKind::Calls,
+        "imports" => EdgeKind::Imports,
+        "contains" => EdgeKind::Contains,
+        "extends" | "inherits" => EdgeKind::Extends,
+        "implements" => EdgeKind::Implements,
+        "uses" => EdgeKind::Uses,
+        "instantiates" => EdgeKind::Instantiates,
+        "exports" => EdgeKind::Exports,
+        "renders" => EdgeKind::Renders,
+        "resolves" => EdgeKind::Resolves,
+        // "references" and any unrecognised kind stay generic.
+        _ => EdgeKind::References,
+    }
+}
+
 fn make_name_match_edge(
     uref: &UnresolvedRef,
     node: &Node,
@@ -752,7 +780,14 @@ fn make_name_match_edge(
             id: format!("{}->{}", uref.from_node_id, node.id),
             source_id: uref.from_node_id.clone(),
             target_id: node.id.clone(),
-            kind: EdgeKind::References,
+            // GAP-3: preserve the extractor's relationship instead of forcing
+            // every name-matched edge to `References`. Edge orientation is
+            // source = referrer (`from_node_id`), target = matched symbol —
+            // which matches the implementer→interface / caller→callee
+            // convention used by graph traversal (see
+            // `codewiki-storage::graph::traversal::type_ancestors`, which walks
+            // OUTGOING Implements/Extends edges from a type to its supertypes).
+            kind: edge_kind_from_reference_kind(&uref.reference_kind),
             confidence: Some(confidence),
             provenance: Some(format!("{:?}", resolved_by)),
             ..Default::default()
@@ -841,5 +876,95 @@ impl<'a> NameMatchContext for DbNameMatchCtx<'a> {
             return idx.contains_key(file_path);
         }
         !self.db.get_nodes_in_file(file_path).is_empty()
+    }
+}
+
+#[cfg(test)]
+mod edge_kind_mapping_tests {
+    use super::{edge_kind_from_reference_kind, make_name_match_edge};
+    use codewiki_core::{EdgeKind, Node, UnresolvedRef};
+    use codewiki_storage::traits::ResolvedBy;
+
+    // GAP-3: reference_kind strings must map to their semantic EdgeKind, not be
+    // collapsed to References. This is the inverse of format_edge_kind in
+    // codewiki-mcp; keep both in sync.
+    #[test]
+    fn reference_kind_maps_to_semantic_edge_kind() {
+        assert_eq!(edge_kind_from_reference_kind("calls"), EdgeKind::Calls);
+        assert_eq!(edge_kind_from_reference_kind("imports"), EdgeKind::Imports);
+        assert_eq!(
+            edge_kind_from_reference_kind("contains"),
+            EdgeKind::Contains
+        );
+        assert_eq!(edge_kind_from_reference_kind("extends"), EdgeKind::Extends);
+        assert_eq!(edge_kind_from_reference_kind("inherits"), EdgeKind::Extends);
+        assert_eq!(
+            edge_kind_from_reference_kind("implements"),
+            EdgeKind::Implements
+        );
+        assert_eq!(edge_kind_from_reference_kind("uses"), EdgeKind::Uses);
+        assert_eq!(
+            edge_kind_from_reference_kind("instantiates"),
+            EdgeKind::Instantiates
+        );
+        assert_eq!(edge_kind_from_reference_kind("exports"), EdgeKind::Exports);
+        assert_eq!(edge_kind_from_reference_kind("renders"), EdgeKind::Renders);
+        assert_eq!(
+            edge_kind_from_reference_kind("resolves"),
+            EdgeKind::Resolves
+        );
+    }
+
+    #[test]
+    fn references_and_unknown_kinds_fall_back_to_references() {
+        assert_eq!(
+            edge_kind_from_reference_kind("references"),
+            EdgeKind::References
+        );
+        assert_eq!(edge_kind_from_reference_kind(""), EdgeKind::References);
+        assert_eq!(
+            edge_kind_from_reference_kind("something-bespoke"),
+            EdgeKind::References
+        );
+    }
+
+    // The C#/.NET DI case: an `implements` ref must resolve to an Implements
+    // edge, with the implementing-side node as source and the matched symbol as
+    // target (the implementer→interface orientation graph traversal expects).
+    #[test]
+    fn implements_ref_produces_implements_edge_with_correct_direction() {
+        let uref = UnresolvedRef {
+            id: "1".to_string(),
+            from_node_id: "impl-side-node".to_string(),
+            reference_name: "UserService".to_string(),
+            reference_kind: "implements".to_string(),
+            ..Default::default()
+        };
+        let node = Node {
+            id: "interface-side-node".to_string(),
+            name: "IUserService".to_string(),
+            ..Default::default()
+        };
+        let resolved = make_name_match_edge(&uref, &node, 0.9, ResolvedBy::NameMatcher);
+        assert_eq!(resolved.edge.kind, EdgeKind::Implements);
+        assert_eq!(resolved.edge.source_id, "impl-side-node");
+        assert_eq!(resolved.edge.target_id, "interface-side-node");
+    }
+
+    #[test]
+    fn calls_ref_produces_calls_edge() {
+        let uref = UnresolvedRef {
+            id: "2".to_string(),
+            from_node_id: "caller".to_string(),
+            reference_name: "doWork".to_string(),
+            reference_kind: "calls".to_string(),
+            ..Default::default()
+        };
+        let node = Node {
+            id: "callee".to_string(),
+            ..Default::default()
+        };
+        let resolved = make_name_match_edge(&uref, &node, 0.8, ResolvedBy::NameMatcher);
+        assert_eq!(resolved.edge.kind, EdgeKind::Calls);
     }
 }

@@ -139,13 +139,16 @@ pub(crate) fn make_resolved_edge(
     confidence: f32,
     resolver_name: &str,
 ) -> ResolvedEdge {
-    use codewiki_core::{Edge, EdgeKind};
+    use crate::resolver::edge_kind_from_reference_kind;
     ResolvedEdge {
         edge: Edge {
             id: format!("{}->{}", reference.from_node_id, target_node_id),
             source_id: reference.from_node_id.clone(),
             target_id: target_node_id,
-            kind: EdgeKind::References,
+            // GAP-3: preserve the extractor's relationship (e.g. C#/.NET DI
+            // `implements` refs from `AddScoped<IFoo, Foo>()`) instead of
+            // collapsing every framework-resolved edge to `References`.
+            kind: edge_kind_from_reference_kind(&reference.reference_kind),
             confidence: Some(confidence),
             provenance: Some(format!("framework-{}", resolver_name)),
             ..Default::default()

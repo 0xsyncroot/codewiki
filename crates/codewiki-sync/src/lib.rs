@@ -21,6 +21,7 @@ pub mod directory_utils;
 pub mod edit_builder;
 pub mod events;
 pub mod git_hooks;
+pub mod live_sync;
 pub mod sync_loop;
 pub mod tree_cache;
 pub mod watch_policy;
@@ -38,7 +39,8 @@ pub use git_hooks::{
     install_git_sync_hook, is_git_repo, is_sync_hook_installed, remove_git_sync_hook, GitHookName,
     GitHookResult, DEFAULT_SYNC_HOOKS,
 };
+pub use live_sync::{spawn_live_sync, LiveSyncHandle, OnSynced};
 pub use sync_loop::{run_sync_cycle, SyncResult};
 pub use tree_cache::TreeCache;
 pub use watch_policy::{detect_wsl, watch_disabled_reason, WatchPolicy};
-pub use watcher::FileWatcher;
+pub use watcher::{FileWatcher, WatcherConfig};
