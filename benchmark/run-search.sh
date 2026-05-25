@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# Search/MCP latency: for each repo, run query types 5x, report p50/p95 (ms).
+# Search/query latency: for each repo, run each query type 7x, report p50 (ms).
+# CLI path = cold DB open per call (worst case); MCP server keeps DB open (sub-ms).
+# Reproduces benchmark/results-search.tsv (one row per repo, p50 per query type).
 set -u
-BIN=/root/develop/code-wiki/target/release/codewiki
-CORPUS=/root/bench-corpus
-OUT=/root/develop/code-wiki/benchmark/results-search.tsv
-echo -e "repo\tquery_type\tp50_ms\tp95_ms" > "$OUT"
+BIN="${CW:-codewiki}"
+ROOT="${BENCH_ROOT:-/tmp/bench}"
+OUT="$(dirname "$0")/results-search.tsv"
+echo -e "repo\tlang\tquery_exact\tquery_fuzzy\tcallers\tcallees\timpact\tcontext" > "$OUT"
 
-declare -A SYM=(
-  [requests]=Session [flask]=Flask [django]=Model [ripgrep]=search
-  [express]=Router [zod]=ZodType [mediatr]=Mediator [vuecore]=createApp
-  [tokio]=spawn [lodash]=debounce
-)
+declare -A SYM=([flask]=Flask [ripgrep]=search [express]=Router [zod]=ZodType \
+  [eShopOnWeb]=OrderService [gson]=Gson [json]=parse [gin]=Engine)
+declare -A LANG=([flask]=Python [ripgrep]=Rust [express]=JavaScript [zod]=TypeScript \
+  [eShopOnWeb]="C#" [gson]=Java [json]="C++" [gin]=Go)
 
-pctl() { local p=$1; sort -n | awk -v p="$p" '{a[NR]=$1} END{ if(NR==0){print 0;exit} i=int((p/100)*NR); if(i<1)i=1; if(i>NR)i=NR; print a[i] }'; }
+p50() { sort -n | awk '{a[NR]=$1} END{ if(NR==0){print 0;exit} print a[int((NR+1)/2)] }'; }
 time_ms() { local s e; s=$(date +%s%N); "$@" >/dev/null 2>&1; e=$(date +%s%N); echo $(( (e-s)/1000000 )); }
 
-run_type() { # repo dir qtype sym partial  → emits 5 timings via $@ command builder
-  local dir=$1 qt=$2 sym=$3 partial=$4
-  local vals=()
-  for i in 1 2 3 4 5; do
+measure() { # dir qtype sym partial  → p50 over 7 runs
+  local dir=$1 qt=$2 sym=$3 partial=$4 vals=()
+  for i in 1 2 3 4 5 6 7; do
     case "$qt" in
       query_exact) vals+=( "$(time_ms "$BIN" query "$sym" --path "$dir")" );;
       query_fuzzy) vals+=( "$(time_ms "$BIN" query "$partial" --path "$dir")" );;
@@ -28,19 +28,20 @@ run_type() { # repo dir qtype sym partial  → emits 5 timings via $@ command bu
       context)     vals+=( "$(time_ms "$BIN" context "how does $sym work" --path "$dir")" );;
     esac
   done
-  local p50 p95
-  p50=$(printf '%s\n' "${vals[@]}" | pctl 50)
-  p95=$(printf '%s\n' "${vals[@]}" | pctl 95)
-  echo -e "$d\t$qt\t$p50\t$p95" >> "$OUT"
+  printf '%s\n' "${vals[@]}" | p50
 }
 
-for d in requests flask django ripgrep express zod mediatr vuecore tokio lodash; do
-  dir="$CORPUS/$d"
-  [ -d "$dir/.codewiki" ] || continue
+for d in flask ripgrep express zod eShopOnWeb gson json gin; do
+  dir="$ROOT/$d"
+  [ -d "$dir/.codewiki" ] || { echo "skip $d (no index)"; continue; }
   sym=${SYM[$d]:-main}; partial=${sym:0:4}
-  for qt in query_exact query_fuzzy callers callees impact context; do
-    run_type "$dir" "$qt" "$sym" "$partial"
-  done
+  qe=$(measure "$dir" query_exact "$sym" "$partial")
+  qf=$(measure "$dir" query_fuzzy "$sym" "$partial")
+  cr=$(measure "$dir" callers "$sym" "$partial")
+  ce=$(measure "$dir" callees "$sym" "$partial")
+  im=$(measure "$dir" impact "$sym" "$partial")
+  cx=$(measure "$dir" context "$sym" "$partial")
+  echo -e "$d\t${LANG[$d]}\t$qe\t$qf\t$cr\t$ce\t$im\t$cx" >> "$OUT"
   echo "searched $d"
 done
 echo "=== results-search.tsv ==="

@@ -1,7 +1,7 @@
 # Vietnamese Language Compatibility Report — codewiki-rs
 
 **Date:** 2026-05-25  
-**codewiki version:** 0.1.0  
+**codewiki version:** 0.1.1  
 **Test corpus:** 18 synthetic files, 5 languages (Python × 7, TypeScript × 5, Go × 2, C# × 2, Rust × 2)  
 **Corpus path:** `/root/bench-corpus/vn-project/`  
 **Methodology:** Fabricated corpus with heavy Vietnamese comments/docstrings and Vietnamese-derived identifiers (camelCase: `tinhTong`, `dangNhap`, `nguoiDung`; snake_case: `tinh_tong_tien`, `_tim_nguoi_dung`; PascalCase: `QuanLyNguoiDung`, `LoiHeThong`). English-translation equivalent (`auth_en.py` ↔ `auth.py`) included for direct parity comparison.

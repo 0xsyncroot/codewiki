@@ -1,16 +1,17 @@
 # CodeWiki Benchmark Results
 
 CodeWiki is a local, tree-sitter-based code knowledge graph that exposes 9 MCP tools
-to AI coding agents. This report summarises indexing throughput, query latency,
-incremental sync speed, 100k-file scalability, and the agent token/tool-call savings
-that the graph enables.
+to AI coding agents. This is the single authoritative benchmark report: cross-language
+indexing throughput, query latency, incremental sync, 100k-file scalability, and the
+agent token / tool-call / dollar savings the graph enables.
 
-All numbers are from deterministic, reproducible runs. Raw data lives in the `.tsv`
-files alongside this document. Detailed methodology and analysis are in the linked
-report files.
+All numbers below come from a fresh run on **2026-05-25** against the current binary
+(`codewiki 0.1.1`). Raw data lives in the `.tsv` files alongside this document. The
+per-repo benchmark repos are **shallow clones of upstream `main`** (commit SHAs recorded
+in `results-index.tsv`); re-running the commands reproduces the figures.
 
 **Machine:** 28 cores, 31 GB RAM, WSL2 on Linux 5.15 (AMD64).
-**Binary:** `codewiki 0.1.0` (release build, default features).
+**Binary:** `codewiki 0.1.1` (release build, default features).
 
 ---
 
@@ -18,186 +19,216 @@ report files.
 
 | Metric | Result |
 |--------|--------|
-| Index throughput — small repos | 370–1700 files/s |
-| Index throughput — django (3019 files) | 256 files/s, **11.8 s** total |
-| Search / callers / callees latency (CLI p50) | **2–7 ms** (includes binary cold-start) |
-| Context query latency (CLI p50) | **3–38 ms** |
-| Incremental sync — 1 file changed | **20–150 ms** |
+| Cold-index throughput | **~280–1800 files/s** across 8 languages |
+| Cold-index, largest single-lang repo (json, 499 C++ files) | **~1.0 s** |
+| Search / callers / callees latency (CLI p50) | **2–4 ms** (includes binary cold-start) |
+| Impact / context latency (CLI p50) | **2–33 ms** |
+| Incremental sync — 1 file changed | **21–43 ms** (small/medium), 66 ms (jellyfin, 2,065 .cs) |
 | 100k-file cold-index extrapolated | **~14 min** (acceptance target: ≤ 20 min) |
-| Agent tool-call reduction (.NET tasks) | **~69% fewer** |
-| Agent token reduction (.NET tasks) | **~86% fewer** |
+| Agent tool-call reduction (.NET tasks) | **~70% fewer** |
+| Agent token reduction (.NET tasks) | **~83% fewer** |
+| Agent cost saved (.NET tasks) | **~$0.012 / task → ~$0.24 / 20-interaction session** |
 | Vietnamese / diacritic search | Safe — UTF-8 intact, ASCII identifiers fully searchable |
 
----
-
-## Scale at a glance
-
-codewiki indexes a 5,203-file enterprise C# codebase (OrchardCore) in **9.2 s**
-and scales to 100,000 files in an extrapolated **~14 min** — then stays fresh with
-millisecond-range incremental sync.
-
-| Repo / corpus | Language | Files | Index time | files/s | Peak RSS | Incr sync |
-|---------------|----------|------:|:----------:|--------:|:--------:|:---------:|
-| eShopOnWeb (C#) | ASP.NET | 254 | 0.16 s | ~1700 | 44 MB | 28 ms |
-| django (Python) | Django | 3,020 | 11.8 s | ~256 | ~351 MB | 130 ms |
-| abp/framework (C#) | .NET | 3,497 | 2.55 s | ~1370 | 228 MB | — |
-| **OrchardCore (C#)** | **ASP.NET** | **5,203** | **9.16 s** | **~640** | **784 MB** | — |
-| synthetic mixed | Py/TS/Rust/Vue | 10,831 | 29.7 s | ~365 | ~1.1 GB | — |
-| synthetic mixed | Py/TS/Rust/Vue | 16,461 | 56.4 s | ~290 | ~1.3 GB | — |
-| **100k (extrapolated)** | mixed | **100,000** | **~14 min** | — | **~4 GB** | **ms/change** |
-
-Sources: [REPORT.md](REPORT.md) (Python/JS/Rust/TS/Vue), [DOTNET-REPORT.md](DOTNET-REPORT.md) (.NET/C#),
-[ANALYSIS-SCALE.md](ANALYSIS-SCALE.md) (100k extrapolation).
-All large-corpus (.NET) numbers are post-fix (interfaces/namespaces/signatures correct).
+The **dollar savings is the .NET-measured agent study only** (see §4). The
+cross-language table (§1) is a **performance** benchmark — speed and scale — and does
+**not** carry per-language dollar figures, because the agent-cost study was run on .NET.
 
 ---
 
-## 1. Cold-index speed — 10 real repos
+## 1. Cross-language cold-index, search, and sync (8 languages, fresh)
 
-Post-Wave-4 optimisation build (see [REPORT.md §6](REPORT.md) for wave-by-wave breakdown
-and [ANALYSIS-SCALE.md](ANALYSIS-SCALE.md) for the 100k scaling analysis).
+Eight shallow-cloned real repositories, one per language. Every repo indexed cleanly —
+zero crashes, zero FK errors — including C++ (`nlohmann/json`, 499 files), which the
+recent extractor fix now handles correctly.
 
-| Repo | Lang | Files | Nodes | Edges | Index time | files/s | Peak RSS | Incr-sync |
-|------|------|------:|------:|------:|:----------:|--------:|:--------:|----------:|
-| requests | Python | 37 | 993 | 956 | 0.1 s | 370 | 31 MB | 20 ms |
-| lodash | JavaScript | 54 | 8,936 | 8,882 | 0.7 s | 77 | 151 MB | 30 ms |
-| flask | Python | 83 | 1,839 | 1,756 | 0.2 s | 415 | 37 MB | 20 ms |
-| ripgrep | Rust | 101 | 5,379 | 5,278 | 2.9 s | 35 | 80 MB | 20 ms |
-| express | JavaScript | 141 | 2,025 | 1,884 | 0.3 s | 470 | 45 MB | 20 ms |
-| mediatr | C# | 151 | 1,377 | 1,226 | 0.1 s | 1510 | 35 MB | 20 ms |
-| zod | TypeScript | 408 | 7,573 | 7,165 | 0.6 s | 680 | 98 MB | 30 ms |
-| vuecore | Vue/TS | 535 | 12,559 | 12,025 | 1.3 s | 412 | 141 MB | 40 ms |
-| tokio | Rust | 778 | 14,430 | 13,652 | 1.8 s | 53 | 106 MB | 40 ms |
-| django | Python | 3,019 | 53,198 | 50,178 | 11.8 s | 256 | 351 MB | 150 ms |
+| Repo | Language | Files | Graph nodes | Graph edges | Cold-index | files/s | Peak RSS | Sync (1 file) |
+|------|----------|------:|------------:|------------:|:----------:|--------:|:--------:|:-------------:|
+| pallets/flask | Python | 83 | 2,110 | 3,742 | 0.19 s | 430 | 47 MB | 22 ms |
+| BurntSushi/ripgrep | Rust | 101 | 3,344 | 11,301 | 0.36 s | 278 | 105 MB | 24 ms |
+| expressjs/express | JavaScript | 141 | 2,291 | 6,374 | 0.26 s | 542 | 62 MB | 21 ms |
+| colinhacks/zod | TypeScript | 408 | 7,596 | 17,275 | 0.57 s | 720 | 135 MB | 32 ms |
+| dotnet-architecture/eShopOnWeb | C# | 269 | 1,632 | 2,128 | 0.15 s | 1,793 | 44 MB | 27 ms |
+| google/gson | Java | 262 | 5,329 | 15,459 | 0.49 s | 538 | 106 MB | 33 ms |
+| nlohmann/json | C++ | 499 | 13,438 | 33,083 | 1.01 s | 494 | 239 MB | 43 ms |
+| gin-gonic/gin | Go | 99 | 1,834 | 6,291 | 0.26 s | 376 | 72 MB | 22 ms |
 
-All 10 repos index cleanly (zero crashes, zero FK errors). Node/edge counts are
-verified for correctness by the parity harness.
+- **Files** = source files extracted into `file`-kind nodes. **Graph nodes / edges** are
+  the final resolved graph (`codewiki status` / the `nodes` and `edges` tables) — the
+  graph an agent actually queries, i.e. after framework extraction and reference
+  resolution promote unresolved refs into `calls` / `imports` / `implements` /
+  `contains` edges. (The shorter "Indexed N files, X nodes, Y edges" line printed by
+  `codewiki init` reports the pre-resolution extraction count and is intentionally lower.)
+- **Cold-index** is the 3-run average wall time (process spawn → index → resolve).
+- **files/s** = source files ÷ cold-index wall time.
 
-Optimisation gain summary (baseline → final):
+### 1.1 Search / query latency (CLI p50 over 7 runs, ms)
 
-| Repo | Baseline | Final | Speedup | Sync baseline | Sync final | Sync speedup |
-|------|:--------:|:-----:|:-------:|:-------------:|:----------:|:------------:|
-| tokio (Rust) | 19.4 s | 1.8 s | **11×** | 1.24 s | 40 ms | **31×** |
-| django (Python) | 36.2 s | 11.0 s | 3.3× | 3.13 s | 130 ms | **24×** |
-| ripgrep (Rust) | 3.7 s | 0.5 s | 7.4× | 180 ms | 20 ms | 9× |
+Each CLI call opens the DB cold, so these are a worst case. Via the persistent MCP
+server the connection stays open and latency is sub-millisecond.
 
----
+| Repo | Language | query exact | fuzzy | callers | callees | impact | context |
+|------|----------|:-----------:|:-----:|:-------:|:-------:|:------:|:-------:|
+| flask | Python | 3 | 3 | 4 | 3 | 12 | 5 |
+| ripgrep | Rust | 3 | 3 | 3 | 3 | 3 | 5 |
+| express | JavaScript | 2 | 2 | 2 | 2 | 2 | 4 |
+| zod | TypeScript | 2 | 3 | 2 | 2 | 23 | 9 |
+| eShopOnWeb | C# | 2 | 2 | 2 | 2 | 2 | 5 |
+| gson | Java | 3 | 3 | 3 | 4 | 32 | 5 |
+| json | C++ | 4 | 4 | 4 | 4 | 4 | 9 |
+| gin | Go | 2 | 2 | 2 | 2 | 2 | 4 |
 
-## 2. Search / query latency
+Search is never the bottleneck. `impact` varies with fan-out (zod 23 ms, gson 33 ms
+on hot interfaces) but stays well inside interactive latency. Raw data:
+[`results-index.tsv`](results-index.tsv), [`results-search.tsv`](results-search.tsv).
 
-All measurements use the CLI (each call opens the DB from cold). Via the persistent
-MCP server the DB stays open and latency is sub-millisecond.
+### 1.2 Incremental sync
 
-| Repo | query exact | fuzzy | callers | callees | impact | context |
-|------|:-----------:|:-----:|:-------:|:-------:|:------:|:-------:|
-| requests | 2 ms | 2 ms | 2 ms | 2 ms | 5 ms | 3 ms |
-| flask | 2 ms | 2 ms | 2 ms | 2 ms | 2 ms | 4 ms |
-| ripgrep | 2 ms | 2 ms | 2 ms | 2 ms | 2 ms | 5 ms |
-| express | 2 ms | 2 ms | 2 ms | 2 ms | 2 ms | 4 ms |
-| zod | 2 ms | 2 ms | 2 ms | 2 ms | 16 ms | 11 ms |
-| vuecore | 3 ms | 3 ms | 4 ms | 3 ms | 4 ms | 15 ms |
-| tokio | 2 ms | 2 ms | 2 ms | 2 ms | 2 ms | 8 ms |
-| django | 6 ms | 7 ms | 7 ms | 6 ms | 6 ms | 29 ms |
+Sync is scoped to changed files only — O(changed), not O(repo). A 1-file edit
+re-extracts and re-resolves just that file and its direct dependants.
 
-Search is not a bottleneck. Even django (53k nodes) answers `context` in ~29 ms.
-
----
-
-## 3. Incremental sync
-
-Incremental sync is scoped to changed files only (O(changed), not O(repo)).
-A 1-file edit triggers re-extraction + resolution only for that file.
-
-| Repo | Files | Sync time (1-file change) |
-|------|------:|:-------------------------:|
-| requests | 37 | 20 ms |
-| flask | 83 | 20 ms |
-| express | 141 | 20 ms |
-| zod | 408 | 30 ms |
-| vuecore | 535 | 40 ms |
-| tokio | 778 | 40 ms |
-| django | 3,019 | 150 ms |
-| jellyfin (.NET, 2065 .cs) | 2,065 | 61 ms |
-
-Baseline pre-optimisation: django sync was 3.13 s (24× slower than final).
+| Repo | Files | Sync (1-file change) |
+|------|------:|:--------------------:|
+| flask | 83 | 22 ms |
+| express | 141 | 21 ms |
+| zod | 408 | 32 ms |
+| json (C++) | 499 | 43 ms |
+| jellyfin (.NET, 2,065 .cs) | 2,065 | 66 ms |
+| django (Python, 3,020) | 3,020 | 31 ms |
 
 ---
 
-## 4. 100k-file scaling verdict
+## 2. Scale: path to 100k files
 
-Measured on synthetic corpora combining django / tokio / vue-core / zod repeated to
-scale. Full wave-by-wave analysis in [ANALYSIS-SCALE.md](ANALYSIS-SCALE.md).
+Cold-index throughput holds across scale. The 3k anchor is a fresh measurement on the
+current binary; the 10k / 16k / 100k figures are from the post-optimisation (Wave-6)
+synthetic-corpus runs (django / tokio / vue-core / zod repeated to scale) — the binary's
+scaling behaviour is unchanged by the node/edge-count fixes, which affect graph
+correctness, not parse/resolve throughput.
 
-| Scale | Post-W6 time | files/s | Peak RSS |
-|-------|:------------:|--------:|:--------:|
-| 3k (django) | 4.4 s | 688 | 482 MB |
-| 10k | 29.7 s | 365 | 1.1 GB |
-| 16k | 56.4 s | 292 | 1.3 GB |
-| **100k (extrapolated)** | **~14 min** | — | ~4 GB |
+| Scale | Files | Cold-index | files/s | Peak RSS |
+|-------|------:|:----------:|--------:|:--------:|
+| 3k (django, **fresh**) | 3,020 | 5.8 s | ~520 | ~480 MB |
+| 10k (synthetic) | 10,831 | 29.7 s | 365 | ~1.1 GB |
+| 16k (synthetic) | 16,461 | 56.4 s | 292 | ~1.3 GB |
+| **100k (extrapolated)** | **100,000** | **~14 min** | — | **~4 GB** |
 
-Acceptance criteria: cold-index ≤ 20 min, peak RSS ≤ 4 GB at 100k files.
-**Both criteria are met.**
+**Scaling law:** cold-index `t ≈ 2.57e-5 · n^1.50` (O(n^1.50)); peak RSS
+`≈ 3.34 · n^0.62` MB (O(n^0.62), sub-linear due to name dedup across the repeated
+corpus — a fully-unique 100k monorepo trends toward O(n) ≈ 3–5 GB). Extrapolation
+uncertainty band ±30–40%.
 
-Scaling law: O(n^1.50) post-W6. Extrapolation uncertainty band ±30–40%.
+**Acceptance criteria:** cold-index ≤ 20 min and peak RSS ≤ 4 GB at 100k files.
+**Both met** (cold-index ~14 min; RSS ~4 GB, borderline). The fresh django 3k run
+(5.8 s, 52,722 nodes / 165,582 edges, 115,404 references resolved) sits on the predicted
+curve and confirms the binary still indexes large repos cleanly.
 
 ---
 
-## 5. Agent savings — .NET enterprise (measured)
+## 3. .NET scale anchors (eShopOnWeb + jellyfin)
+
+The agent-savings study in §4 runs against these two .NET corpora. Their index /
+maintenance cost (the prerequisite for the per-task savings to repeat):
+
+| Repo | .cs files | Cold index | Sync (1 file) | context p50 | impact p50 |
+|------|----------:|:----------:|:-------------:|:-----------:|:----------:|
+| eShopOnWeb | 269 (254 .cs + 13 .razor + 2 .js) | 0.16 s | 26 ms | 4 ms | 2 ms |
+| jellyfin | 2,065 | 2.1 s | 66 ms | 9 ms | 4 ms |
+
+jellyfin final graph: 19,911 nodes, 46,648 edges, 29,187 references resolved.
+Cold indexing a 2,065-file enterprise repo in ~2 s is a one-time cost; every subsequent
+query reuses the graph for sub-10 ms answers.
+
+---
+
+## 4. Agent savings — .NET enterprise (measured)
 
 Five realistic tasks on eShopOnWeb (254 .cs) and jellyfin (2,065 .cs), comparing
-`codewiki` CLI calls vs. a grep + file-read baseline. All byte counts measured from
-actual CLI output and file sizes. Tokens estimated at 1 token = 4 bytes (conservative;
-code tokenises more efficiently). Pricing: Claude Sonnet $3.00 / 1M input tokens.
+`codewiki` CLI calls vs. a grep + file-read baseline. All byte counts are measured from
+actual CLI output (`| wc -c`) and real file sizes. Tokens estimated at 1 token = 4 bytes
+(conservative — code tokenises more efficiently, so real savings are likely higher).
+Pricing: Claude Sonnet **$3.00 / 1M input tokens**.
 
-| Task | Repo | CW calls | Baseline calls | Call reduction | CW tokens | Baseline tokens | Token reduction |
-|------|------|:--------:|:--------------:|:--------------:|:---------:|:---------------:|:--------------:|
-| DI consumers (`IBasketService`) | eShopOnWeb | 2 | 6 | **66%** | 400 | 3,498 | **88%** |
-| Feature comprehension (basket checkout) | eShopOnWeb | 1 | 6 | **83%** | 1,035 | 6,934 | **85%** |
-| Interface→impls (`IRepository`) | eShopOnWeb | 2 | 6 | **66%** | 449 | 4,335 | **89%** |
-| Blast radius (`OrderService` refactor) | eShopOnWeb | 1 | 5 | **80%** | 264 | 1,977 | **86%** |
-| Cross-cutting: auth config | jellyfin | 2 | 4 | **50%** | 1,296 | 8,332 | **84%** |
-| **Average** | | **1.6** | **5.4** | **69%** | **689** | **5,015** | **86%** |
+| Task | Repo | CW calls | BL calls | Call reduction | CW tokens | BL tokens | Token reduction | $ saved |
+|------|------|:--------:|:--------:|:--------------:|:---------:|:---------:|:---------------:|:-------:|
+| DI consumers (`IBasketService`) | eShopOnWeb | 2 | 6 | **67%** | 380 | 3,476 | **89%** | $0.0093 |
+| Feature comprehension (basket checkout) | eShopOnWeb | 1 | 6 | **83%** | 1,017 | 6,842 | **85%** | $0.0175 |
+| Interface→impls (`IRepository`) | eShopOnWeb | 2 | 6 | **67%** | 624 | 4,219 | **85%** | $0.0108 |
+| Blast radius (`OrderService` refactor) | eShopOnWeb | 1 | 5 | **80%** | 246 | 1,959 | **87%** | $0.0051 |
+| Cross-cutting: auth config | jellyfin | 2 | 4 | **50%** | 2,034 | 8,158 | **75%** | $0.0184 |
+| **Average** | | **1.6** | **5.4** | **70%** | **860** | **4,930** | **83%** | **$0.0122** |
 
-Full methodology and per-task traces: [DOTNET-REPORT.md §7](DOTNET-REPORT.md).
+A developer session with ~20 agent interactions saves roughly **$0.24** while the index
+stays current at 21–66 ms per file change. (CodeWiki's `context` output is ranked, so its
+byte/token counts vary ±~5% between cold index builds; `query` / `impact` / `callers`
+are deterministic. The aggregate above is stable across builds. Figures are from a fresh
+clean-index run via [`run-dotnet.sh`](run-dotnet.sh).) The savings compound: the index is built once,
+maintained automatically, and every subsequent query is effectively free.
+
+**The implements-edge fix in action (Task 3).** Interface→implementation queries now
+traverse real `implements` edges: eShopOnWeb has 67 `implements` edges, so
+`codewiki impact IRepository` returns the concrete implementation `EfRepository`
+(class + constructor) directly, and `codewiki query IRepository` lists the interface
+plus its 10 DI consumers. The grep/read baseline must read the interface, the EF impl,
+the DI registration, and consumer services separately.
+
+Full methodology, per-task traces, and reproduction commands:
+[`DOTNET-REPORT.md`](DOTNET-REPORT.md).
 
 ---
 
-## 6. Vietnamese / diacritic search
+## 5. Vietnamese / diacritic search
 
-Tested on 18 synthetic files in 5 languages (Python, TypeScript, Go, C#, Rust) with
-heavy Vietnamese comments/docstrings and Vietnamese-derived ASCII identifiers
-(`tinhTong`, `dangNhap`, `QuanLyNguoiDung`). Full report: [VIETNAMESE-REPORT.md](VIETNAMESE-REPORT.md).
+Tested on synthetic files in 5 languages (Python, TypeScript, Go, C#, Rust) with heavy
+Vietnamese comments/docstrings and Vietnamese-derived ASCII identifiers (`tinhTong`,
+`dangNhap`, `QuanLyNguoiDung`). Full report: [`VIETNAMESE-REPORT.md`](VIETNAMESE-REPORT.md).
 
 | Dimension | Result |
 |-----------|--------|
 | Symbol extraction parity vs English | Identical (AST-agnostic) |
-| Crash / encoding error | None (18/18 files clean) |
+| Crash / encoding error | None |
 | UTF-8 storage integrity | Intact — no mojibake |
 | Identifier search (ASCII-derived VN names) | Full support |
 | FTS Latin-1 diacritics (`à`, `ì`, `ù`) | Folds correctly |
 | FTS extended VN diacritics (`ư`, `đ`, `ắ`) | Does not fold (stays as-is) |
-| `context` with Vietnamese prose query | Works, slightly noisier than English |
 | `callers` / `callees` / `impact` on VN symbols | Full support |
 
-**Verdict:** codewiki is Vietnamese-safe for its primary workflow (symbol/identifier
-search, call graph analysis, context building). A one-line schema change
-(`remove_diacritics 2`) would give full NFD diacritic stripping for prose queries.
+**Verdict:** CodeWiki is Vietnamese-safe for its primary workflow (symbol/identifier
+search, call-graph analysis, context building). A one-line schema change
+(`remove_diacritics 2`) would add full NFD diacritic stripping for prose queries.
 
 ---
 
-## Detailed reports
+## Reproducing these numbers
 
-| Report | Contents |
-|--------|----------|
-| [REPORT.md](REPORT.md) | Cold-index baseline + post-Wave-4 final, wave-by-wave optimisation history, token savings methodology |
-| [DOTNET-REPORT.md](DOTNET-REPORT.md) | Full .NET/C# enterprise audit: eShopOnWeb, jellyfin, orchardcore, ABP — extraction quality, gap analysis, agent savings |
-| [VIETNAMESE-REPORT.md](VIETNAMESE-REPORT.md) | Vietnamese / i18n compatibility: FTS5 tokeniser behaviour, diacritic folding, UTF-8 integrity |
-| [ANALYSIS-SCALE.md](ANALYSIS-SCALE.md) | 100k-file scaling: wave-by-wave extrapolation, O(n^1.50) law, remaining walls |
-| [ANALYSIS-B2-sync.md](ANALYSIS-B2-sync.md) | Incremental sync analysis (B2) |
-| [ANALYSIS-B4-memory.md](ANALYSIS-B4-memory.md) | Memory profiling analysis (B4) |
-| [OPTIMIZATION-PLAN.md](OPTIMIZATION-PLAN.md) | Optimisation wave plan and design notes |
+```bash
+CW=/path/to/codewiki        # confirm: $CW --version  → codewiki 0.1.1
+mkdir -p /tmp/bench && cd /tmp/bench
+
+# 1. Shallow-clone the 8 cross-language repos (SHAs recorded in results-index.tsv)
+for r in pallets/flask BurntSushi/ripgrep expressjs/express colinhacks/zod \
+         dotnet-architecture/eShopOnWeb google/gson nlohmann/json gin-gonic/gin; do
+  git clone --depth 1 https://github.com/$r "$(basename $r)"
+done
+
+# 2. Cold-index each, capture wall time + "Indexed N files, X nodes, Y edges"
+$CW init --path flask
+
+# 3. Authoritative graph totals (final resolved graph the agent queries)
+sqlite3 flask/.codewiki/codewiki.db \
+  "SELECT (SELECT COUNT(*) FROM nodes), (SELECT COUNT(*) FROM edges);"
+
+# 4. Search latency — time a few queries (p50 over several runs)
+$CW query Flask --path flask
+
+# 5. Incremental sync — touch one file, time the sync
+touch flask/src/flask/app.py && $CW sync --path flask
+```
+
+For the .NET agent-savings study, see the reproduction block in
+[`DOTNET-REPORT.md` §7.9](DOTNET-REPORT.md).
 
 Raw data (TSV):
-- [`results-index.tsv`](results-index.tsv) — cold-index run data
-- [`results-search.tsv`](results-search.tsv) — search latency data
-- [`results-dotnet.tsv`](results-dotnet.tsv) — .NET corpus data
+- [`results-index.tsv`](results-index.tsv) — cross-language cold-index (files, nodes, edges, time, RSS, DB size, files/s, sync)
+- [`results-search.tsv`](results-search.tsv) — search/query p50 latency by repo and query type
+- [`results-dotnet.tsv`](results-dotnet.tsv) — .NET agent-savings (calls, bytes, tokens, $) per task

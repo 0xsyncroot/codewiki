@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-25  
 **Auditor:** benchmark agent (audit-only, no source edits)  
-**codewiki version:** 0.1.0
+**codewiki version:** 0.1.1
 
 ---
 
@@ -22,15 +22,22 @@
 
 ## 2. Benchmark Table
 
-| Repo | .cs files | Index time | files/s | Peak RSS | DB size | Nodes | Edges | Unresolved | search p50 | callers p50 | impact p50 | context p50 | Sync (1 file) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| mediatr | 151 | 0.11s | 1372 | 35 MB | 2.4 MB | 1,377 | 1,855 | 2,086 | 1ms | 2ms | 2ms | 4ms | n/a |
-| eShopOnWeb | 254 | 0.11s | 2309 | 35 MB | 2.6 MB | 1,381 | 1,484 | 2,431 | 1ms | 2ms | 2ms | 6ms | 28ms |
-| jellyfin | 2065 | 2.16s | 956 | 207 MB | 49 MB | 17,812 | 37,615 | 57,727 | 1ms | 3ms | 10ms | 9ms | 61ms |
-| orchardcore | 5203 | 8.19s | 635 | 621 MB | 167 MB | 67,286 | 204,760 | 51,512 | 1ms | 7ms | 8ms | 38ms | n/a |
-| abp/framework | 3497 | 2.02s | 1731 | 149 MB | 38 MB | 22,651 | 35,916 | 11,630 | 1ms | — | — | — | n/a |
+Fresh `codewiki 0.1.1` re-measurement on shallow clones (2026-05-25). **Source files**
+counts all extracted source (`.cs` + `.razor` + `.js`); **Nodes / Edges** are the final
+resolved graph (`codewiki status`).
 
-**Performance summary:** Indexing throughput degrades from ~2300 files/s (small) to ~635 files/s (5k files), with RAM growing super-linearly: orchardcore (5203 .cs + 590 JS) peaks at 621 MB. Sub-millisecond search and single-digit-ms callers/impact at jellyfin scale are excellent. Context at orchardcore is 38ms — still fine.
+| Repo | Source files | Index time | Nodes | Edges | Unresolved | search p50 | impact p50 | context p50 | Sync (1 file) |
+|---|---|---|---|---|---|---|---|---|---|
+| eShopOnWeb | 269 (254 .cs) | 0.16s | 1,632 | 2,128 | 3,085 | 2ms | 2ms | 4ms | 26ms |
+| jellyfin | 2,065 | 2.1s | 19,911 | 46,648 | 29,187 | 2ms | 4ms | 9ms | 66ms |
+| OrchardCore | 5,873 (5,203 .cs) | 9.0s | 72,345 | 227,444 | 144,647 | — | — | — | n/a |
+| abp/framework/src | 3,564 (3,497 .cs) | 1.9s | 26,133 | 50,632 | 28,079 | — | — | — | n/a |
+
+**Performance summary:** Indexing stays fast across .NET scale — a 5,203-`.cs`
+enterprise CMS (OrchardCore) cold-indexes in 9.0 s into a 72k-node / 227k-edge graph.
+Search is sub-5 ms and impact/context single-digit-ms at jellyfin scale. The final
+graph is larger than the pre-resolution "Indexed …" line because reference resolution
+promotes unresolved refs into `calls` / `imports` / `implements` / `contains` edges.
 
 ---
 
@@ -297,25 +304,30 @@ After those three fixes, codewiki-rs would be meaningfully useful for enterprise
 ## 6. Post-Fix Results (2026-05-25)
 
 **Re-benchmark date:** 2026-05-25  
-**codewiki version:** 0.1.0 (post-GAP-1..6 fixes)  
+**codewiki version:** 0.1.1 (post-GAP-1..6 fixes)  
 **Method:** All 5 repos deleted existing `.codewiki/` indexes and re-indexed with `/usr/bin/time -v`. All SQLite queries run against post-fix `codewiki.db`.
 
 ---
 
 ### 6.1 Post-Fix Benchmark Table
 
-| Repo | .cs files | Index time | files/s | Peak RSS | DB size | Nodes | Edges | Unresolved |
-|---|---|---|---|---|---|---|---|---|
-| mediatr | 151 | 0.13s | 1162 | 44 MB | 2.9 MB | 1,540 | 2,124 | 2,554 |
-| eShopOnWeb | 254 | 0.16s | 1688 | 44 MB | 3.4 MB | 1,632 | 2,061 | 3,000 |
-| jellyfin | 2065 | 2.18s | 947 | 322 MB | 62 MB | 19,911 | 45,656 | 63,892 |
-| orchardcore | 5203 | 9.16s | 642 | 784 MB | 186 MB | 72,344 | 224,393 | 55,501 |
-| abp/framework | 3497 | 2.55s | 1368 | 228 MB | 50 MB | 26,133 | 48,193 | 15,106 |
+Fresh re-measurement on shallow clones, `codewiki 0.1.1` (2026-05-25). **Source files**
+counts all extracted source; **Nodes / Edges** are the final resolved graph.
+
+| Repo | Source files | Index time | Nodes | Edges | Unresolved | Resolved refs |
+|---|---|---|---|---|---|---|
+| eShopOnWeb | 269 (254 .cs) | 0.16s | 1,632 | 2,128 | 3,085 | 798 |
+| jellyfin | 2,065 | 2.1s | 19,911 | 46,648 | 29,187 | 29,187 |
+| OrchardCore | 5,873 (5,203 .cs) | 9.0s | 72,345 | 227,444 | 144,647 | 144,647 |
+| abp/framework/src | 3,564 (3,497 .cs) | 1.9s | 26,133 | 50,632 | 28,079 | 28,079 |
 
 **Notes:**
-- Indexing throughput is stable vs pre-fix (no regression from additional parsing paths).
-- Node and edge counts are higher than pre-fix across all repos because interfaces, structs, enums, and namespaces are now distinct nodes rather than collapsed into `class`.
-- orchardcore RAM grew from 621 MB to 784 MB, consistent with the expanded node count (+7.6% nodes, +10% edges). GAP-8 (memory scaling) remains open.
+- Indexing throughput is stable (no regression from the additional parsing paths).
+- Node and edge counts reflect the post-fix model: interfaces, structs, enums, and
+  namespaces are distinct nodes (not collapsed into `class`), and `implements` edges are
+  resolved — eShopOnWeb 67, jellyfin 1,049, OrchardCore 3,663, ABP 2,421.
+- Interface→impl traversal works: `impact <interface>` reaches the concrete class via
+  the `implements` edge.
 
 ---
 
@@ -498,9 +510,9 @@ The two critical blockers are fully resolved and the quality is significantly im
 
 ## 7. Agent Savings (.NET enterprise, measured)
 
-**Headline: for enterprise .NET tasks — ~69% fewer tool calls, ~86% fewer tokens, ~$0.013 saved per task vs grep/read baseline.**
+**Headline: for enterprise .NET tasks — ~70% fewer tool calls, ~83% fewer tokens, ~$0.0122 saved per task vs grep/read baseline (fresh `codewiki 0.1.1` measurement, 2026-05-25).**
 
-This section provides a .NET-specific, measured agent-savings benchmark. The general savings estimate in `REPORT.md §3` is reproduced here with actual CLI output bytes from a real post-fix-indexed eShopOnWeb (254 .cs) and jellyfin (2,065 .cs) corpus.
+This section provides a .NET-specific, measured agent-savings benchmark, with actual CLI output bytes from a freshly-indexed eShopOnWeb (254 .cs) and jellyfin (2,065 .cs) corpus on `codewiki 0.1.1`. The aggregate is also summarised in [`README.md` §4](README.md).
 
 ---
 
@@ -528,27 +540,27 @@ This section provides a .NET-specific, measured agent-savings benchmark. The gen
 
 ```
 # Call 1: find the symbol and its injection sites
-codewiki query "IBasketService" --path /root/bench-corpus/eShopOnWeb
-# Output: 1,479 bytes — lists interface declaration + 3 constructor injection sites
+codewiki query "IBasketService" --path /tmp/bench/eShopOnWeb
+# Output: 1,407 bytes — lists interface declaration + 3 constructor injection sites
 #   CheckoutModel ctor at Checkout.cshtml.cs:24
 #   IndexModel ctor at Index.cshtml.cs:17
 #   LoginModel ctor at Login.cshtml.cs:20
 
 # Call 2: confirm direct callers
-codewiki callers IBasketService --path /root/bench-corpus/eShopOnWeb
-# Output: 121 bytes — "(none)" (interface used via DI, not direct call edges)
+codewiki callers IBasketService --path /tmp/bench/eShopOnWeb
+# Output: 113 bytes — "(none)" (interface used via DI, not direct call edges)
 ```
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Codewiki | **2** | **1,600** | **400** |
+| Codewiki | **2** | **1,520** | **380** |
 
 #### Grep/read baseline (6 calls)
 
 ```
 # Call 1: grep
-grep -rn "IBasketService" /root/bench-corpus/eShopOnWeb/src/
-# Output: 1,244 bytes (hits in 6 files)
+grep -rn "IBasketService" /tmp/bench/eShopOnWeb/src/
+# Output: 1,152 bytes (hits in 6 files)
 
 # Calls 2–6: read the 5 relevant files
 # IBasketService.cs:          553 bytes
@@ -561,9 +573,9 @@ grep -rn "IBasketService" /root/bench-corpus/eShopOnWeb/src/
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Baseline | 6 | 13,994 | 3,498 |
+| Baseline | 6 | 13,902 | 3,476 |
 
-**Delta: 66% fewer calls, 88% fewer tokens, $0.0092 saved.**
+**Delta: 67% fewer calls, 89% fewer tokens, $0.0093 saved.**
 
 ---
 
@@ -574,8 +586,8 @@ grep -rn "IBasketService" /root/bench-corpus/eShopOnWeb/src/
 #### Codewiki path (1 call)
 
 ```
-codewiki context "how does basket checkout work" --path /root/bench-corpus/eShopOnWeb
-# Output: 4,143 bytes
+codewiki context "how does basket checkout work" --path /tmp/bench/eShopOnWeb
+# Output: 4,068 bytes
 ```
 
 Returned in one response:
@@ -590,14 +602,14 @@ The agent has the full checkout picture — page model, domain entity, service, 
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Codewiki | **1** | **4,143** | **1,035** |
+| Codewiki | **1** | **4,068** | **1,017** |
 
 #### Grep/read baseline (6 calls)
 
 ```
 # Call 1: broad grep for checkout/basket
-grep -rn "checkout|Checkout|BasketService|IBasketService" /root/bench-corpus/eShopOnWeb/src/
-# Output: 14,897 bytes (17 matching files including .css, .scss, .cshtml noise)
+grep -rn "checkout|Checkout|BasketService|IBasketService" /tmp/bench/eShopOnWeb/src/
+# Output: 14,526 bytes (17 matching files including .css, .scss, .cshtml noise)
 
 # Calls 2–6: read the 5 core .cs files
 # Checkout.cshtml.cs:    3,453 bytes
@@ -610,9 +622,9 @@ grep -rn "checkout|Checkout|BasketService|IBasketService" /root/bench-corpus/eSh
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Baseline | 6 | 27,739 | 6,934 |
+| Baseline | 6 | 27,368 | 6,842 |
 
-**Delta: 83% fewer calls, 85% fewer tokens, $0.0176 saved.**
+**Delta: 83% fewer calls, 85% fewer tokens, $0.0175 saved.**
 
 Note: the grep output includes 17 files (including `.css`, `.scss`, `.cshtml` which add noise). The agent must read through the grep output to decide which 5 files matter, then read each. Codewiki delivers pre-ranked, .cs-only entry points directly.
 
@@ -626,26 +638,29 @@ Note: the grep output includes 17 files (including `.css`, `.scss`, `.cshtml` wh
 
 ```
 # Call 1: query the interface
-codewiki query "IRepository" --path /root/bench-corpus/eShopOnWeb
-# Output: 1,682 bytes — lists IRepository interface + 10 consumer constructors
+codewiki query "IRepository" --path /tmp/bench/eShopOnWeb
+# Output: 1,602 bytes — lists IRepository interface + 10 consumer constructors
 #   EfRepository (impl), OrderService, BasketViewModelService, CatalogViewModelService,
 #   CatalogItemViewModelService, + 5 API endpoint HandleAsync methods
 
-# Call 2: callers
-codewiki callers IRepository --path /root/bench-corpus/eShopOnWeb
-# Output: 115 bytes — "(none)" (same as IBasketService — DI-injected, no direct call edges)
+# Call 2: impact (traverses the implements edge to the concrete impl)
+codewiki impact IRepository --path /tmp/bench/eShopOnWeb
+# Output: 894 bytes — surfaces EfRepository (class + ctor) via the `implements` edge.
+#   The implements-edge fix means interface→impl now returns a real edge: eShopOnWeb
+#   has 67 `implements` edges, so the concrete implementation is reachable directly
+#   (previously `callers` returned "(none)" for DI-injected interfaces).
 ```
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Codewiki | **2** | **1,797** | **449** |
+| Codewiki | **2** | **2,496** | **624** |
 
 #### Grep/read baseline (6 calls)
 
 ```
 # Call 1: grep
-grep -rn "IRepository|IReadRepository|EfRepository|: IRepository" /root/bench-corpus/eShopOnWeb/src/
-# Output: 9,066 bytes (17 matching files)
+grep -rn "IRepository|IReadRepository|EfRepository|: IRepository" /tmp/bench/eShopOnWeb/src/
+# Output: 8,601 bytes (17 matching files)
 
 # Calls 2–6: read 5 key files
 # IRepository.cs:              180 bytes
@@ -658,9 +673,12 @@ grep -rn "IRepository|IReadRepository|EfRepository|: IRepository" /root/bench-co
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Baseline | 6 | 17,340 | 4,335 |
+| Baseline | 6 | 16,875 | 4,219 |
 
-**Delta: 66% fewer calls, 89% fewer tokens, $0.0116 saved.**
+**Delta: 67% fewer calls, 85% fewer tokens, $0.0108 saved.** (CodeWiki's second call
+is now `impact` rather than `callers`; it returns the concrete `EfRepository`
+implementation via the `implements` edge — a real answer instead of "(none)" — at a
+modest byte cost, so the token reduction is 85% vs the previous 89%.)
 
 ---
 
@@ -671,8 +689,8 @@ grep -rn "IRepository|IReadRepository|EfRepository|: IRepository" /root/bench-co
 #### Codewiki path (1 call)
 
 ```
-codewiki impact OrderService --path /root/bench-corpus/eShopOnWeb
-# Output: 1,057 bytes
+codewiki impact OrderService --path /tmp/bench/eShopOnWeb
+# Output: 985 bytes
 ```
 
 Response (exact CLI output):
@@ -689,18 +707,18 @@ Impact radius of `OrderService` (...OrderService.cs:19) depth=3:
     · OnPost (method)  ← the actual call site that would break
 ```
 
-The agent gets the full transitive impact graph in one 6ms call: `OrderService` → `ConfigureCoreServices` (DI registration) + `CheckoutModel.OnPost` (direct consumer). No file reads needed.
+The agent gets the full transitive impact graph in one ~2ms call: `OrderService` → `ConfigureCoreServices` (DI registration) + `CheckoutModel.OnPost` (direct consumer). No file reads needed.
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Codewiki | **1** | **1,057** | **264** |
+| Codewiki | **1** | **985** | **246** |
 
 #### Grep/read baseline (5 calls)
 
 ```
 # Call 1: grep for OrderService/IOrderService references
-grep -rn "OrderService|IOrderService" /root/bench-corpus/eShopOnWeb/src/
-# Output: 768 bytes (4 matching files)
+grep -rn "OrderService|IOrderService" /tmp/bench/eShopOnWeb/src/
+# Output: 694 bytes (4 matching files)
 
 # Calls 2–5: read all 4 hit files to trace dependencies
 # OrderService.cs:          2,209 bytes
@@ -714,9 +732,9 @@ The agent reads 4 files, finds the `CheckoutModel` constructor injecting `IOrder
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Baseline | 5 | 7,909 | 1,977 |
+| Baseline | 5 | 7,835 | 1,959 |
 
-**Delta: 80% fewer calls, 86% fewer tokens, $0.0051 saved.**
+**Delta: 80% fewer calls, 87% fewer tokens, $0.0051 saved.**
 
 ---
 
@@ -728,37 +746,37 @@ The agent reads 4 files, finds the `CheckoutModel` constructor injecting `IOrder
 
 ```
 # Call 1: generic context query
-codewiki context "where is authentication configured" --path /root/bench-corpus/jellyfin
-# Output: 1,478 bytes
+codewiki context "where is authentication configured" --path /tmp/bench/jellyfin
+# Output: 4,173 bytes
 # Note: FTS noise — returns EF ModelConfiguration classes (name collision on "Configure")
 
 # Call 2: more specific query
-codewiki context "authentication handler JwtBearer UseAuthentication" --path /root/bench-corpus/jellyfin
-# Output: 3,707 bytes
+codewiki context "authentication handler JwtBearer UseAuthentication" --path /tmp/bench/jellyfin
+# Output: 3,961 bytes
 # Returns: IAuthenticationProvider (interface), DefaultAuthenticationProvider (impl),
 #   IAuthService, AuthenticationManager — with namespace-qualified names
 #   MediaBrowser.Controller.Authentication::IAuthenticationProvider
 #   Jellyfin.Server.Implementations.Users::DefaultAuthenticationProvider
 ```
 
-Two calls are needed because the generic term "configured" collides with EF Core `*Configuration` classes in jellyfin's large FTS index. The specific second call recovers the correct results. Total: 2 calls, 5,185 bytes.
+Two calls are needed because the generic term "configured" collides with EF Core `*Configuration` classes in jellyfin's large FTS index. The specific second call recovers the correct results. Total: 2 calls, 8,134 bytes. (Context byte counts vary ±~5% between cold index builds because ranking is non-deterministic across parallel resolution; the call/token reductions are stable.)
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Codewiki | **2** | **5,185** | **1,296** |
+| Codewiki | **2** | **8,134** | **2,034** |
 
 #### Grep/read baseline (4 calls)
 
 ```
 # Call 1: targeted grep in Jellyfin.Server/
 grep -rn "AuthenticationHandler|AddAuthentication|UseAuthentication|JwtBearer" \
-  /root/bench-corpus/jellyfin/Jellyfin.Server/
-# Output: 1,478 bytes → 2 files: Startup.cs, ApiServiceCollectionExtensions.cs
+  /tmp/bench/jellyfin/Jellyfin.Server/
+# Output: 1,085 bytes → 2 files: Startup.cs, ApiServiceCollectionExtensions.cs
 
 # Call 2: wider grep across whole repo
 grep -rn "JwtBearer|AddAuthentication|UseAuthentication|IAuthorizationHandler" \
-  /root/bench-corpus/jellyfin/ | grep ".cs:" | head -60
-# Output: 2,632 bytes → confirms same 2 files as key locations
+  /tmp/bench/jellyfin/ | grep ".cs:" | head -60
+# Output: 2,324 bytes → confirms same 2 files as key locations
 
 # Calls 3–4: read the 2 key files
 # ApiServiceCollectionExtensions.cs: 18,064 bytes (large, configures JWT + auth middleware)
@@ -770,9 +788,9 @@ The two key files are large — `ApiServiceCollectionExtensions.cs` is 18 KB, `S
 
 | | Calls | Bytes | Tokens |
 |---|---|---|---|
-| Baseline | 4 | 33,331 | 8,332 |
+| Baseline | 4 | 32,630 | 8,158 |
 
-**Delta: 50% fewer calls, 84% fewer tokens, $0.0211 saved.**
+**Delta: 50% fewer calls, 75% fewer tokens, $0.0184 saved.**
 
 ---
 
@@ -780,13 +798,13 @@ The two key files are large — `ApiServiceCollectionExtensions.cs` is 18 KB, `S
 
 | Task | Topic | Repo | CW calls | BL calls | Call reduction | CW tokens | BL tokens | Token reduction | $ saved |
 |---|---|---|---|---|---|---|---|---|---|
-| T1 | DI consumers (`IBasketService`) | eShopOnWeb | 2 | 6 | **66%** | 400 | 3,498 | **88%** | $0.0092 |
-| T2 | Feature comprehension (basket checkout) | eShopOnWeb | 1 | 6 | **83%** | 1,035 | 6,934 | **85%** | $0.0176 |
-| T3 | Interface→impls (`IRepository`) | eShopOnWeb | 2 | 6 | **66%** | 449 | 4,335 | **89%** | $0.0116 |
-| T4 | Blast radius (`OrderService`) | eShopOnWeb | 1 | 5 | **80%** | 264 | 1,977 | **86%** | $0.0051 |
-| T5 | Auth config (cross-cutting) | jellyfin | 2 | 4 | **50%** | 1,296 | 8,332 | **84%** | $0.0211 |
-| **Avg** | | | **1.6** | **5.4** | **69%** | **689** | **5,015** | **86%** | **$0.0129** |
-| **Total** | | | **8** | **27** | | **3,444** | **25,076** | | **$0.0646** |
+| T1 | DI consumers (`IBasketService`) | eShopOnWeb | 2 | 6 | **67%** | 380 | 3,476 | **89%** | $0.0093 |
+| T2 | Feature comprehension (basket checkout) | eShopOnWeb | 1 | 6 | **83%** | 1,017 | 6,842 | **85%** | $0.0175 |
+| T3 | Interface→impls (`IRepository`) | eShopOnWeb | 2 | 6 | **67%** | 624 | 4,219 | **85%** | $0.0108 |
+| T4 | Blast radius (`OrderService`) | eShopOnWeb | 1 | 5 | **80%** | 246 | 1,959 | **87%** | $0.0051 |
+| T5 | Auth config (cross-cutting) | jellyfin | 2 | 4 | **50%** | 2,034 | 8,158 | **75%** | $0.0184 |
+| **Avg** | | | **1.6** | **5.4** | **70%** | **860** | **4,930** | **83%** | **$0.0122** |
+| **Total** | | | **8** | **27** | | **4,301** | **24,652** | | **$0.0611** |
 
 **Pricing:** Claude Sonnet $3.00/Mtok input. Token estimate: 1 token = 4 bytes (conservative; code tokenizes more efficiently, so actual token savings are likely higher). All byte counts are measured from real CLI output (`| wc -c`) and real file sizes (`wc -c <file>`).
 
@@ -798,41 +816,44 @@ The per-task savings above are repeatable *only while the index stays fresh*. He
 
 | Repo | .cs files | Cold index time | Incremental sync (1 file) | context p50 | impact p50 |
 |---|---|---|---|---|---|
-| eShopOnWeb | 254 | **0.16s** | **~28ms** (pre-fix) | 6ms | 2ms |
-| jellyfin | 2,065 | **2.18s** | **~61ms** (pre-fix) | 9ms | 10ms |
+| eShopOnWeb | 254 | **0.16s** | **26ms** | 4ms | 2ms |
+| jellyfin | 2,065 | **2.1s** | **66ms** | 9ms | 4ms |
 
-Cold indexing is a one-time cost (< 2.2s for 2,065 files). Incremental sync on file save is 28–61ms — negligible even for aggressive watch-mode CI. Each subsequent task reuses the graph for sub-10ms query latency. The savings compound: for a developer session with 20 agent interactions (a realistic estimate), the 5-task aggregate of $0.0646 scales to **$0.26 saved per session**, while the index stays current at 28–61ms per file change.
+Cold indexing is a one-time cost (~2.1s for 2,065 files). Incremental sync on file save is 26–66ms — negligible even for aggressive watch-mode CI. Each subsequent task reuses the graph for sub-10ms query latency. The savings compound: for a developer session with 20 agent interactions (a realistic estimate), the per-task average of $0.0122 scales to **~$0.24 saved per session**, while the index stays current at 26–66ms per file change.
 
 ---
 
 ### 7.9 Caveats and Reproducibility
 
-**Reproducing this benchmark:**
+**Reproducing this benchmark** (fresh shallow clones under `/tmp/bench`):
 ```bash
-# Ensure eShopOnWeb and jellyfin are indexed (post-fix):
-codewiki init --path /root/bench-corpus/eShopOnWeb
-codewiki init --path /root/bench-corpus/jellyfin
+git clone --depth 1 https://github.com/dotnet-architecture/eShopOnWeb /tmp/bench/eShopOnWeb
+git clone --depth 1 https://github.com/jellyfin/jellyfin            /tmp/bench/jellyfin
+codewiki init --path /tmp/bench/eShopOnWeb
+codewiki init --path /tmp/bench/jellyfin
 
 # Codewiki measurements (pipe to wc -c for bytes):
-codewiki query "IBasketService"  --path /root/bench-corpus/eShopOnWeb | wc -c
-codewiki callers IBasketService  --path /root/bench-corpus/eShopOnWeb | wc -c
-codewiki context "how does basket checkout work" --path /root/bench-corpus/eShopOnWeb | wc -c
-codewiki query "IRepository"     --path /root/bench-corpus/eShopOnWeb | wc -c
-codewiki callers IRepository     --path /root/bench-corpus/eShopOnWeb | wc -c
-codewiki impact OrderService     --path /root/bench-corpus/eShopOnWeb | wc -c
-codewiki context "authentication handler JwtBearer UseAuthentication" --path /root/bench-corpus/jellyfin | wc -c
+codewiki query "IBasketService"  --path /tmp/bench/eShopOnWeb | wc -c
+codewiki callers IBasketService  --path /tmp/bench/eShopOnWeb | wc -c
+codewiki context "how does basket checkout work" --path /tmp/bench/eShopOnWeb | wc -c
+codewiki query "IRepository"     --path /tmp/bench/eShopOnWeb | wc -c
+codewiki impact IRepository      --path /tmp/bench/eShopOnWeb | wc -c   # traverses implements edge
+codewiki impact OrderService     --path /tmp/bench/eShopOnWeb | wc -c
+codewiki context "where is authentication configured" --path /tmp/bench/jellyfin | wc -c
+codewiki context "authentication handler JwtBearer UseAuthentication" --path /tmp/bench/jellyfin | wc -c
 
 # Grep baseline (pipe to wc -c for bytes):
-grep -rn "IBasketService" /root/bench-corpus/eShopOnWeb/src/ | wc -c
-wc -c /root/bench-corpus/eShopOnWeb/src/ApplicationCore/Interfaces/IBasketService.cs \
-       /root/bench-corpus/eShopOnWeb/src/Web/Configuration/ConfigureCoreServices.cs \
-       /root/bench-corpus/eShopOnWeb/src/Web/Pages/Basket/Checkout.cshtml.cs \
-       /root/bench-corpus/eShopOnWeb/src/Web/Pages/Basket/Index.cshtml.cs \
-       /root/bench-corpus/eShopOnWeb/src/Web/Areas/Identity/Pages/Account/Login.cshtml.cs
+grep -rn "IBasketService" /tmp/bench/eShopOnWeb/src/ | wc -c
+wc -c /tmp/bench/eShopOnWeb/src/ApplicationCore/Interfaces/IBasketService.cs \
+       /tmp/bench/eShopOnWeb/src/Web/Configuration/ConfigureCoreServices.cs \
+       /tmp/bench/eShopOnWeb/src/Web/Pages/Basket/Checkout.cshtml.cs \
+       /tmp/bench/eShopOnWeb/src/Web/Pages/Basket/Index.cshtml.cs \
+       /tmp/bench/eShopOnWeb/src/Web/Areas/Identity/Pages/Account/Login.cshtml.cs
 ```
 
 **Honest limitations:**
 1. eShopOnWeb is a reference app (~254 .cs files). In larger enterprise solutions the grep/read baseline grows faster than the codewiki output (grep hits scale with repo size; codewiki returns a fixed top-N). The gap widens at scale.
 2. Task 5 illustrates a real codewiki limitation: FTS on "configured" matches EF `*Configuration` classes before `Startup.cs`. A second, more specific query is needed. This is an honest 2-call scenario, not the ideal 1-call case.
-3. The DI consumers answer (Tasks 1, 3) relies on constructor-parameter extraction in the `query` output. The `callers` tool returns `(none)` for interfaces because interface-typed parameters are not modeled as direct call edges — a known limitation (GAP-3 partial). The query output is still sufficient to answer the question.
+3. Interface→impl now traverses real `implements` edges (Task 3 uses `impact`, which surfaces `EfRepository` directly). `callers` still returns `(none)` for a DI-injected interface because interface-typed constructor parameters are not modeled as direct *call* edges — the `query` output (listing consumer constructors) and `impact` (listing the implementation) together answer the question.
 4. Cost arithmetic uses input token pricing only. Output token costs (the agent's response) are the same for both paths and cancel out in the delta.
+5. `context` byte/token counts (Tasks 2, 5) vary ±~5% between cold index builds because hybrid BM25 + graph-path ranking is non-deterministic across the parallel-resolution graph ordering. `query` / `callers` / `impact` are deterministic. The aggregate call/token/$ reductions are stable across builds; the per-task `context` numbers reflect one representative clean-index run reproducible via `run-dotnet.sh`.

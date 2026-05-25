@@ -136,7 +136,7 @@ node detail panel, impact view. Behind the `web` feature flag.
 #### Performance
 - Cold-index: 370–1510 files/s on small/medium repos; django (3,019 files) in 11.8 s.
 - 100k-file cold-index: ~14 min extrapolated from measured 3k / 10k / 16k data points
-  (acceptance target: ≤ 20 min). See [`benchmark/ANALYSIS-SCALE.md`](benchmark/ANALYSIS-SCALE.md).
+  (acceptance target: ≤ 20 min). See [`benchmark/README.md`](benchmark/README.md).
 - Optimisation waves 1–6: key wins — in-memory name-index cache, streaming bulk writes,
   FTS drop/rebuild, incremental sync scope, CargoWorkspace map caching, parallel
   resolution, cursor pagination, full-core parse pool.

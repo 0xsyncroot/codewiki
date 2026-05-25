@@ -1,6 +1,7 @@
-repo	cs_files	sha	index_time_s	files_s	peak_rss_mb	db_size_kb	nodes	edges	unresolved_refs	search_p50_ms	callers_p50_ms	impact_p50_ms	context_p50_ms	sync_ms
-mediatr	151	c3e2419	0.11	1372	35.4	2400	1377	1855	2086	1	2	2	4	n/a
-eShopOnWeb	254	4da8212	0.11	2309	35.4	2584	1381	1484	2431	1	2	2	6	28
-jellyfin	2065	498d265	2.16	956	207.1	50232	17812	37615	57727	1	3	10	9	61
-orchardcore	5203	39c2d68	8.19	635	620.8	171028	67286	204760	51512	1	7	8	38	n/a
-abp/framework/src	3497	ecf83f4e	2.02	1731	148.8	38568	22651	35916	11630	1	n/a	n/a	n/a	n/a
+task	repo	cw_calls	bl_calls	cw_bytes	bl_bytes	cw_tokens	bl_tokens	call_reduction_pct	token_reduction_pct	usd_saved
+T1_DI_consumers	eShopOnWeb	2	6	1520	13902	380	3476	67	89	0.0093
+T2_feature_comprehension	eShopOnWeb	1	6	4068	27368	1017	6842	83	85	0.0175
+T3_interface_impls	eShopOnWeb	2	6	2496	16875	624	4219	67	85	0.0108
+T4_blast_radius	eShopOnWeb	1	5	985	7835	246	1959	80	87	0.0051
+T5_auth_config	jellyfin	2	4	8134	32630	2034	8158	50	75	0.0184
+AVG	-	1.6	5.4	-	-	860	4930	70	83	0.0122

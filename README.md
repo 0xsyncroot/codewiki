@@ -15,7 +15,7 @@ codewiki_impact("AuthService")     → 6 ms, full blast radius
 codewiki_context("basket checkout")→ 4 ms, ranked entry points + key code
 ```
 
-**Measured on real .NET codebases: ~69% fewer tool calls, ~86% fewer tokens, ~$0.013 saved per task.**  
+**Measured on real .NET codebases: ~70% fewer tool calls, ~83% fewer tokens, ~$0.012 saved per task.**  
 100% local. Single static binary. No cloud, no telemetry, no API keys.
 
 ---
@@ -60,7 +60,7 @@ Key properties:
 - **16 framework resolvers** — including Angular, ASP.NET / Razor, Django, Express,
   NestJS, React, Vue, Spring, Rails, Flask, FastAPI, Laravel, Cargo, and more.
 - **FTS5 full-text search** — Unicode-aware BM25 ranking with hybrid graph-path scoring.
-- **Fully incremental** — 1-file change syncs in 20–150 ms.
+- **Fully incremental** — 1-file change syncs in 21–66 ms (even a 2,065-file .NET repo).
 - **Docstring extraction** — Python, Rust, Go, TypeScript/JavaScript, C#.
 - **100% local** — grammars are bundled in the binary; no network access after install.
 
@@ -68,22 +68,25 @@ Key properties:
 
 ## Why it pays off
 
-Measured across 5 realistic tasks on eShopOnWeb (254 .cs) and jellyfin (2,065 .cs).
-All byte counts from real CLI output. Pricing: Claude Sonnet $3.00 / 1M input tokens.
+Measured across 5 realistic tasks on eShopOnWeb (254 .cs) and jellyfin (2,065 .cs),
+freshly re-run on `codewiki 0.1.1`. All byte counts from real CLI output and real file
+sizes; tokens = bytes ÷ 4 (conservative). Pricing: Claude Sonnet $3.00 / 1M input tokens.
 Full methodology and per-task breakdown: [`benchmark/README.md`](benchmark/README.md).
 
 | Task | CW calls | Baseline calls | Call reduction | CW tokens | Baseline tokens | Token reduction | $ saved |
 |------|:--------:|:--------------:|:--------------:|:---------:|:---------------:|:--------------:|:-------:|
-| DI consumers (`IBasketService`) | 2 | 6 | **66%** | 400 | 3,498 | **88%** | $0.009 |
-| Feature comprehension (basket checkout) | 1 | 6 | **83%** | 1,035 | 6,934 | **85%** | $0.018 |
-| Interface→impls (`IRepository`) | 2 | 6 | **66%** | 449 | 4,335 | **89%** | $0.012 |
-| Blast radius (`OrderService` refactor) | 1 | 5 | **80%** | 264 | 1,977 | **86%** | $0.005 |
-| Cross-cutting: auth config (jellyfin) | 2 | 4 | **50%** | 1,296 | 8,332 | **84%** | $0.021 |
-| **Average** | **1.6** | **5.4** | **69%** | **689** | **5,015** | **86%** | **$0.013** |
+| DI consumers (`IBasketService`) | 2 | 6 | **67%** | 380 | 3,476 | **89%** | $0.009 |
+| Feature comprehension (basket checkout) | 1 | 6 | **83%** | 1,017 | 6,842 | **85%** | $0.018 |
+| Interface→impls (`IRepository`) | 2 | 6 | **67%** | 624 | 4,219 | **85%** | $0.011 |
+| Blast radius (`OrderService` refactor) | 1 | 5 | **80%** | 246 | 1,959 | **87%** | $0.005 |
+| Cross-cutting: auth config (jellyfin) | 2 | 4 | **50%** | 2,034 | 8,158 | **75%** | $0.018 |
+| **Average** | **1.6** | **5.4** | **70%** | **860** | **4,930** | **83%** | **$0.012** |
 
-A developer session with 20 agent interactions saves roughly **$0.26** while the index
-stays current at 20–150 ms per file change. The savings compound: the index is built
-once, maintained automatically, and every subsequent query is free.
+A developer session with 20 agent interactions saves roughly **$0.24** while the index
+stays current at 21–66 ms per file change. The savings compound: the index is built
+once, maintained automatically, and every subsequent query is free. Interface→impl
+queries now traverse real `implements` edges — `codewiki impact IRepository` returns the
+concrete `EfRepository` implementation directly (Task 3).
 
 ---
 
@@ -209,7 +212,7 @@ config. One registration serves **every** project you open.
 ```sh
 codewiki init
 # Creates + indexes ./.codewiki/ (DB + git hooks).
-# Indexed 141 files — 2025 nodes, 1884 edges (0.3s).
+# Indexed 141 files, 2025 nodes, 1884 edges in 0.2s.
 ```
 
 That's it — restart your agent once after step 1, and from then on every
@@ -388,58 +391,62 @@ merge, or branch switch. The MCP server also runs an internal file watcher with 
 Incremental sync is truly incremental: only changed files and their direct dependants
 are re-extracted and re-resolved. The rest of the graph is untouched.
 
-**Measured sync times (1 file changed):**
+**Measured sync times (1 file changed, fresh on `codewiki 0.1.1`):**
 
 | Repo | Files | Sync time |
 |------|------:|:---------:|
-| flask | 83 | 20 ms |
-| express | 141 | 20 ms |
-| zod | 408 | 30 ms |
-| vuecore | 535 | 40 ms |
-| django | 3,019 | 150 ms |
-| jellyfin (.cs, 2,065 files) | 2,065 | 61 ms |
+| flask (Python) | 83 | 22 ms |
+| express (JavaScript) | 141 | 21 ms |
+| zod (TypeScript) | 408 | 32 ms |
+| json (C++) | 499 | 43 ms |
+| jellyfin (C#, 2,065 .cs) | 2,065 | 66 ms |
+| django (Python) | 3,020 | 31 ms |
 
-Before the incremental-sync optimisation, django sync was **3.13 s** per file change
-(24× slower). The fix scopes re-resolution to changed files only, making sync
-proportional to the change size, not the repo size.
+Sync is scoped to the changed file and its direct dependants only, so it stays
+proportional to the change size — not the repo size. A 2,065-file .NET repo re-syncs a
+single edit in 66 ms.
 
-**The cost story:** index once (~0.2–11.8 s depending on repo size), then maintain at
-20–150 ms per change. Every subsequent query reuses the same graph for sub-ms
-responses. The $0.013/task savings repeat every session.
+**The cost story:** index once (~0.2–2.1 s for these repos), then maintain at
+21–66 ms per change. Every subsequent query reuses the same graph for sub-ms
+responses. The $0.012/task savings repeat every session.
 
 ---
 
 ## Performance
 
-Full tables and wave-by-wave optimisation history: [`benchmark/README.md`](benchmark/README.md).
-Machine: 28 cores, 31 GB RAM.
+Full tables, scale analysis, and the .NET agent-cost study live in
+[`benchmark/README.md`](benchmark/README.md). All figures below are a fresh run on
+`codewiki 0.1.1` (2026-05-25). Machine: 28 cores, 31 GB RAM, WSL2.
 
-**Cold-index speed — 10 real repos (post-Wave-4 build):**
+**Cross-language results — 8 real repos (one per language, shallow clones of `main`):**
 
-| Repo | Lang | Files | Index time | files/s |
-|------|------|------:|:---------:|--------:|
-| requests | Python | 37 | 0.1 s | 370 |
-| flask | Python | 83 | 0.2 s | 415 |
-| express | JavaScript | 141 | 0.3 s | 470 |
-| mediatr | C# | 151 | 0.1 s | 1510 |
-| zod | TypeScript | 408 | 0.6 s | 680 |
-| vuecore | Vue/TS | 535 | 1.3 s | 412 |
-| tokio | Rust | 778 | 1.8 s | 53 |
-| django | Python | 3,019 | **11.8 s** | 256 |
+This is a **performance** benchmark — cold-index speed, search latency, and incremental
+sync — across languages. (The dollar savings figure is from the .NET agent study in
+[*Why it pays off*](#why-it-pays-off); it is **not** a per-language number.)
 
-**Optimisation gains (baseline → final):**
+| Repo | Language | Files | Cold-index | files/s | Search p50 | Sync (1 file) |
+|------|----------|------:|:----------:|--------:|:----------:|:-------------:|
+| pallets/flask | Python | 83 | 0.19 s | 430 | 3 ms | 22 ms |
+| BurntSushi/ripgrep | Rust | 101 | 0.36 s | 278 | 3 ms | 24 ms |
+| expressjs/express | JavaScript | 141 | 0.26 s | 542 | 2 ms | 21 ms |
+| colinhacks/zod | TypeScript | 408 | 0.57 s | 720 | 2 ms | 32 ms |
+| dotnet-architecture/eShopOnWeb | C# | 269 | 0.15 s | 1,793 | 2 ms | 27 ms |
+| google/gson | Java | 262 | 0.49 s | 538 | 3 ms | 33 ms |
+| nlohmann/json | C++ | 499 | 1.01 s | 494 | 4 ms | 43 ms |
+| gin-gonic/gin | Go | 99 | 0.26 s | 376 | 2 ms | 22 ms |
 
-| Repo | Index | Speedup | Sync | Speedup |
-|------|:-----:|:-------:|:----:|:-------:|
-| tokio (Rust) | 19.4 s → 1.8 s | **11×** | 1.24 s → 40 ms | **31×** |
-| django (Python) | 36.2 s → 11.0 s | **3.3×** | 3.13 s → 130 ms | **24×** |
+All 8 index cleanly — zero crashes, zero FK errors — including C++ (`nlohmann/json`,
+499 files, 13,438 graph nodes). "Search p50" is the `query` latency; `callers`/`callees`
+are comparable, `impact`/`context` run 2–33 ms depending on fan-out.
 
-**100k-file scaling:** ~14 min cold-index extrapolated (O(n^1.50), target ≤ 20 min, PASS).
-Full analysis: [`benchmark/README.md`](benchmark/README.md).
+**Scale:** holds across size. django (3,020 Python files) cold-indexes in ~5.8 s into a
+52,722-node / 165,582-edge graph (fresh); the 100k-file cold-index extrapolates to
+**~14 min** (O(n^1.50), target ≤ 20 min — PASS) at ~4 GB peak RSS. Full scale table:
+[`benchmark/README.md`](benchmark/README.md).
 
 **Search latency** (CLI p50, includes binary cold-start):
-- Exact / fuzzy / callers / callees: **2–7 ms** on all repos including django (53k nodes)
-- Context query: **3–29 ms**
+- Exact / fuzzy / callers / callees: **2–4 ms** across all 8 languages
+- Impact / context query: **2–33 ms** (varies with graph fan-out)
 - Via persistent MCP server: sub-millisecond
 
 ---
@@ -481,14 +488,16 @@ and Razor.
 
 CodeWiki is production-tested on enterprise-scale codebases:
 
+All figures below are fresh `codewiki 0.1.1` runs on shallow clones (2026-05-25):
+
 | Metric | Result |
 |--------|--------|
 | 100k-file cold index | ~14 min (extrapolated from 3k / 10k / 16k measured runs) |
 | 100k-file peak RAM | ~4 GB (extrapolated; sub-linear O(n^0.62) memory scaling) |
-| orchardcore (5,203 .cs) | 9.2 s index, 505 interfaces, 97 enums, fully qualified names |
-| jellyfin (2,065 .cs) | 2.2 s index, 209 interfaces, 6,165 import edges, 385 routes |
-| ABP framework (3,497 .cs) | 2.6 s index, 623 interfaces, namespace-qualified (`Volo.Abp.Domain.Services::DomainService`) |
-| .NET enterprise verdict | **READY** — interfaces/enums/structs correctly classified, namespaces qualified, signatures stored, async detected |
+| OrchardCore (5,203 .cs) | 9.0 s index, 72,345 nodes / 227,444 edges, 505 interfaces, 97 enums, 3,663 implements edges, fully qualified names |
+| jellyfin (2,065 .cs) | 2.1 s index, 19,911 nodes / 46,648 edges, 209 interfaces, 385 routes, 5,852 import edges, 1,019 async methods |
+| ABP framework (3,497 .cs) | 1.9 s index, 26,133 nodes / 50,632 edges, 623 interfaces, namespace-qualified (`Volo.Abp.Domain.Services::DomainService`) |
+| .NET enterprise verdict | **READY** — interfaces/enums/structs correctly classified, namespaces qualified, signatures stored, async detected, `implements` edges resolved |
 
 Full benchmark suite and .NET audit: [`benchmark/README.md`](benchmark/README.md).
 
