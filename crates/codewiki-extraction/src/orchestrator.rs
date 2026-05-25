@@ -85,7 +85,12 @@ impl ExtractionOrchestratorImpl {
         let num_threads = num_cpus::get().max(2);
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(num_threads)
-            .stack_size(2 * 1024 * 1024)
+            // 64 MB worker stacks: the AST walker recurses with tree depth, and
+            // pathologically deep files (e.g. generated/nested test fixtures in
+            // microsoft/TypeScript) overflow a small stack and abort the process.
+            // This explicit size overrides RUST_MIN_STACK; stacks are reserved
+            // virtually and paged in on use, so the headroom is effectively free.
+            .stack_size(64 * 1024 * 1024)
             .build()
             .expect("failed to build rayon thread pool");
 
