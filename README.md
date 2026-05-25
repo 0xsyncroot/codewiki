@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/0xsyncroot/codewiki/actions/workflows/ci.yml/badge.svg)](https://github.com/0xsyncroot/codewiki/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.1-green.svg)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/rust-1.78%2B-orange.svg)](https://www.rust-lang.org)
 
 Instead of reading whole source files, your AI agent asks the graph:
@@ -36,6 +36,7 @@ codewiki_context("basket checkout")→ 4 ms, ranked entry points + key code
 - [Enterprise](#enterprise)
 - [Architecture](#architecture)
 - [Roadmap](#roadmap)
+- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -69,7 +70,7 @@ Key properties:
 
 Measured across 5 realistic tasks on eShopOnWeb (254 .cs) and jellyfin (2,065 .cs).
 All byte counts from real CLI output. Pricing: Claude Sonnet $3.00 / 1M input tokens.
-Full methodology: [`benchmark/DOTNET-REPORT.md §7`](benchmark/DOTNET-REPORT.md).
+Full methodology and per-task breakdown: [`benchmark/README.md`](benchmark/README.md).
 
 | Task | CW calls | Baseline calls | Call reduction | CW tokens | Baseline tokens | Token reduction | $ saved |
 |------|:--------:|:--------------:|:--------------:|:---------:|:---------------:|:--------------:|:-------:|
@@ -88,10 +89,16 @@ once, maintained automatically, and every subsequent query is free.
 
 ## Install
 
-CodeWiki is a **single self-contained binary** — all 18 tree-sitter grammars are
-bundled, with no runtime dependencies. The installers download the pre-built
-binary for your platform from GitHub Releases and **verify its SHA-256
-checksum**; nothing is compiled and the source tree is never cloned.
+CodeWiki ships as a **single self-contained binary** — all tree-sitter grammars are
+bundled, with no runtime dependencies. Every GitHub Release attaches CI-built binaries
+for five targets, each with a matching SHA-256 checksum. **No toolchain, no compiling,
+no cloning required.**
+
+### 1. One-liner (recommended)
+
+The install scripts auto-detect your platform, download the matching pre-built binary
+from the **latest** GitHub Release, verify its SHA-256 checksum, and place `codewiki`
+on your PATH. Nothing is compiled.
 
 **Linux / macOS:**
 
@@ -105,26 +112,71 @@ curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh
 irm https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.ps1 | iex
 ```
 
-Each installer resolves the latest release, downloads `codewiki-<target>.tar.gz`
-and its `.sha256`, verifies the checksum, and installs the binary to
-`~/.local/bin` (Unix) or `%LOCALAPPDATA%\Programs\codewiki` (Windows). Pin a
-specific release with `--version vX.Y.Z` (sh) or `-Version vX.Y.Z` (PowerShell).
+**Install location:** `~/.local/bin` on Unix, `%LOCALAPPDATA%\Programs\codewiki` on
+Windows (added to your user PATH automatically on Windows). Override with `--dir <path>`
+(sh) or `-Dir <path>` (PowerShell).
 
-Check the installed version:
+**Pin a version** instead of taking the latest:
+
+```sh
+# Linux / macOS
+curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh | sh -s -- --version v0.1.1
+```
+
+```powershell
+# Windows PowerShell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.ps1))) -Version v0.1.1
+```
+
+### 2. Manual download
+
+Prefer not to pipe a script to your shell? Download the asset for your platform from the
+[Releases page](https://github.com/0xsyncroot/codewiki/releases), verify it, extract, and
+put `codewiki` on your PATH.
+
+| OS | Arch | Release asset |
+|----|------|---------------|
+| Linux | x86_64 | `codewiki-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux | ARM64 | `codewiki-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS | Intel | `codewiki-x86_64-apple-darwin.tar.gz` |
+| macOS | Apple Silicon | `codewiki-aarch64-apple-darwin.tar.gz` |
+| Windows | x86_64 | `codewiki-x86_64-pc-windows-msvc.zip` |
+
+Each asset has a matching `<asset>.sha256`. Download both, then verify and install:
+
+**Linux / macOS:**
+
+```sh
+# Replace <asset> with the filename for your platform from the table above.
+sha256sum -c <asset>.sha256        # macOS: shasum -a 256 -c <asset>.sha256
+tar -xzf <asset>                   # extracts ./codewiki
+install -m 755 codewiki ~/.local/bin/codewiki
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Verify: the printed hash must match the contents of the .sha256 file.
+Get-FileHash codewiki-x86_64-pc-windows-msvc.zip -Algorithm SHA256
+Expand-Archive codewiki-x86_64-pc-windows-msvc.zip -DestinationPath $env:LOCALAPPDATA\Programs\codewiki
+# Add %LOCALAPPDATA%\Programs\codewiki to your PATH.
+```
+
+### Verify the install
 
 ```sh
 codewiki --version
-# codewiki 0.1.0
+# codewiki 0.1.1
 ```
 
-The installed binary includes all features — graph UI, FTS5, 18-language support — by
+The binary includes every feature — graph UI, FTS5 search, full language support — by
 default. No extra flags needed.
 
 <details>
-<summary>Build from source (optional — for development only)</summary>
+<summary><b>3. Build from source</b> (optional — for development only)</summary>
 
-End users do not need this; the installers above ship a verified pre-built
-binary. To build from source you need a stable Rust toolchain (1.78+):
+End users do not need this; the installers above ship a verified pre-built binary.
+Building from source requires a stable Rust toolchain (1.78+):
 
 ```sh
 git clone https://github.com/0xsyncroot/codewiki
@@ -383,7 +435,7 @@ Machine: 28 cores, 31 GB RAM.
 | django (Python) | 36.2 s → 11.0 s | **3.3×** | 3.13 s → 130 ms | **24×** |
 
 **100k-file scaling:** ~14 min cold-index extrapolated (O(n^1.50), target ≤ 20 min, PASS).
-Full analysis: [`benchmark/ANALYSIS-SCALE.md`](benchmark/ANALYSIS-SCALE.md).
+Full analysis: [`benchmark/README.md`](benchmark/README.md).
 
 **Search latency** (CLI p50, includes binary cold-start):
 - Exact / fuzzy / callers / callees: **2–7 ms** on all repos including django (53k nodes)
@@ -396,8 +448,11 @@ Full analysis: [`benchmark/ANALYSIS-SCALE.md`](benchmark/ANALYSIS-SCALE.md).
 
 **18 languages:**
 
-C, C++, C#, Dart, Go, Java, JavaScript, Kotlin, Lua, Luau, Pascal, PHP, Python,
-Ruby, Rust, Scala, Swift, TypeScript, Vue, Svelte, Liquid, Razor.
+C, C++, C#, Dart, Go, Java, JavaScript, Kotlin, Lua, Pascal, PHP, Python,
+Ruby, Rust, Scala, Swift, TypeScript, and Vue.
+
+Plus additional grammars for component and template dialects — Svelte, Luau, Liquid,
+and Razor.
 
 **16 framework resolvers:**
 
@@ -435,7 +490,7 @@ CodeWiki is production-tested on enterprise-scale codebases:
 | ABP framework (3,497 .cs) | 2.6 s index, 623 interfaces, namespace-qualified (`Volo.Abp.Domain.Services::DomainService`) |
 | .NET enterprise verdict | **READY** — interfaces/enums/structs correctly classified, namespaces qualified, signatures stored, async detected |
 
-Full .NET audit: [`benchmark/DOTNET-REPORT.md`](benchmark/DOTNET-REPORT.md).
+Full benchmark suite and .NET audit: [`benchmark/README.md`](benchmark/README.md).
 
 **Privacy:** all indexing and querying runs locally. No data leaves the machine.
 No embedding model, no external API, no telemetry by default. Single static binary —
@@ -467,6 +522,16 @@ Data flow: **tree-sitter extraction** → **SQLite / FTS5** → **reference reso
 - **wiki-md generation** — generate structured Markdown documentation from the graph
   (per-module API docs, architecture diagrams, call-graph narratives) as a first-class
   output format. This is the next major capability after the graph itself.
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test, and
+pull-request guidelines, and the [code of conduct](CODE_OF_CONDUCT.md) for community
+expectations. To report a security issue, follow the process in [SECURITY.md](SECURITY.md).
+Benchmark methodology and how to reproduce the numbers live in
+[`benchmark/README.md`](benchmark/README.md).
 
 ---
 

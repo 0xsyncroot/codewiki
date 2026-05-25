@@ -7,6 +7,53 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.1] - 2026-05-25
+
+First functional public release with cross-platform binaries. Hardens the
+initial rewrite after a multi-agent QA pass on real repositories.
+
+### Fixed
+
+- **C++ extraction on real codebases.** Previously a template specialization
+  with a base class crashed indexing (orphan edge → foreign-key violation →
+  the entire repository indexed 0 files, silently). C++ now resolves template
+  and qualified names, recovers class names through export/visibility macros
+  (e.g. `SPDLOG_API`), classifies out-of-line definitions as methods, and routes
+  `.h` headers to the C++ grammar. nlohmann/json and spdlog now index fully
+  (hundreds of classes, thousands of methods, inheritance edges; no crash).
+- **`implements` / `extends` edges** are now emitted from class heritage for
+  C#, TypeScript, and Java (previously only DI-derived edges existed).
+- **Java** `interface`/`enum` are no longer mis-typed as `class`.
+- **Rust** trait/impl methods are no longer double-emitted as both a `function`
+  and a `method` node (with duplicate `calls` edges).
+- **Unicode identifiers** (e.g. Vietnamese) are stored verbatim instead of being
+  stripped to ASCII; search stays diacritic-insensitive via the FTS tokenizer.
+- **Framework routes** are detected from minimal in-file patterns (Express,
+  Django, ASP.NET), not only from projects with a manifest.
+- **MCP server no longer crashes in an un-indexed project** — it serves a
+  friendly "run `codewiki init`" message, so one global registration works
+  across every project.
+- **`doctor`** recognizes `--location local` installs; cross-platform path and
+  test-isolation fixes make the suite pass on Linux, macOS, and Windows.
+
+### Added
+
+- **Robustness:** a foreign-key backstop skips orphan edges (with a warning)
+  instead of rolling back a whole repository; `index`/`init` exit non-zero when
+  a repository with source files indexes none (no more silent data loss).
+- **Live auto-sync:** the MCP server starts a file watcher that re-indexes on
+  change (in addition to the git hooks installed by `init`).
+- Cross-platform CI (Linux, macOS, Windows); MIT license detection; community
+  health files (`CONTRIBUTING`, `CODE_OF_CONDUCT`, `SECURITY`, issue/PR
+  templates); honest CodeGraph derivative-work attribution in `NOTICE`.
+
+### Removed
+
+- The unimplemented `telemetry` Cargo feature and its dependencies — CodeWiki is
+  100% local with no telemetry.
+
+---
+
 ## [0.1.0] - 2026-05-25
 
 ### Added

@@ -15,7 +15,7 @@ class Codewiki < Formula
   desc "Tree-sitter-powered code knowledge graph server for AI coding agents"
   homepage "https://github.com/0xsyncroot/codewiki"
   license "MIT"
-  version "0.1.0"
+  version "0.1.1"
 
   # ── macOS Apple Silicon ──────────────────────────────────────────────────────
   on_macos do
