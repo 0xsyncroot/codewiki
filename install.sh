@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # T-446 — CodeWiki one-liner installer (Linux / macOS)
-# Usage:  curl -fsSL https://raw.githubusercontent.com/your-org/codewiki/main/install.sh | sh
+# Usage:  curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh | sh
 #    Or:  ./install.sh [--version <tag>] [--dir <install-dir>] [--uninstall] [--help]
 #
 # Downloads the correct pre-built Rust binary from GitHub Releases,
@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-REPO="your-org/codewiki"
+REPO="0xsyncroot/codewiki"
 INSTALL_DIR="${CODEWIKI_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${CODEWIKI_VERSION:-latest}"
 UNINSTALL=0

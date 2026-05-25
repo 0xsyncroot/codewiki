@@ -225,13 +225,9 @@ pub fn parse_query(raw: &str) -> ParsedQuery {
                     continue;
                 }
                 match key.as_str() {
-                    "kind" => {
-                        if is_valid_kind(value_raw) {
-                            if let Some(k) = kind_from_str(value_raw) {
-                                out.kinds.push(k);
-                            } else {
-                                text_parts.push(tok.clone());
-                            }
+                    "kind" if is_valid_kind(value_raw) => {
+                        if let Some(k) = kind_from_str(value_raw) {
+                            out.kinds.push(k);
                         } else {
                             text_parts.push(tok.clone());
                         }

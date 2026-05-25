@@ -27,6 +27,7 @@ codewiki_context("basket checkout")→ 4 ms, ranked entry points + key code
 - [Install](#install)
 - [Quick start](#quick-start)
 - [MCP tools](#mcp-tools)
+- [Editor and agent support](#editor-and-agent-support)
 - [CLI commands](#cli-commands)
 - [Graph UI](#graph-ui)
 - [Maintenance and incremental sync](#maintenance-and-incremental-sync)
@@ -48,7 +49,7 @@ inherits, implements, route-to-handler, DI bindings).
 
 The graph is exposed to AI coding agents via a
 [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server —
-9 `codewiki_*` tools that Claude Code, Cursor, Windsurf, and other agents call over
+9 `codewiki_*` tools that Claude Code, Cursor, Codex, and other MCP-capable agents call over
 stdio JSON-RPC. Agents get sub-millisecond structural answers instead of reading files.
 
 Key properties:
@@ -144,7 +145,7 @@ Or run the steps individually:
 # 1. Index this project
 codewiki init
 
-# 2. Wire into your agent (Claude, Cursor, Windsurf, Codex, Hermes, …)
+# 2. Wire into your agent (Claude, Cursor, Codex, opencode, Hermes)
 codewiki install --target claude
 
 # 3. Verify everything is healthy
@@ -172,6 +173,51 @@ The MCP server keeps the SQLite connection open — query latency is sub-millise
 | `codewiki_explore` | Several related symbols' source in one capped call |
 | `codewiki_files` | Indexed files under a directory path with metadata |
 | `codewiki_status` | Index health: file count, node/edge counts, DB size |
+
+---
+
+## Editor and agent support
+
+CodeWiki ships a standard [Model Context Protocol](https://modelcontextprotocol.io)
+stdio server (`codewiki serve --mcp`, JSON-RPC over stdin/stdout, protocol `2024-11-05`),
+so it works with **any MCP-compatible agent**. For the agents below, a one-command
+installer writes the MCP config (and agent instructions) for you:
+
+| Agent | Install command | Notes |
+|-------|-----------------|-------|
+| Claude Code | `codewiki install --target claude` | Writes `~/.claude.json` (global) or `./.mcp.json` (local); adds a CodeWiki block to `CLAUDE.md`. |
+| Cursor | `codewiki install --target cursor` | Writes `~/.cursor/mcp.json` (global) or `./.cursor/mcp.json` (local); local installs also add `./.cursor/rules/codewiki.mdc`. |
+| Codex CLI | `codewiki install --target codex` | Global only — writes `[mcp_servers.codewiki]` to `~/.codex/config.toml` and a block to `~/.codex/AGENTS.md`. |
+| opencode | `codewiki install --target opencode` | Writes `~/.config/opencode/opencode.jsonc` (global) or `./opencode.jsonc` (local); adds a block to `AGENTS.md`. |
+| Hermes Agent | `codewiki install --target hermes` | Global only — writes `mcp_servers.codewiki` to `$HERMES_HOME/config.yaml` (defaults to `~/.hermes/config.yaml`). |
+
+Pass `--location local` to wire the current project instead of your user-wide config
+(Codex CLI and Hermes Agent are global-only). `codewiki install --target all` configures
+every detected agent at once, and `codewiki setup` indexes the project and wires agents
+in a single step. Run `codewiki uninstall --target <name>` to cleanly remove a config.
+
+### Any other MCP client (manual)
+
+Any MCP-capable client — including editors and assistants without a first-class
+installer above — can use CodeWiki by registering the stdio server directly. The
+canonical invocation is `codewiki serve --mcp`. A typical `mcpServers` entry:
+
+```json
+{
+  "mcpServers": {
+    "codewiki": {
+      "type": "stdio",
+      "command": "codewiki",
+      "args": ["serve", "--mcp"]
+    }
+  }
+}
+```
+
+If your client launches MCP servers without inheriting the project working directory,
+add `--path` so CodeWiki finds the right index, e.g.
+`"args": ["serve", "--mcp", "--path", "/abs/path/to/project"]`. Place the entry in
+whatever config file your client reads (the schema varies by client) and restart it.
 
 ---
 

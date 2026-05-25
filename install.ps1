@@ -1,5 +1,5 @@
 # T-446 / T-021 — CodeWiki one-liner installer (Windows PowerShell)
-# Usage: iwr https://raw.githubusercontent.com/your-org/codewiki/main/install.ps1 | iex
+# Usage: iwr https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.ps1 | iex
 #    Or: .\install.ps1 [-Version <tag>] [-Dir <path>] [-Uninstall]
 #
 # Downloads the correct pre-built Rust binary from GitHub Releases,
@@ -17,7 +17,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$Repo = "your-org/codewiki"
+$Repo = "0xsyncroot/codewiki"
 
 # ── Uninstall path ────────────────────────────────────────────────────────────
 

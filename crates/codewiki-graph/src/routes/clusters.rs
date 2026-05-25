@@ -80,7 +80,7 @@ pub async fn handle(
                 languages: langs.into_iter().collect(),
             })
             .collect();
-        clusters.sort_by(|a, b| b.node_count.cmp(&a.node_count));
+        clusters.sort_by_key(|c| std::cmp::Reverse(c.node_count));
 
         Ok(clusters)
     })
