@@ -15,7 +15,7 @@ codewiki_impact("AuthService")     → 6 ms, full blast radius
 codewiki_context("basket checkout")→ 4 ms, ranked entry points + key code
 ```
 
-**Measured on real .NET codebases: ~70% fewer tool calls, ~83% fewer tokens, ~$0.012 saved per task.**  
+**Measured across 8 real-world repos (Python, Rust, TypeScript, JavaScript, C#, Java, C++, Go): ~72% fewer tool calls and ~97% fewer tokens than grepping and reading files.**  
 100% local. Single static binary. No cloud, no telemetry, no API keys.
 
 ---
@@ -68,10 +68,53 @@ Key properties:
 
 ## Why it pays off
 
+An MCP-driven agent-savings harness runs **6 task archetypes** (locate, callers, callees,
+feature, impl, blast) against **one real repo per language** — 48 cases over 8 repos — and
+compares CodeWiki to a **grep + read-full-files baseline**, the surface a tool-less agent
+actually uses. Every answer is scored for recall against a frozen ground-truth oracle.
+Tokens = output bytes ÷ 4 (conservative). Pricing: Claude Sonnet $3.00 / 1M input tokens.
+Fresh run on `codewiki 0.1.1` (2026-05-25). Full methodology, recall caveat, and raw data:
+[`benchmark/README.md`](benchmark/README.md) (source: [`results-savings.tsv`](benchmark/results-savings.tsv)).
+
+| Language | Repo | Tool-call reduction | Token reduction |
+|----------|------|:-------------------:|:---------------:|
+| C++ | nlohmann/json | 67% | **99%** |
+| Go | gin-gonic/gin | 78% | **98%** |
+| TypeScript | colinhacks/zod | 65% | **98%** |
+| Rust | BurntSushi/ripgrep | 75% | **97%** |
+| Python | pallets/flask | 74% | **94%** |
+| Java | google/gson | 74% | **94%** |
+| JavaScript | expressjs/express | 57% | **91%** |
+| C# | dotnet-architecture/eShopOnWeb | 74% | **31%** |
+| **Overall** | **48 cases / 8 repos** | **72%** | **97%** |
+
+Across all 48 cases CodeWiki uses **72% fewer tool-calls and 97% fewer tokens** than
+grep+read, saving **~$4.60** of input tokens over the run. The token win is so large
+because the baseline reads whole candidate files while CodeWiki returns a small, ranked,
+structurally-resolved slice. (C#'s 31% is a small-repo artefact: eShopOnWeb's files are
+already cheap to read, so there is little to save — recall stays on par, 0.93 vs 0.94.)
+
+**Honest recall note.** CodeWiki trades a little completeness for that token/call win:
+mean recall is **0.80 for CodeWiki vs 0.93 for the grep+read baseline**. The value
+proposition is *near-baseline answers at ~3% of the tokens*, and the recall delta is the
+cost being paid for it. Methodology and the full recall breakdown are in
+[`benchmark/README.md`](benchmark/README.md).
+
+The savings compound: the index is built once, maintained automatically at 21–66 ms per
+file change, and every subsequent query is free.
+
+### Worked example — 5 .NET tasks
+
+> **Different baseline.** This per-task trace uses a more economical
+> **grep-then-read-*minimal*-files** baseline (read only the files a task strictly needs),
+> not the read-*whole*-files baseline of the cross-language table above. That is why the
+> token reduction here (~83%) is lower than the headline 97% — both are honest; they
+> simply measure against different baselines. Full trace:
+> [`benchmark/README.md`](benchmark/README.md) (§7 .NET appendix).
+
 Measured across 5 realistic tasks on eShopOnWeb (254 .cs) and jellyfin (2,065 .cs),
-freshly re-run on `codewiki 0.1.1`. All byte counts from real CLI output and real file
-sizes; tokens = bytes ÷ 4 (conservative). Pricing: Claude Sonnet $3.00 / 1M input tokens.
-Full methodology and per-task breakdown: [`benchmark/README.md`](benchmark/README.md).
+freshly re-run on `codewiki 0.1.1`. Byte counts from real CLI output and file sizes;
+tokens = bytes ÷ 4 (conservative). Pricing: Claude Sonnet $3.00 / 1M input tokens.
 
 | Task | CW calls | Baseline calls | Call reduction | CW tokens | Baseline tokens | Token reduction | $ saved |
 |------|:--------:|:--------------:|:--------------:|:---------:|:---------------:|:--------------:|:-------:|
@@ -82,11 +125,8 @@ Full methodology and per-task breakdown: [`benchmark/README.md`](benchmark/READM
 | Cross-cutting: auth config (jellyfin) | 2 | 4 | **50%** | 2,034 | 8,158 | **75%** | $0.018 |
 | **Average** | **1.6** | **5.4** | **70%** | **860** | **4,930** | **83%** | **$0.012** |
 
-A developer session with 20 agent interactions saves roughly **$0.24** while the index
-stays current at 21–66 ms per file change. The savings compound: the index is built
-once, maintained automatically, and every subsequent query is free. Interface→impl
-queries now traverse real `implements` edges — `codewiki impact IRepository` returns the
-concrete `EfRepository` implementation directly (Task 3).
+Interface→impl queries traverse real `implements` edges — `codewiki impact IRepository`
+returns the concrete `EfRepository` implementation directly (Task 3).
 
 ---
 
@@ -409,21 +449,22 @@ single edit in 66 ms.
 
 **The cost story:** index once (~0.2–2.1 s for these repos), then maintain at
 21–66 ms per change. Every subsequent query reuses the same graph for sub-ms
-responses. The $0.012/task savings repeat every session.
+responses. The ~97% token / ~72% tool-call savings repeat every session (see
+[*Why it pays off*](#why-it-pays-off)).
 
 ---
 
 ## Performance
 
-Full tables, scale analysis, and the .NET agent-cost study live in
+Full tables, scale analysis, and the agent-savings study live in
 [`benchmark/README.md`](benchmark/README.md). All figures below are a fresh run on
 `codewiki 0.1.1` (2026-05-25). Machine: 28 cores, 31 GB RAM, WSL2.
 
 **Cross-language results — 8 real repos (one per language, shallow clones of `main`):**
 
-This is a **performance** benchmark — cold-index speed, search latency, and incremental
-sync — across languages. (The dollar savings figure is from the .NET agent study in
-[*Why it pays off*](#why-it-pays-off); it is **not** a per-language number.)
+This table is a **performance** benchmark — cold-index speed, search latency, and
+incremental sync. The token / tool-call savings for these same 8 repos are in
+[*Why it pays off*](#why-it-pays-off).
 
 | Repo | Language | Files | Cold-index | files/s | Search p50 | Sync (1 file) |
 |------|----------|------:|:----------:|--------:|:----------:|:-------------:|
