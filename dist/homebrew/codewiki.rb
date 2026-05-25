@@ -13,17 +13,17 @@
 
 class Codewiki < Formula
   desc "Tree-sitter-powered code knowledge graph server for AI coding agents"
-  homepage "https://github.com/your-org/codewiki"
+  homepage "https://github.com/0xsyncroot/codewiki"
   license "MIT"
   version "0.1.0"
 
   # ── macOS Apple Silicon ──────────────────────────────────────────────────────
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/your-org/codewiki/releases/download/v#{version}/codewiki-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/0xsyncroot/codewiki/releases/download/v#{version}/codewiki-aarch64-apple-darwin.tar.gz"
       sha256 "REPLACE_AT_RELEASE_TIME_MACOS_ARM64"
     else
-      url "https://github.com/your-org/codewiki/releases/download/v#{version}/codewiki-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/0xsyncroot/codewiki/releases/download/v#{version}/codewiki-x86_64-apple-darwin.tar.gz"
       sha256 "REPLACE_AT_RELEASE_TIME_MACOS_X86_64"
     end
   end
@@ -31,10 +31,10 @@ class Codewiki < Formula
   # ── Linux x86_64 ─────────────────────────────────────────────────────────────
   on_linux do
     if Hardware::CPU.intel?
-      url "https://github.com/your-org/codewiki/releases/download/v#{version}/codewiki-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/0xsyncroot/codewiki/releases/download/v#{version}/codewiki-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "REPLACE_AT_RELEASE_TIME_LINUX_X86_64"
     else
-      url "https://github.com/your-org/codewiki/releases/download/v#{version}/codewiki-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/0xsyncroot/codewiki/releases/download/v#{version}/codewiki-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "REPLACE_AT_RELEASE_TIME_LINUX_ARM64"
     end
   end

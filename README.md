@@ -88,27 +88,15 @@ once, maintained automatically, and every subsequent query is free.
 
 ## Install
 
-**One-liner (Linux / macOS):**
+CodeWiki is a **single self-contained binary** — all 18 tree-sitter grammars are
+bundled, with no runtime dependencies. The installers download the pre-built
+binary for your platform from GitHub Releases and **verify its SHA-256
+checksum**; nothing is compiled and the source tree is never cloned.
+
+**Linux / macOS:**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh | sh
-```
-
-**Homebrew (macOS):**
-
-```sh
-brew install --formula dist/homebrew/codewiki.rb
-```
-
-*(Formula will be submitted to homebrew-core at v1.0 GA.)*
-
-**Build from source (Rust 1.78+):**
-
-```sh
-git clone https://github.com/0xsyncroot/codewiki
-cd codewiki
-cargo build --release
-# binary: ./target/release/codewiki
 ```
 
 **Windows (PowerShell):**
@@ -116,6 +104,11 @@ cargo build --release
 ```powershell
 irm https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.ps1 | iex
 ```
+
+Each installer resolves the latest release, downloads `codewiki-<target>.tar.gz`
+and its `.sha256`, verifies the checksum, and installs the binary to
+`~/.local/bin` (Unix) or `%LOCALAPPDATA%\Programs\codewiki` (Windows). Pin a
+specific release with `--version vX.Y.Z` (sh) or `-Version vX.Y.Z` (PowerShell).
 
 Check the installed version:
 
@@ -126,6 +119,20 @@ codewiki --version
 
 The installed binary includes all features — graph UI, FTS5, 18-language support — by
 default. No extra flags needed.
+
+<details>
+<summary>Build from source (optional — for development only)</summary>
+
+End users do not need this; the installers above ship a verified pre-built
+binary. To build from source you need a stable Rust toolchain (1.78+):
+
+```sh
+git clone https://github.com/0xsyncroot/codewiki
+cd codewiki
+cargo build --release   # binary: ./target/release/codewiki
+```
+
+</details>
 
 ---
 

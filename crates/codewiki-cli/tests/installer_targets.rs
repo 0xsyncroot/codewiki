@@ -445,9 +445,11 @@ fn opencode_install_writes_agents_md() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    // Global config dir for opencode: ~/.config/opencode/AGENTS.md
-    let home = home::home_dir().unwrap();
-    let md_path = home.join(".config").join("opencode").join("AGENTS.md");
+    // opencode resolves its global config dir from XDG_CONFIG_HOME (pinned by
+    // setup_home), so derive the expected path the same way the writer does —
+    // `home::home_dir()` does not honor a test-set sandbox on Windows.
+    let config_base = PathBuf::from(std::env::var_os("XDG_CONFIG_HOME").unwrap());
+    let md_path = config_base.join("opencode").join("AGENTS.md");
     assert!(
         md_path.exists(),
         "AGENTS.md should be created for opencode global"
@@ -538,8 +540,8 @@ fn opencode_jsonc_has_correct_shape() {
         .install(Location::Global, &install_opts(false))
         .unwrap();
 
-    let home = home::home_dir().unwrap();
-    let jsonc_path = home.join(".config").join("opencode").join("opencode.jsonc");
+    let config_base = PathBuf::from(std::env::var_os("XDG_CONFIG_HOME").unwrap());
+    let jsonc_path = config_base.join("opencode").join("opencode.jsonc");
     assert!(jsonc_path.exists(), "opencode.jsonc should exist");
     let content = fs::read_to_string(&jsonc_path).unwrap();
     let val: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -685,8 +687,9 @@ fn install_target_all_selects_all_targets() {
         home.join(".codex").join("config.toml").exists(),
         "~/.codex/config.toml (Codex)"
     );
+    let opencode_base = PathBuf::from(std::env::var_os("XDG_CONFIG_HOME").unwrap());
     assert!(
-        home.join(".config")
+        opencode_base
             .join("opencode")
             .join("opencode.jsonc")
             .exists(),
