@@ -5,7 +5,7 @@
 [![CI](https://github.com/0xsyncroot/codewiki/actions/workflows/ci.yml/badge.svg)](https://github.com/0xsyncroot/codewiki/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.1-green.svg)](CHANGELOG.md)
-[![Rust](https://img.shields.io/badge/rust-1.78%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
 
 Instead of reading whole source files, your AI agent asks the graph:
 
@@ -15,8 +15,11 @@ codewiki_impact("AuthService")     → 6 ms, full blast radius
 codewiki_context("basket checkout")→ 4 ms, ranked entry points + key code
 ```
 
-**Measured across 10 real-world repos and 151 tasks (Python, Rust, TypeScript, JavaScript, C#, Java, C++, Go — from 83-file libraries up to the 17k-file kubernetes and 39k-file TypeScript compiler): ~73% fewer tool calls and ~97% fewer tokens than grepping and reading files.**  
-100% local. Single static binary. No cloud, no telemetry, no API keys.
+Measured across **10 real-world repos and 151 tasks** (Python, Rust, TypeScript,
+JavaScript, C#, Java, C++, Go — from 83-file libraries up to the 17k-file kubernetes and
+39k-file TypeScript compiler), CodeWiki uses **~73% fewer tool-calls and ~97% fewer
+tokens** than grepping and reading files. 100% local, single static binary — no cloud,
+no telemetry, no API keys.
 
 ---
 
@@ -50,17 +53,23 @@ inherits, implements, route-to-handler, DI bindings).
 
 The graph is exposed to AI coding agents via a
 [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server —
-9 `codewiki_*` tools that Claude Code, Cursor, Codex, and other MCP-capable agents call over
-stdio JSON-RPC. Agents get sub-millisecond structural answers instead of reading files.
+9 `codewiki_*` tools that Claude Code, Cursor, Codex, and other MCP-capable agents call
+over stdio JSON-RPC. Agents get sub-millisecond structural answers instead of reading
+files, and the index is built once then maintained automatically (see
+[*Maintenance*](#maintenance-and-incremental-sync)).
 
 Key properties:
 
-- **18 languages** — Python, Rust, TypeScript/JavaScript, C#, Java, Go, Kotlin, PHP,
-  Ruby, Swift, C, C++, Vue, Svelte, Scala, Dart, Lua, Pascal and more.
-- **16 framework resolvers** — including Angular, ASP.NET / Razor, Django, Express,
-  NestJS, React, Vue, Spring, Rails, Flask, FastAPI, Laravel, Cargo, and more.
+- **18 languages** — C, C++, C#, Dart, Go, Java, JavaScript, Kotlin, Lua, Pascal, PHP,
+  Python, Ruby, Rust, Scala, Swift, TypeScript, and Vue
+  (plus additional component/template grammars; see
+  [*Languages and frameworks*](#languages-and-frameworks)).
+- **16 framework resolvers** — Angular, ASP.NET / Razor, Django, Express, FastAPI, Flask,
+  NestJS, Rails, Laravel, React, Vue, Svelte, Spring, Gin (Go web), Vapor (Swift web),
+  and Cargo workspaces.
 - **FTS5 full-text search** — Unicode-aware BM25 ranking with hybrid graph-path scoring.
-- **Fully incremental** — 1-file change syncs in 21–66 ms (even a 2,065-file .NET repo).
+- **Fully incremental** — a 1-file change re-syncs in tens of milliseconds; the rest of
+  the graph is untouched (see [*Maintenance*](#maintenance-and-incremental-sync)).
 - **Docstring extraction** — Python, Rust, Go, TypeScript/JavaScript, C#.
 - **100% local** — grammars are bundled in the binary; no network access after install.
 
@@ -73,9 +82,9 @@ feature, impl, blast) over **10 real repos across three size tiers** — **151 c
 compares CodeWiki to a **grep + read-full-files baseline**, the surface a tool-less agent
 actually uses. Every answer is scored for recall against a frozen ground-truth oracle (the
 baseline is scored on the *identical* oracle). Tokens = output bytes ÷ 4 (conservative).
-Pricing: Claude Sonnet $3.00 / 1M input tokens. Fresh cold run on `codewiki 0.1.1`
-(2026-05-25). Full methodology, recall caveat, and raw data:
-[`benchmark/README.md`](benchmark/README.md) (source: [`results-savings.tsv`](benchmark/results-savings.tsv)).
+Pricing: Claude Sonnet $3.00 / 1M input tokens. Fresh cold run on `codewiki 0.1.1`. Full
+methodology, recall caveat, and raw data: [`benchmark/README.md`](benchmark/README.md)
+(source: [`results-savings.tsv`](benchmark/results-savings.tsv)).
 
 | Language | Repo | Files | Tool-call reduction | Token reduction |
 |----------|------|------:|:-------------------:|:---------------:|
@@ -93,7 +102,7 @@ Across all 151 cases CodeWiki uses **73% fewer tool-calls and 97% fewer tokens**
 grep+read, saving **~$15.64** of input tokens over the run. The token win is so large
 because the baseline reads whole candidate files while CodeWiki returns a small, ranked,
 structurally-resolved slice. (C#'s 72% is a small-repo artefact: eShopOnWeb's files are
-already cheap to read, so there is little to save — recall stays on par, 0.84 vs 0.94.)
+already cheap to read, so there is little to save; recall stays on par, 0.84 vs 0.94.)
 
 **The saving grows with repo size.** CodeWiki's per-query answer stays bounded
 (~0.7–1.4k tokens) no matter how big the codebase, while the grep+read baseline explodes:
@@ -104,7 +113,7 @@ already cheap to read, so there is little to save — recall stays on par, 0.84 
 | Medium (300–700) | zod, gson, json | 1,365 | 51,079 | **97%** |
 | Enterprise (>15k) | kubernetes (17k), microsoft/TypeScript (39k) | 708 | **108,573** | **99%** |
 
-On a 17k–39k-file monorepo a single scoped grep + the file reads it forces cost
+On a 17k–39k-file monorepo a single scoped grep plus the file reads it forces costs
 **~109k tokens per query**; CodeWiki answers the same task in ~700. The biggest codebases
 — where agent token budgets hurt most — are where CodeWiki saves the most.
 
@@ -116,8 +125,9 @@ for it. The suite keeps hard and expected-to-lose cases (overloaded names, Go st
 interfaces with no `implements` edge, C# type-usage gaps) — no cherry-picking. Full
 methodology, weakness analysis, and per-case breakdown: [`benchmark/README.md`](benchmark/README.md).
 
-The savings compound: the index is built once, maintained automatically at 21–66 ms per
-file change (74–202 ms on the 17k–39k-file repos), and every subsequent query is free.
+The savings compound: the index is built once and maintained automatically at a per-edit
+cost in milliseconds (see [*Maintenance*](#maintenance-and-incremental-sync)), so every
+subsequent query is effectively free.
 
 ### Worked example — 5 .NET tasks
 
@@ -128,9 +138,9 @@ file change (74–202 ms on the 17k–39k-file repos), and every subsequent quer
 > simply measure against different baselines. Full trace:
 > [`benchmark/README.md`](benchmark/README.md) (§4 .NET worked example).
 
-Measured across 5 realistic tasks on eShopOnWeb (254 .cs) and jellyfin (2,065 .cs),
-freshly re-run on `codewiki 0.1.1`. Byte counts from real CLI output and file sizes;
-tokens = bytes ÷ 4 (conservative). Pricing: Claude Sonnet $3.00 / 1M input tokens.
+Measured across 5 realistic tasks on eShopOnWeb (254 .cs) and jellyfin (2,065 .cs), freshly
+re-run on `codewiki 0.1.1`. Byte counts from real CLI output and file sizes; tokens =
+bytes ÷ 4 (conservative). Pricing: Claude Sonnet $3.00 / 1M input tokens.
 
 | Task | CW calls | Baseline calls | Call reduction | CW tokens | Baseline tokens | Token reduction | $ saved |
 |------|:--------:|:--------------:|:--------------:|:---------:|:---------------:|:--------------:|:-------:|
@@ -150,7 +160,7 @@ returns the concrete `EfRepository` implementation directly (Task 3).
 
 CodeWiki ships as a **single self-contained binary** — all tree-sitter grammars are
 bundled, with no runtime dependencies. Every GitHub Release attaches CI-built binaries
-for five targets, each with a matching SHA-256 checksum. **No toolchain, no compiling,
+for four targets, each with a matching SHA-256 checksum. **No toolchain, no compiling,
 no cloning required.**
 
 ### 1. One-liner (recommended)
@@ -236,7 +246,8 @@ default. No extra flags needed.
 <summary><b>3. Build from source</b> (optional — for development only)</summary>
 
 End users do not need this; the installers above ship a verified pre-built binary.
-Building from source requires a stable Rust toolchain (1.78+):
+Building from source requires a recent stable Rust toolchain (CI builds on current
+`stable`):
 
 ```sh
 git clone https://github.com/0xsyncroot/codewiki
@@ -269,7 +280,7 @@ config. One registration serves **every** project you open.
 ```sh
 codewiki init
 # Creates + indexes ./.codewiki/ (DB + git hooks).
-# Indexed 141 files, 2025 nodes, 1884 edges in 0.2s.
+# Indexed 141 files, 2,291 nodes, 6,374 edges in 0.3s.
 ```
 
 That's it — restart your agent once after step 1, and from then on every
@@ -438,17 +449,26 @@ cargo build --release --no-default-features --features bundled-sqlite,wasmtime-g
 
 ## Maintenance and incremental sync
 
-**The graph stays current automatically — at negligible cost.**
+**The graph stays current automatically — at negligible cost.** This is the single
+authoritative description of how the index is kept fresh; the savings sections above
+cross-link here rather than restate it.
 
-On `codewiki init`, git hooks are installed in `.git/hooks/` (`post-commit`,
-`post-merge`, `post-checkout`). Each hook runs `codewiki sync` after a commit,
-merge, or branch switch. The MCP server also runs an internal file watcher with a
-~1 s debounce that syncs on any file save.
+`codewiki init` installs two complementary auto-sync paths:
 
-Incremental sync is truly incremental: only changed files and their direct dependants
-are re-extracted and re-resolved. The rest of the graph is untouched.
+- **Git hooks** (`post-commit`, `post-merge`, `post-checkout`) run `codewiki sync`
+  detached in the background after a commit, merge, or branch switch, so git is never
+  blocked. They work on **every** filesystem, including WSL `/mnt` drives.
+- **Live file watcher** inside `codewiki serve --mcp` re-syncs on file saves, using a
+  **2-second debounce** (`WatcherConfig::default()`) that coalesces a multi-file burst
+  into one sync cycle. The watcher does not fire on WSL `/mnt` (drvfs/9p) drives — inotify
+  events don't cross the 9p protocol — which is exactly why the git hooks exist as the
+  fallback there.
 
-**Measured sync times (1 file changed, fresh on `codewiki 0.1.1`):**
+Incremental sync is truly incremental: only changed files and their direct dependants are
+re-extracted and re-resolved, so sync time stays proportional to the change size, not the
+repo size. A 2,065-file .NET repo re-syncs a single edit in 66 ms.
+
+**Measured 1-file sync (tool-reported parse/DB-write time, fresh on `codewiki 0.1.1`):**
 
 | Repo | Files | Sync time |
 |------|------:|:---------:|
@@ -457,16 +477,15 @@ are re-extracted and re-resolved. The rest of the graph is untouched.
 | zod (TypeScript) | 408 | 32 ms |
 | json (C++) | 499 | 43 ms |
 | jellyfin (C#, 2,065 .cs) | 2,065 | 66 ms |
-| django (Python) | 3,020 | 31 ms |
+| kubernetes (Go, 17,176 files) | 17,176 | 74 ms |
+| microsoft/TypeScript (39,296 files) | 39,296 | 202 ms |
 
-Sync is scoped to the changed file and its direct dependants only, so it stays
-proportional to the change size — not the repo size. A 2,065-file .NET repo re-syncs a
-single edit in 66 ms.
-
-**The cost story:** index once (~0.2–2.1 s for these repos), then maintain at
-21–66 ms per change. Every subsequent query reuses the same graph for sub-ms
-responses. The ~97% token / ~73% tool-call savings repeat every session (see
-[*Why it pays off*](#why-it-pays-off)).
+**The cost story:** index once (~0.2–2.1 s for the per-language repos, ~1 min for the
+17k–39k-file monorepos), then maintain at tens of milliseconds per change. Use
+`codewiki index` instead of `sync` for whole-repo rewrites (a mass reformat is ~2× slower
+through the incremental path). Every subsequent query reuses the same graph for sub-ms
+responses, so the ~97% token / ~73% tool-call savings (see
+[*Why it pays off*](#why-it-pays-off)) repeat every session.
 
 ---
 
@@ -474,7 +493,8 @@ responses. The ~97% token / ~73% tool-call savings repeat every session (see
 
 Full tables, scale analysis, and the agent-savings study live in
 [`benchmark/README.md`](benchmark/README.md). All figures below are a fresh run on
-`codewiki 0.1.1` (2026-05-25). Machine: 28 cores, 31 GB RAM, WSL2.
+`codewiki 0.1.1`. Machine: Intel Core i7-14700KF (14 cores / 28 threads), 31 GiB RAM,
+WSL2.
 
 **Cross-language results — 8 real repos (one per language, shallow clones of `main`):**
 
@@ -500,8 +520,9 @@ are comparable, `impact`/`context` run 2–33 ms depending on fan-out.
 **Scale:** holds to enterprise size. **kubernetes** (Go, 17,176 files) cold-indexes in
 **55 s** into a 208k-node / 971k-edge graph, and **microsoft/TypeScript** (the TS
 compiler, 39,296 files) in **62 s** — both clean, exit 0, ~1.1–1.5 GB peak RSS. The
-100k-file cold-index extrapolates to **~14 min** (O(n^1.50), target ≤ 20 min — PASS) at
-~4 GB peak RSS. Full scale table: [`benchmark/README.md`](benchmark/README.md).
+100k-file cold-index extrapolates to **~14 min** (O(n^1.5), target ≤ 20 min) at ~4 GB
+peak RSS. Full scale table and the enterprise breakdown: [*Enterprise*](#enterprise) and
+[`benchmark/README.md`](benchmark/README.md).
 
 **Search latency** (CLI p50, includes binary cold-start):
 - Exact / fuzzy / callers / callees: **2–4 ms** across all 8 languages
@@ -517,8 +538,8 @@ compiler, 39,296 files) in **62 s** — both clean, exit 0, ~1.1–1.5 GB peak R
 C, C++, C#, Dart, Go, Java, JavaScript, Kotlin, Lua, Pascal, PHP, Python,
 Ruby, Rust, Scala, Swift, TypeScript, and Vue.
 
-Plus additional grammars for component and template dialects — Svelte, Luau, Liquid,
-and Razor.
+Plus additional grammars for component, template, and form dialects — Svelte, Luau,
+Liquid, Razor, and Delphi form files (DFM).
 
 **16 framework resolvers:**
 
@@ -537,17 +558,16 @@ and Razor.
 | **Vue** | SFC components, `<script setup>`, Composition API |
 | **Svelte** | Component exports, stores |
 | **Spring** | `@RequestMapping`, `@GetMapping`, beans |
-| **Cargo workspace** | Inter-crate `use` resolution, workspace members |
-| **Swift Package Manager** | Target dependencies, module imports |
-| **Go modules** | Package imports, module graph |
+| **Gin (Go web)** | `r.GET/POST/…` routes for Gin / chi / Echo / gorilla mux / net/http → route nodes + handler resolution |
+| **Vapor (Swift web)** | `app/routes/router .get/post/…` routes; controller, Fluent model, and middleware resolution |
+| **Cargo workspace** | Workspace members → module nodes; inter-crate `use` resolution; path-dependency edges |
 
 ---
 
 ## Enterprise
 
-CodeWiki is production-tested on enterprise-scale codebases:
-
-All figures below are fresh `codewiki 0.1.1` runs on shallow clones (2026-05-25):
+CodeWiki is production-tested on enterprise-scale codebases. All figures below are fresh
+`codewiki 0.1.1` runs on shallow clones:
 
 | Metric | Result |
 |--------|--------|
@@ -563,14 +583,15 @@ All figures below are fresh `codewiki 0.1.1` runs on shallow clones (2026-05-25)
 Full benchmark suite and .NET audit: [`benchmark/README.md`](benchmark/README.md).
 
 **Privacy:** all indexing and querying runs locally. No data leaves the machine.
-No embedding model, no external API, no telemetry by default. Single static binary —
+No embedding model, no external API, no telemetry. Single static binary —
 copy it anywhere, run it, works.
 
 ---
 
 ## Architecture
 
-Eight-crate Cargo workspace under `crates/`:
+Cargo workspace under `crates/` — eight product crates plus a test-only helper
+(`codewiki-testutil`):
 
 | Crate | Role |
 |-------|------|

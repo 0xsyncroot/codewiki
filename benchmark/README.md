@@ -260,9 +260,11 @@ changes; `sync` is optimised for the small change sets that dominate real editin
   single-digit ms; the changed symbol becomes queryable **~0.1 s** later — even on
   kubernetes (~128 ms to reflect a commit on a 17k-file repo). Add/remove/branch-switch
   round-trips all verified correct. Works on **every** filesystem, including WSL `/mnt`.
-- **Live file watcher** (inside `codewiki serve --mcp`, ~500 ms debounce, notify +
-  debouncer). On native ext4 it correctly handles single edits and **coalesces a
-  multi-file burst into one sync cycle**; observed latency ~0.2–2.0 s.
+- **Live file watcher** (inside `codewiki serve --mcp`, **2 s debounce** — the default
+  `WatcherConfig` in `codewiki-sync`, notify + debouncer). On native ext4 it correctly
+  handles single edits and **coalesces a multi-file burst into one sync cycle**. A save is
+  reflected ~2 s after edits settle (the 2 s debounce window plus a few-ms sync); for
+  sub-second freshness use the git-hook path above.
 
 **Honest caveats (stated plainly):**
 1. The live watcher **does not fire on WSL `/mnt` (drvfs/9p) drives** — inotify events
