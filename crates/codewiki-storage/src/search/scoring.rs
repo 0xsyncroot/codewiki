@@ -1,6 +1,103 @@
 /// Search scoring functions.
 /// Port of research-source/src/search/query-utils.ts.
 use codewiki_core::NodeKind;
+use rusqlite::Connection;
+use std::collections::HashMap;
+
+// ---------------------------------------------------------------------------
+// Query-time IDF (FIX 2 — context multi-term coverage ranking)
+// ---------------------------------------------------------------------------
+
+/// Per-term inverse document frequency computed at query time.
+///
+/// For each term we count how many nodes match it via FTS (document frequency,
+/// `df`) and compute `idf = ln(total / (df + 1)) + 1`. Rare terms (low `df`)
+/// get a higher IDF so the coverage boost rewards a candidate that matches a
+/// rare *semantic anchor* term more than one matching only a high-frequency
+/// term. The `+1` smoothing keeps the IDF positive and finite even when a term
+/// matches every node or no node.
+#[derive(Debug, Clone, Default)]
+pub struct TermIdf {
+    /// Map from lowercased term → IDF weight (always >= ~1.0).
+    weights: HashMap<String, f32>,
+}
+
+impl TermIdf {
+    /// IDF weight for a term (case-insensitive). Unknown terms get a neutral
+    /// weight of 1.0 so they still contribute one unit of coverage.
+    pub fn weight(&self, term: &str) -> f32 {
+        self.weights
+            .get(&term.to_lowercase())
+            .copied()
+            .unwrap_or(1.0)
+    }
+
+    /// Number of terms with a recorded weight.
+    pub fn len(&self) -> usize {
+        self.weights.len()
+    }
+
+    /// True when no term weights were computed.
+    pub fn is_empty(&self) -> bool {
+        self.weights.is_empty()
+    }
+}
+
+/// FTS5 MATCH string for a single term (prefix match), mirroring the per-term
+/// shape `fts_query_string` produces. Strips FTS operator characters so a raw
+/// query term can't inject syntax. Returns `None` when nothing usable remains.
+fn term_fts_match(term: &str) -> Option<String> {
+    let cleaned: String = term
+        .replace("::", " ")
+        .replace(|c: char| "\"*():^".contains(c), "");
+    let cleaned = cleaned.trim();
+    if cleaned.is_empty() || matches!(cleaned, "AND" | "OR" | "NOT" | "NEAR") {
+        return None;
+    }
+    Some(format!("\"{}\"*", cleaned))
+}
+
+/// Compute query-time IDF for each distinct term against the indexed corpus.
+///
+/// `total` is the node count; each term's `df` is the number of nodes matching
+/// it via FTS prefix search. Best-effort: a term whose FTS count errors out is
+/// recorded with `df = 0` (max IDF) rather than aborting the whole computation.
+///
+/// Callers should cache the result for the lifetime of a single query — it runs
+/// one cheap `COUNT(*)` per distinct term.
+pub fn compute_term_idf(conn: &Connection, terms: &[String]) -> TermIdf {
+    let total: i64 = conn
+        .query_row("SELECT COUNT(*) FROM nodes", [], |r| r.get(0))
+        .unwrap_or(0);
+    let total_f = (total.max(0) as f32).max(1.0);
+
+    let mut weights: HashMap<String, f32> = HashMap::new();
+    for term in terms {
+        let key = term.to_lowercase();
+        if weights.contains_key(&key) {
+            continue;
+        }
+        let df = match term_fts_match(&key) {
+            Some(m) => fts_match_count(conn, &m),
+            None => 0,
+        };
+        // idf = ln(total / (df + 1)) + 1  — always >= ~1.0 with the +1 floor.
+        let idf = (total_f / (df as f32 + 1.0)).ln() + 1.0;
+        weights.insert(key, idf.max(1.0));
+    }
+    TermIdf { weights }
+}
+
+/// Count nodes matching an FTS MATCH string. Returns 0 on any error so IDF
+/// degrades gracefully to "rare term" rather than failing the query.
+fn fts_match_count(conn: &Connection, fts_match: &str) -> i64 {
+    conn.query_row(
+        "SELECT COUNT(*) FROM nodes_fts WHERE nodes_fts MATCH ?1",
+        [fts_match],
+        |r| r.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+}
 
 // ---------------------------------------------------------------------------
 // High-value node kinds — ported from TS context/index.ts lines 158-161
@@ -588,5 +685,92 @@ mod tests {
         // "run" is in commonWords (len 3 lowercase passes lower_re, but is a stopword)
         let symbols = extract_symbols_from_query("how to run the server");
         assert!(!symbols.contains(&"run".to_string()), "'run' is a stopword");
+    }
+
+    // -------------------------------------------------------------------------
+    // FIX 2: query-time IDF
+    // -------------------------------------------------------------------------
+
+    /// A rare term must receive a HIGHER IDF weight than a high-frequency one,
+    /// so the coverage boost can reward the semantic anchor over a common term.
+    #[test]
+    fn idf_weights_rare_term_higher_than_common_term() {
+        use crate::connection::open_in_memory;
+        use crate::queries::nodes::insert_node;
+        use codewiki_core::{Language, Node, NodeKind};
+
+        let conn = open_in_memory().unwrap();
+        // "process" appears in 20 node names (high-frequency / common).
+        for i in 0..20 {
+            insert_node(
+                &conn,
+                &Node {
+                    id: format!("p{}", i),
+                    name: format!("process{}", i),
+                    qualified_name: format!("process{}", i),
+                    kind: NodeKind::Function,
+                    language: Language::Rust,
+                    file_path: "src/p.rs".to_string(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+        // "telemetry" appears in exactly ONE node (rare / anchor).
+        insert_node(
+            &conn,
+            &Node {
+                id: "rare1".to_string(),
+                name: "telemetryFlush".to_string(),
+                qualified_name: "telemetryFlush".to_string(),
+                kind: NodeKind::Function,
+                language: Language::Rust,
+                file_path: "src/t.rs".to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let terms = vec!["process".to_string(), "telemetry".to_string()];
+        let idf = compute_term_idf(&conn, &terms);
+        assert!(
+            idf.weight("telemetry") > idf.weight("process"),
+            "rare term must outweigh common term: telemetry={}, process={}",
+            idf.weight("telemetry"),
+            idf.weight("process"),
+        );
+        // Unknown terms get a neutral weight.
+        assert_eq!(idf.weight("zzz_unseen"), 1.0);
+    }
+
+    /// IDF weights are always finite and >= 1.0 even when a term matches every
+    /// node or no node (smoothing + floor).
+    #[test]
+    fn idf_weights_are_bounded_and_positive() {
+        use crate::connection::open_in_memory;
+        use crate::queries::nodes::insert_node;
+        use codewiki_core::{Language, Node, NodeKind};
+
+        let conn = open_in_memory().unwrap();
+        insert_node(
+            &conn,
+            &Node {
+                id: "n1".to_string(),
+                name: "common".to_string(),
+                qualified_name: "common".to_string(),
+                kind: NodeKind::Function,
+                language: Language::Rust,
+                file_path: "src/x.rs".to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let terms = vec!["common".to_string(), "missing".to_string()];
+        let idf = compute_term_idf(&conn, &terms);
+        for t in &terms {
+            let w = idf.weight(t);
+            assert!(w.is_finite() && w >= 1.0, "weight for {} = {}", t, w);
+        }
     }
 }

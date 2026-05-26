@@ -345,6 +345,38 @@ mod tests {
         ) -> Result<Vec<codewiki_core::Node>, codewiki_core::CodeWikiError> {
             Ok(vec![])
         }
+
+        fn get_callers_aggregated(
+            &self,
+            _symbol: &str,
+            _cap: usize,
+        ) -> Result<
+            codewiki_storage::traits::query::AggregatedNeighbors,
+            codewiki_core::CodeWikiError,
+        > {
+            Ok(codewiki_storage::traits::query::AggregatedNeighbors::default())
+        }
+
+        fn get_callees_aggregated(
+            &self,
+            _symbol: &str,
+            _cap: usize,
+        ) -> Result<
+            codewiki_storage::traits::query::AggregatedNeighbors,
+            codewiki_core::CodeWikiError,
+        > {
+            Ok(codewiki_storage::traits::query::AggregatedNeighbors::default())
+        }
+
+        fn get_impact_aggregated(
+            &self,
+            _symbol: &str,
+            _depth: usize,
+            _cap: usize,
+        ) -> Result<codewiki_storage::traits::query::AggregatedImpact, codewiki_core::CodeWikiError>
+        {
+            Ok(codewiki_storage::traits::query::AggregatedImpact::default())
+        }
     }
 
     fn extract_text(result: &CallToolResult) -> String {

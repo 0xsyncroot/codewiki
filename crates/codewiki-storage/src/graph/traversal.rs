@@ -707,6 +707,108 @@ impl<'a> GraphTraverser<'a> {
         Ok(children)
     }
 
+    /// Bounded "sibling-anchor" expansion (FIX 2).
+    ///
+    /// Given a selected context root, return at most `max` structurally-related
+    /// anchor nodes that help an agent orient around the root without flooding
+    /// the context:
+    ///   1. **Sibling methods** — if the root is contained by a class/struct/
+    ///      trait/interface, other members of that same container (the root's
+    ///      "siblings"), which are usually the rest of the type's API surface.
+    ///   2. **Interface implementers / supertypes** — if the root is a type,
+    ///      one node it `Extends`/`Implements` or that implements it, so the
+    ///      contract<->implementation link is reachable.
+    ///
+    /// Excludes the root itself and any id in `exclude`. The traversal touches
+    /// only the root's immediate containment/type edges (O(degree)), so it is
+    /// cheap even on a large repo. Results are deterministic (sorted by
+    /// start_line then id) and truncated to `max`.
+    pub fn sibling_anchors(
+        &self,
+        root_id: &str,
+        max: usize,
+        exclude: &HashSet<String>,
+    ) -> Result<Vec<Node>, CodeWikiError> {
+        if max == 0 {
+            return Ok(vec![]);
+        }
+        let mut out: Vec<Node> = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+
+        // --- (1) Sibling methods: root's container → its other children. ---
+        let parents = eq::get_incoming_edges(self.conn, root_id, Some(&[EdgeKind::Contains]))?;
+        if let Some(parent_edge) = parents.into_iter().next() {
+            let parent_id = parent_edge.source_id;
+            let sib_edges =
+                eq::get_outgoing_edges(self.conn, &parent_id, Some(&[EdgeKind::Contains]))?;
+            let sib_ids: Vec<String> = sib_edges
+                .iter()
+                .map(|e| e.target_id.clone())
+                .filter(|id| id != root_id && !exclude.contains(id))
+                .collect();
+            let sib_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &sib_ids)?
+                .into_iter()
+                .map(|n| (n.id.clone(), n))
+                .collect();
+            let mut sibs: Vec<Node> = sib_map.into_values().collect();
+            sibs.sort_by(|a, b| {
+                a.start_line
+                    .cmp(&b.start_line)
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+            for n in sibs {
+                if seen.insert(n.id.clone()) {
+                    out.push(n);
+                }
+                if out.len() >= max {
+                    out.truncate(max);
+                    return Ok(out);
+                }
+            }
+        }
+
+        // --- (2) Type relations: supertypes / implementers of the root. ---
+        let mut type_ids: Vec<String> = Vec::new();
+        for edge in eq::get_outgoing_edges(
+            self.conn,
+            root_id,
+            Some(&[EdgeKind::Extends, EdgeKind::Implements]),
+        )? {
+            type_ids.push(edge.target_id);
+        }
+        for edge in eq::get_incoming_edges(
+            self.conn,
+            root_id,
+            Some(&[EdgeKind::Extends, EdgeKind::Implements]),
+        )? {
+            type_ids.push(edge.source_id);
+        }
+        type_ids.retain(|id| id != root_id && !exclude.contains(id) && !seen.contains(id));
+        if !type_ids.is_empty() {
+            let type_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &type_ids)?
+                .into_iter()
+                .map(|n| (n.id.clone(), n))
+                .collect();
+            let mut types: Vec<Node> = type_map.into_values().collect();
+            types.sort_by(|a, b| {
+                a.start_line
+                    .cmp(&b.start_line)
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+            for n in types {
+                if seen.insert(n.id.clone()) {
+                    out.push(n);
+                }
+                if out.len() >= max {
+                    break;
+                }
+            }
+        }
+
+        out.truncate(max);
+        Ok(out)
+    }
+
     /// Detect circular dependencies (file-level DFS with recursion stack).
     pub fn find_circular_dependencies(
         &self,

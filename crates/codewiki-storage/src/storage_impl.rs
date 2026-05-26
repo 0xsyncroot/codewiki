@@ -6,6 +6,7 @@ use crate::search::{
     extract_search_terms, extract_symbols_from_query, get_stem_variants, is_test_file,
     search_nodes_fts, HIGH_VALUE_NODE_KINDS,
 };
+use crate::traits::query::{is_qualified_symbol, AggregatedImpact, AggregatedNeighbors};
 use crate::traits::{
     BulkStoreStats, ExtractionStore, FileFilter, FindOpts, QueryHandle, ResolutionStore,
     ResolvedEdge, SearchOptions, SyncStore,
@@ -219,6 +220,121 @@ impl StorageImpl {
         )?;
         Ok(())
     }
+
+    /// Resolve a symbol string to the set of node ids it should aggregate over.
+    ///
+    /// Returns `(family_ids, resolved_name, family_size)`:
+    /// - For a **qualified** symbol (e.g. `Foo::bar`), resolves to exactly the
+    ///   single best match — `family_ids` has one id and `family_size == 1`.
+    /// - For a **bare** symbol, resolves the best match, then collects every
+    ///   node whose simple name case-insensitively EQUALS the best match's name
+    ///   (the same-name family). `family_size` is the number of such nodes.
+    ///
+    /// Returns `None` when nothing matches the symbol.
+    ///
+    /// The family lookup is bounded by `MAX_FAMILY_NODES` so a pathological
+    /// same-name set (e.g. a generated codebase with thousands of `new`) can't
+    /// blow up traversal cost; the most relevant members (by search rank) win.
+    fn resolve_symbol_family(
+        &self,
+        symbol: &str,
+    ) -> Result<Option<(Vec<String>, String, usize)>, CodeWikiError> {
+        /// Cap on how many same-name definitions we union over. Keeps the
+        /// per-call traversal cost bounded on huge same-name families.
+        const MAX_FAMILY_NODES: usize = 32;
+
+        // Resolve the best match first (top BM25 hit), as the legacy tools did.
+        let matches = self.search_nodes(
+            symbol,
+            SearchOptions {
+                limit: 5,
+                ..Default::default()
+            },
+        )?;
+        let best = match matches.first() {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+
+        // Qualified / namespaced symbol → resolve to exactly the best node.
+        // No same-name family union.
+        if is_qualified_symbol(symbol) {
+            return Ok(Some((
+                vec![best.node.id.clone()],
+                best.node.name.clone(),
+                1,
+            )));
+        }
+
+        // Bare name → collect the same-name family (case-insensitive EQUALITY
+        // on the simple name, NOT fuzzy/substring matches).
+        let target_name = best.node.name.clone();
+        let family_nodes = self.with_conn(|conn| {
+            nq::find_nodes_by_exact_name(
+                conn,
+                std::slice::from_ref(&target_name),
+                None,
+                MAX_FAMILY_NODES,
+            )
+        })?;
+
+        // Order family members by graph degree (most-connected first) so the
+        // cap keeps the highest-signal definitions when the family is large.
+        let mut ranked: Vec<(String, u64)> = Vec::with_capacity(family_nodes.len());
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        self.with_conn(|conn| {
+            for n in &family_nodes {
+                if !n.name.eq_ignore_ascii_case(&target_name) {
+                    continue; // defensive: exact-name only
+                }
+                if !seen.insert(n.id.clone()) {
+                    continue;
+                }
+                let (in_deg, out_deg) = eq::get_node_degree(conn, &n.id).unwrap_or((0, 0));
+                ranked.push((n.id.clone(), in_deg + out_deg));
+            }
+            Ok::<_, CodeWikiError>(())
+        })?;
+
+        // Guarantee the best match is present even if it wasn't returned by the
+        // exact-name lookup (it always should be, but be defensive).
+        if !ranked.iter().any(|(id, _)| id == &best.node.id) {
+            ranked.push((best.node.id.clone(), 0));
+        }
+
+        ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        let family_size = ranked.len();
+        let family_ids: Vec<String> = ranked.into_iter().map(|(id, _)| id).collect();
+
+        Ok(Some((family_ids, target_name, family_size)))
+    }
+
+    /// Rank an aggregated neighbor list by graph degree (most-connected first,
+    /// ties broken by name then id for determinism) and truncate to `cap`.
+    fn rank_and_cap_neighbors(&self, neighbors: &mut Vec<Node>, cap: usize) {
+        let degrees: std::collections::HashMap<String, u64> = self
+            .with_conn(|conn| {
+                Ok::<_, CodeWikiError>(
+                    neighbors
+                        .iter()
+                        .map(|n| {
+                            let (i, o) = eq::get_node_degree(conn, &n.id).unwrap_or((0, 0));
+                            (n.id.clone(), i + o)
+                        })
+                        .collect(),
+                )
+            })
+            .unwrap_or_default();
+
+        neighbors.sort_by(|a, b| {
+            let da = degrees.get(&a.id).copied().unwrap_or(0);
+            let db = degrees.get(&b.id).copied().unwrap_or(0);
+            db.cmp(&da)
+                .then_with(|| a.name.cmp(&b.name))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        neighbors.truncate(cap);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +512,154 @@ impl QueryHandle for StorageImpl {
         self.with_conn(|conn| {
             let traverser = GraphTraverser::new(conn);
             traverser.get_impact_radius(node_id, depth)
+        })
+    }
+
+    fn get_callers_aggregated(
+        &self,
+        symbol: &str,
+        cap: usize,
+    ) -> Result<AggregatedNeighbors, CodeWikiError> {
+        let (family_ids, resolved_name, family_size) = match self.resolve_symbol_family(symbol)? {
+            Some(f) => f,
+            None => return Ok(AggregatedNeighbors::default()),
+        };
+
+        // Union 1-hop callers across the family, deduped by node id, ranked by
+        // graph degree (most-connected first), capped at `cap`.
+        let mut neighbor_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut neighbors: Vec<Node> = Vec::new();
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            for fid in &family_ids {
+                for (node, _edge) in traverser.get_callers(fid, 1)? {
+                    if neighbor_ids.insert(node.id.clone()) {
+                        neighbors.push(node);
+                    }
+                }
+            }
+            Ok::<_, CodeWikiError>(())
+        })?;
+
+        self.rank_and_cap_neighbors(&mut neighbors, cap);
+
+        Ok(AggregatedNeighbors {
+            neighbors,
+            resolved_name,
+            family_size,
+        })
+    }
+
+    fn get_callees_aggregated(
+        &self,
+        symbol: &str,
+        cap: usize,
+    ) -> Result<AggregatedNeighbors, CodeWikiError> {
+        let (family_ids, resolved_name, family_size) = match self.resolve_symbol_family(symbol)? {
+            Some(f) => f,
+            None => return Ok(AggregatedNeighbors::default()),
+        };
+
+        let mut neighbor_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut neighbors: Vec<Node> = Vec::new();
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            for fid in &family_ids {
+                for (node, _edge) in traverser.get_callees(fid, 1)? {
+                    if neighbor_ids.insert(node.id.clone()) {
+                        neighbors.push(node);
+                    }
+                }
+            }
+            Ok::<_, CodeWikiError>(())
+        })?;
+
+        self.rank_and_cap_neighbors(&mut neighbors, cap);
+
+        Ok(AggregatedNeighbors {
+            neighbors,
+            resolved_name,
+            family_size,
+        })
+    }
+
+    fn get_impact_aggregated(
+        &self,
+        symbol: &str,
+        depth: usize,
+        cap: usize,
+    ) -> Result<AggregatedImpact, CodeWikiError> {
+        let (family_ids, resolved_name, family_size) = match self.resolve_symbol_family(symbol)? {
+            Some(f) => f,
+            None => return Ok(AggregatedImpact::default()),
+        };
+
+        // Union the reverse-reach impact subgraph across the family. Dedup nodes
+        // by id and edges by (source -> target). The merged subgraph is capped
+        // at `cap` nodes (ranked by degree) so output stays bounded on large
+        // same-name families.
+        let mut all_nodes: std::collections::HashMap<String, Node> =
+            std::collections::HashMap::new();
+        let mut all_edges: Vec<Edge> = Vec::new();
+        let mut seen_edges: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut roots: Vec<String> = Vec::new();
+
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            for fid in &family_ids {
+                let subgraph = traverser.get_impact_radius(fid, depth)?;
+                roots.push(fid.clone());
+                for (id, node) in subgraph.nodes {
+                    all_nodes.insert(id, node);
+                }
+                for edge in subgraph.edges {
+                    let key = format!("{}->{}", edge.source_id, edge.target_id);
+                    if seen_edges.insert(key) {
+                        all_edges.push(edge);
+                    }
+                }
+            }
+            Ok::<_, CodeWikiError>(())
+        })?;
+
+        // Cap nodes by degree when the union exceeds the budget. Family roots
+        // are always retained so the focal symbols never get dropped.
+        if all_nodes.len() > cap {
+            let root_set: std::collections::HashSet<&String> = roots.iter().collect();
+            let mut scored: Vec<(String, u64)> = self.with_conn(|conn| {
+                Ok::<_, CodeWikiError>(
+                    all_nodes
+                        .keys()
+                        .map(|id| {
+                            let (i, o) = eq::get_node_degree(conn, id).unwrap_or((0, 0));
+                            (id.clone(), i + o)
+                        })
+                        .collect(),
+                )
+            })?;
+            // Roots first (by giving them max priority), then by degree desc.
+            scored.sort_by(|a, b| {
+                let a_root = root_set.contains(&a.0);
+                let b_root = root_set.contains(&b.0);
+                b_root
+                    .cmp(&a_root)
+                    .then_with(|| b.1.cmp(&a.1))
+                    .then_with(|| a.0.cmp(&b.0))
+            });
+            let keep: std::collections::HashSet<String> =
+                scored.into_iter().take(cap).map(|(id, _)| id).collect();
+            all_nodes.retain(|id, _| keep.contains(id));
+            all_edges.retain(|e| keep.contains(&e.source_id) && keep.contains(&e.target_id));
+        }
+
+        Ok(AggregatedImpact {
+            subgraph: Subgraph {
+                nodes: all_nodes,
+                edges: all_edges,
+                roots,
+            },
+            resolved_name,
+            family_size,
         })
     }
 
@@ -869,8 +1133,26 @@ impl QueryHandle for StorageImpl {
                 .collect();
 
                 let term_limit = opts.search_limit * 2;
-                let mut term_results_map: std::collections::HashMap<String, (SearchResult, usize)> =
-                    std::collections::HashMap::new();
+
+                // FIX 2: per-term IDF, computed once per query and cached for the
+                // whole text-channel aggregation. Rare terms (the semantic anchor)
+                // weigh more than high-frequency terms so a single common term
+                // can't dominate BM25 and crowd out the anchor.
+                let term_idf = self
+                    .with_conn(|conn| {
+                        Ok::<_, CodeWikiError>(crate::search::scoring::compute_term_idf(
+                            conn,
+                            &search_terms,
+                        ))
+                    })
+                    .unwrap_or_default();
+
+                // Track, per candidate node, the DISTINCT query terms it matched
+                // (not just a count) so coverage and IDF weighting are exact.
+                let mut term_results_map: std::collections::HashMap<
+                    String,
+                    (SearchResult, std::collections::HashSet<String>),
+                > = std::collections::HashMap::new();
 
                 for term in &search_terms {
                     let search_opts = SearchOptions {
@@ -882,27 +1164,79 @@ impl QueryHandle for StorageImpl {
                         for r in results {
                             let entry = term_results_map
                                 .entry(r.node.id.clone())
-                                .or_insert_with(|| (r.clone(), 0));
-                            entry.1 += 1; // increment term_hits
+                                .or_insert_with(|| (r.clone(), std::collections::HashSet::new()));
+                            entry.1.insert(term.to_lowercase());
                             entry.0.score = f64::max(entry.0.score, r.score);
                         }
                     }
                 }
 
-                // Boost multi-term hits and collect
-                text_results = term_results_map
+                // FIX 2: compute an IDF-weighted multi-term COVERAGE boost for
+                // every candidate BEFORE truncation. The boost rewards a node for
+                // covering MORE distinct query terms, weighting the rarer
+                // (higher-IDF) terms most. Concretely: take the IDF of each matched
+                // term, treat the single MOST COMMON matched term as the "base"
+                // (it carries the least signal), and sum the IDFs of every other
+                // matched term. So a node matching a rare anchor term (`eviction`)
+                // on top of a common one (`cache`) is rewarded by ~idf(eviction),
+                // counteracting BM25 latching onto the high-frequency term.
+                //
+                // Coverage is recomputed by testing each query term against the
+                // candidate's own text (name / qualified_name / file stem) rather
+                // than relying on per-term FTS top-K membership — a candidate can
+                // fall out of a common term's capped top-K yet still genuinely
+                // cover it, so the membership signal under-counts coverage.
+                let multi_term = search_terms.len() > 1;
+                let mut scored: Vec<(SearchResult, usize)> = term_results_map
                     .into_values()
-                    .map(|(mut result, term_hits)| {
-                        result.score += (term_hits.saturating_sub(1)) as f64 * 5.0;
-                        result
+                    .map(|(mut result, fts_matched)| {
+                        // Distinct terms this node textually covers.
+                        let name_l = result.node.name.to_lowercase();
+                        let qname_l = result.node.qualified_name.to_lowercase();
+                        let stem_l = std::path::Path::new(&result.node.file_path)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("")
+                            .to_lowercase();
+                        let covered: std::collections::HashSet<String> = search_terms
+                            .iter()
+                            .map(|t| t.to_lowercase())
+                            .filter(|t| {
+                                fts_matched.contains(t)
+                                    || name_l.contains(t.as_str())
+                                    || qname_l.contains(t.as_str())
+                                    || stem_l.contains(t.as_str())
+                            })
+                            .collect();
+                        let n_terms = covered.len();
+                        if multi_term && n_terms > 1 {
+                            let mut idfs: Vec<f32> =
+                                covered.iter().map(|t| term_idf.weight(t)).collect();
+                            // Ascending: drop the smallest IDF (most common term) as
+                            // the base; the remaining (rarer) terms form the coverage.
+                            idfs.sort_by(|a, b| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            });
+                            let cov: f32 = idfs.iter().skip(1).sum();
+                            result.score += 5.0 * cov as f64;
+                        }
+                        (result, n_terms)
                     })
                     .collect();
-                text_results.sort_by(|a, b| {
-                    b.score
-                        .partial_cmp(&a.score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
+
+                // Coverage-aware ordering so multi-term anchors are NOT truncated
+                // away by single-term BM25 hits before they reach the merge +
+                // STEP 5a co-occurrence re-rank. Primary key: number of distinct
+                // terms covered (descending); tie-break by boosted score.
+                scored.sort_by(|a, b| {
+                    b.1.cmp(&a.1).then_with(|| {
+                        b.0.score
+                            .partial_cmp(&a.0.score)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
                 });
-                text_results.truncate(term_limit);
+                scored.truncate(term_limit);
+                text_results = scored.into_iter().map(|(r, _)| r).collect();
             }
         }
 
@@ -1377,6 +1711,35 @@ impl QueryHandle for StorageImpl {
                     all_edges.extend(subgraph.edges);
                 }
             }
+        }
+
+        // === Phase 3: bounded sibling-anchor expansion (FIX 2) ===
+        // For each root, pull in up to 1 structurally-related anchor (a sibling
+        // method of the same class/struct, or an interface implementer/supertype)
+        // when there is still room in the node budget. This re-attaches the
+        // anchor's API surface to a feature-style query without flooding context.
+        // Strictly capped (1 anchor/root) and touches only the root's immediate
+        // containment/type edges, so latency stays bounded on a large repo.
+        if all_nodes.len() < opts.max_nodes && !roots.is_empty() {
+            let root_ids: Vec<String> = roots.clone();
+            let _ = self.with_conn(|conn| {
+                let traverser = GraphTraverser::new(conn);
+                for root_id in &root_ids {
+                    if all_nodes.len() >= opts.max_nodes {
+                        break;
+                    }
+                    let exclude: std::collections::HashSet<String> =
+                        all_nodes.keys().cloned().collect();
+                    let anchors = traverser.sibling_anchors(root_id, 1, &exclude)?;
+                    for anchor in anchors {
+                        if all_nodes.len() >= opts.max_nodes {
+                            break;
+                        }
+                        all_nodes.entry(anchor.id.clone()).or_insert(anchor);
+                    }
+                }
+                Ok::<_, CodeWikiError>(())
+            });
         }
 
         Ok(Subgraph {
@@ -2396,6 +2759,358 @@ mod tests {
         )
         .unwrap();
         assert_eq!(all.len(), 2);
+    }
+
+    // -------------------------------------------------------------------------
+    // FIX 2: context multi-term coverage ranking
+    // -------------------------------------------------------------------------
+
+    /// A node covering BOTH distinct query terms must outrank a node that only
+    /// matches the high-frequency term many times. This is the keyword-latching
+    /// fix: a single common term must not dominate the multi-term anchor.
+    #[test]
+    fn context_coverage_rewards_multi_term_over_single_repeated_term() {
+        use crate::queries::nodes::insert_node;
+
+        let storage = make_storage();
+
+        // High-frequency term "cache" appears in MANY node names (the common term).
+        for i in 0..15 {
+            storage
+                .with_conn(|conn| {
+                    insert_node(
+                        conn,
+                        &Node {
+                            id: format!("cache{}", i),
+                            name: format!("cacheHelper{}", i),
+                            qualified_name: format!("cacheHelper{}", i),
+                            kind: NodeKind::Function,
+                            language: Language::Rust,
+                            file_path: "src/cache.rs".to_string(),
+                            start_line: (i as u32) + 1,
+                            end_line: (i as u32) + 1,
+                            ..Default::default()
+                        },
+                    )
+                })
+                .unwrap();
+        }
+
+        // The anchor node covers BOTH "cache" AND the rare term "eviction".
+        storage
+            .with_conn(|conn| {
+                insert_node(
+                    conn,
+                    &Node {
+                        id: "anchor".to_string(),
+                        name: "cacheEviction".to_string(),
+                        qualified_name: "cacheEviction".to_string(),
+                        kind: NodeKind::Function,
+                        language: Language::Rust,
+                        file_path: "src/evict.rs".to_string(),
+                        start_line: 1,
+                        end_line: 20,
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+
+        let opts = FindOpts {
+            search_limit: 3,
+            traversal_depth: 0, // isolate ranking from BFS expansion
+            max_nodes: 20,
+            min_score: 0.0,
+        };
+        let result = storage
+            .find_relevant_context("cache eviction policy", opts)
+            .unwrap();
+
+        // The two-term anchor must be selected as a ROOT despite 15 single-term
+        // "cache*" competitors.
+        assert!(
+            result.roots.contains(&"anchor".to_string()),
+            "multi-term-coverage anchor must be a root; roots={:?}",
+            result.roots
+        );
+    }
+
+    /// Sibling-anchor expansion (Phase 3) must pull in a same-container sibling
+    /// for a selected root, and must respect the node budget.
+    #[test]
+    fn context_sibling_anchor_expansion_respects_budget() {
+        use crate::queries::edges::insert_edge;
+        use crate::queries::nodes::insert_node;
+        use codewiki_core::{Edge, EdgeKind};
+
+        let storage = make_storage();
+
+        // A struct `RuntimeCache` containing two methods. The query targets the
+        // first method; the sibling method should be pulled in as an anchor.
+        let mk = |id: &str, name: &str, kind: NodeKind, line: u32| Node {
+            id: id.to_string(),
+            name: name.to_string(),
+            qualified_name: format!("RuntimeCache::{}", name),
+            kind,
+            language: Language::Rust,
+            file_path: "src/runtime_cache.rs".to_string(),
+            start_line: line,
+            end_line: line + 5,
+            ..Default::default()
+        };
+        storage
+            .with_conn(|conn| {
+                insert_node(conn, &mk("rc", "RuntimeCache", NodeKind::Struct, 1))?;
+                insert_node(conn, &mk("rc_insert", "insertEntry", NodeKind::Method, 10))?;
+                insert_node(conn, &mk("rc_evict", "evictEntry", NodeKind::Method, 20))?;
+                // Containment edges struct -> methods.
+                insert_edge(
+                    conn,
+                    &Edge {
+                        id: "c1".into(),
+                        source_id: "rc".into(),
+                        target_id: "rc_insert".into(),
+                        kind: EdgeKind::Contains,
+                        ..Default::default()
+                    },
+                )?;
+                insert_edge(
+                    conn,
+                    &Edge {
+                        id: "c2".into(),
+                        source_id: "rc".into(),
+                        target_id: "rc_evict".into(),
+                        kind: EdgeKind::Contains,
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+
+        // Direct call to sibling_anchors verifies the structural helper itself,
+        // independent of FTS ranking.
+        let anchors = storage
+            .with_conn(|conn| {
+                let t = GraphTraverser::new(conn);
+                let exclude: std::collections::HashSet<String> =
+                    ["rc_insert".to_string()].into_iter().collect();
+                t.sibling_anchors("rc_insert", 1, &exclude)
+            })
+            .unwrap();
+        assert_eq!(anchors.len(), 1, "exactly one sibling anchor (budget=1)");
+        assert_eq!(
+            anchors[0].id, "rc_evict",
+            "sibling method of the same struct must be the anchor"
+        );
+
+        // Budget = 0 must yield nothing.
+        let none = storage
+            .with_conn(|conn| {
+                let t = GraphTraverser::new(conn);
+                t.sibling_anchors("rc_insert", 0, &std::collections::HashSet::new())
+            })
+            .unwrap();
+        assert!(none.is_empty(), "zero budget must produce no anchors");
+    }
+
+    // -------------------------------------------------------------------------
+    // FIX 1: overloaded-name aggregation (callers/callees/impact)
+    // -------------------------------------------------------------------------
+
+    /// Helper: insert a function-kind node.
+    fn insert_fn(storage: &StorageImpl, id: &str, name: &str, file: &str) {
+        use crate::queries::nodes::insert_node;
+        storage
+            .with_conn(|conn| {
+                insert_node(
+                    conn,
+                    &Node {
+                        id: id.to_string(),
+                        name: name.to_string(),
+                        qualified_name: format!("{}::{}", file, name),
+                        kind: NodeKind::Function,
+                        language: Language::Rust,
+                        file_path: file.to_string(),
+                        start_line: 1,
+                        end_line: 10,
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+    }
+
+    fn insert_call(storage: &StorageImpl, id: &str, from: &str, to: &str) {
+        use crate::queries::edges::insert_edge;
+        storage
+            .with_conn(|conn| {
+                insert_edge(
+                    conn,
+                    &codewiki_core::Edge {
+                        id: id.to_string(),
+                        source_id: from.to_string(),
+                        target_id: to.to_string(),
+                        kind: codewiki_core::EdgeKind::Calls,
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+    }
+
+    /// A bare name with TWO same-name definitions must UNION the callers of
+    /// both family members, deduped by node id.
+    #[test]
+    fn callers_aggregated_unions_same_name_family() {
+        let storage = make_storage();
+        // Two `handle` definitions in different files (overloaded name).
+        insert_fn(&storage, "handle_a", "handle", "src/a.rs");
+        insert_fn(&storage, "handle_b", "handle", "src/b.rs");
+        // Distinct callers for each.
+        insert_fn(&storage, "caller_a", "callerA", "src/a.rs");
+        insert_fn(&storage, "caller_b", "callerB", "src/b.rs");
+        insert_call(&storage, "e1", "caller_a", "handle_a");
+        insert_call(&storage, "e2", "caller_b", "handle_b");
+
+        let agg = storage.get_callers_aggregated("handle", 80).unwrap();
+        assert_eq!(agg.resolved_name, "handle");
+        assert_eq!(agg.family_size, 2, "both same-name defs form the family");
+        let names: std::collections::HashSet<&str> =
+            agg.neighbors.iter().map(|n| n.name.as_str()).collect();
+        assert!(
+            names.contains("callerA") && names.contains("callerB"),
+            "callers of BOTH family members must be unioned; got {:?}",
+            names
+        );
+    }
+
+    /// callees aggregation behaves symmetrically: union callees of the family.
+    #[test]
+    fn callees_aggregated_unions_same_name_family() {
+        let storage = make_storage();
+        insert_fn(&storage, "run_a", "run", "src/a.rs");
+        insert_fn(&storage, "run_b", "run", "src/b.rs");
+        insert_fn(&storage, "callee_a", "calleeA", "src/a.rs");
+        insert_fn(&storage, "callee_b", "calleeB", "src/b.rs");
+        insert_call(&storage, "e1", "run_a", "callee_a");
+        insert_call(&storage, "e2", "run_b", "callee_b");
+
+        let agg = storage.get_callees_aggregated("run", 80).unwrap();
+        assert_eq!(agg.family_size, 2);
+        let names: std::collections::HashSet<&str> =
+            agg.neighbors.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains("calleeA") && names.contains("calleeB"));
+    }
+
+    /// A QUALIFIED symbol must resolve to exactly one node — NO family union.
+    /// Here two `handle` defs exist; querying `a::handle` must return only the
+    /// caller of the node whose qualified_name matches that file, with
+    /// family_size == 1.
+    #[test]
+    fn callers_aggregated_qualified_name_no_family_union() {
+        let storage = make_storage();
+        // Make the two defs distinguishable by qualified_name so FTS can rank
+        // the right one to the top for a qualified query.
+        use crate::queries::nodes::insert_node;
+        for (id, file) in [("h_a", "src/a.rs"), ("h_b", "src/b.rs")] {
+            storage
+                .with_conn(|conn| {
+                    insert_node(
+                        conn,
+                        &Node {
+                            id: id.to_string(),
+                            name: "handle".to_string(),
+                            qualified_name: format!("{}::handle", file.replace(".rs", "")),
+                            kind: NodeKind::Function,
+                            language: Language::Rust,
+                            file_path: file.to_string(),
+                            start_line: 1,
+                            end_line: 10,
+                            ..Default::default()
+                        },
+                    )
+                })
+                .unwrap();
+        }
+        insert_fn(&storage, "caller_a", "callerA", "src/a.rs");
+        insert_fn(&storage, "caller_b", "callerB", "src/b.rs");
+        insert_call(&storage, "e1", "caller_a", "h_a");
+        insert_call(&storage, "e2", "caller_b", "h_b");
+
+        // Qualified query: must resolve to exactly one node, family_size == 1.
+        let agg = storage.get_callers_aggregated("src/a::handle", 80).unwrap();
+        assert_eq!(
+            agg.family_size, 1,
+            "a qualified symbol must NOT trigger a same-name family union"
+        );
+    }
+
+    /// The neighbor cap must bound output even when the union is large.
+    #[test]
+    fn callers_aggregated_respects_cap() {
+        let storage = make_storage();
+        insert_fn(&storage, "target", "target", "src/t.rs");
+        // 10 distinct callers of the single `target` node.
+        for i in 0..10 {
+            let cid = format!("c{}", i);
+            insert_fn(&storage, &cid, &format!("caller{}", i), "src/c.rs");
+            insert_call(&storage, &format!("e{}", i), &cid, "target");
+        }
+        let agg = storage.get_callers_aggregated("target", 3).unwrap();
+        assert_eq!(agg.family_size, 1, "unique name → family of one");
+        assert!(
+            agg.neighbors.len() <= 3,
+            "cap must bound the neighbor count; got {}",
+            agg.neighbors.len()
+        );
+    }
+
+    /// Impact aggregation unions the reverse-reach subgraph of the family and
+    /// caps the node budget.
+    #[test]
+    fn impact_aggregated_unions_family_and_caps() {
+        let storage = make_storage();
+        insert_fn(&storage, "save_a", "save", "src/a.rs");
+        insert_fn(&storage, "save_b", "save", "src/b.rs");
+        // Each save has a distinct dependent.
+        insert_fn(&storage, "dep_a", "depA", "src/a.rs");
+        insert_fn(&storage, "dep_b", "depB", "src/b.rs");
+        insert_call(&storage, "e1", "dep_a", "save_a");
+        insert_call(&storage, "e2", "dep_b", "save_b");
+
+        let agg = storage.get_impact_aggregated("save", 3, 100).unwrap();
+        assert_eq!(agg.family_size, 2);
+        let names: std::collections::HashSet<&str> = agg
+            .subgraph
+            .nodes
+            .values()
+            .map(|n| n.name.as_str())
+            .collect();
+        assert!(
+            names.contains("depA") && names.contains("depB"),
+            "impact must union dependents of BOTH family members; got {:?}",
+            names
+        );
+
+        // Cap must bound the node count (roots are always retained).
+        let capped = storage.get_impact_aggregated("save", 3, 2).unwrap();
+        assert!(
+            capped.subgraph.nodes.len() <= 2,
+            "node cap must bound the impact subgraph; got {}",
+            capped.subgraph.nodes.len()
+        );
+    }
+
+    /// A symbol that matches nothing returns an empty result (empty resolved_name).
+    #[test]
+    fn callers_aggregated_no_match_is_empty() {
+        let storage = make_storage();
+        insert_fn(&storage, "x", "somethingElse", "src/x.rs");
+        let agg = storage
+            .get_callers_aggregated("nonexistent_symbol_xyz", 80)
+            .unwrap();
+        assert!(agg.resolved_name.is_empty());
+        assert!(agg.neighbors.is_empty());
     }
 
     /// `get_dependent_files` must return the file paths of nodes with edges

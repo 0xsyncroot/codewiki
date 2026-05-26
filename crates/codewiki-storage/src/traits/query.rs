@@ -94,4 +94,119 @@ pub trait QueryHandle: Send + Sync {
     fn root_path(&self) -> Option<String> {
         None
     }
+
+    /// Aggregated callers for a bare symbol name (overloaded-name family union).
+    ///
+    /// Resolves `symbol` to its best match, then — when `symbol` is a *bare*
+    /// name (no scope/qualifier separator) — unions the callers of every node
+    /// whose simple name case-insensitively EQUALS the best match's name (the
+    /// "same-name family"). Results are deduped by node id, ranked by graph
+    /// degree (most-connected first), and capped at `cap`.
+    ///
+    /// When `symbol` is qualified/namespaced (e.g. `Foo::bar`, `mod.Foo`,
+    /// `Foo#bar`) it resolves to exactly that one node with NO family union,
+    /// preserving the legacy single-node behavior.
+    fn get_callers_aggregated(
+        &self,
+        symbol: &str,
+        cap: usize,
+    ) -> Result<AggregatedNeighbors, CodeWikiError>;
+
+    /// Aggregated callees for a bare symbol name. See [`Self::get_callers_aggregated`]
+    /// for family-union vs qualified-name semantics.
+    fn get_callees_aggregated(
+        &self,
+        symbol: &str,
+        cap: usize,
+    ) -> Result<AggregatedNeighbors, CodeWikiError>;
+
+    /// Aggregated impact subgraph for a bare symbol name. Unions the
+    /// reverse-reach impact radius of every same-name-family member (bare name)
+    /// or just the single resolved node (qualified name). Node and edge counts
+    /// in the returned subgraph are bounded by `cap` nodes.
+    fn get_impact_aggregated(
+        &self,
+        symbol: &str,
+        depth: usize,
+        cap: usize,
+    ) -> Result<AggregatedImpact, CodeWikiError>;
+}
+
+/// Result of an aggregated callers/callees query.
+///
+/// `resolved_name` is the simple name of the best match (the family key);
+/// `family_size` is how many same-name definitions were unioned (1 when the
+/// name is unique or a qualified symbol was supplied).
+#[derive(Debug, Clone, Default)]
+pub struct AggregatedNeighbors {
+    pub neighbors: Vec<Node>,
+    pub resolved_name: String,
+    pub family_size: usize,
+}
+
+/// Result of an aggregated impact query.
+#[derive(Debug, Clone, Default)]
+pub struct AggregatedImpact {
+    pub subgraph: Subgraph,
+    pub resolved_name: String,
+    pub family_size: usize,
+}
+
+/// True when `symbol` looks like a fully-qualified / namespaced reference
+/// rather than a bare identifier.
+///
+/// A qualified symbol contains a scope/member separator (`::`, `.`, `/`, `#`,
+/// `\`, `->`) flanked by identifier characters — e.g. `Foo::bar`, `mod.Foo`,
+/// `pkg/Type`, `Class#method`. Such a symbol must resolve to exactly one node
+/// (no same-name family union). A bare identifier (`bar`, `process_request`)
+/// is NOT qualified and triggers the family union.
+pub fn is_qualified_symbol(symbol: &str) -> bool {
+    let s = symbol.trim();
+    // Multi-token inputs (e.g. "Foo bar baz") are treated as bare search
+    // queries, not a single qualified reference.
+    if s.split_whitespace().count() != 1 {
+        return false;
+    }
+    const SEPARATORS: &[&str] = &["::", "->", ".", "/", "#", "\\"];
+    for sep in SEPARATORS {
+        if let Some(idx) = s.find(sep) {
+            // Require an identifier char on BOTH sides so a trailing/leading
+            // separator (or a lone `.`) doesn't count as qualification.
+            let before = s[..idx].chars().next_back();
+            let after = s[idx + sep.len()..].chars().next();
+            if matches!(before, Some(c) if c.is_alphanumeric() || c == '_')
+                && matches!(after, Some(c) if c.is_alphanumeric() || c == '_')
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod qualified_tests {
+    use super::is_qualified_symbol;
+
+    #[test]
+    fn bare_names_are_not_qualified() {
+        assert!(!is_qualified_symbol("bar"));
+        assert!(!is_qualified_symbol("process_request"));
+        assert!(!is_qualified_symbol("handleRequest"));
+        // Multi-word queries are bare (treated as search text).
+        assert!(!is_qualified_symbol("Foo bar"));
+        // A lone trailing separator is not qualification.
+        assert!(!is_qualified_symbol("foo."));
+        assert!(!is_qualified_symbol(".foo"));
+    }
+
+    #[test]
+    fn qualified_names_are_detected() {
+        assert!(is_qualified_symbol("Foo::bar"));
+        assert!(is_qualified_symbol("module.Foo"));
+        assert!(is_qualified_symbol("pkg/Type"));
+        assert!(is_qualified_symbol("Class#method"));
+        assert!(is_qualified_symbol("a::b::c"));
+        assert!(is_qualified_symbol("obj->method"));
+    }
 }

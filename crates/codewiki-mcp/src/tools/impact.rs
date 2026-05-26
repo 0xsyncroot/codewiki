@@ -1,13 +1,23 @@
 //! T-410 — `codewiki_impact` tool handler.
 //!
 //! Analyze the impact radius of changing a symbol.
+//!
+//! Overloaded-name aggregation: a bare symbol name is resolved to its
+//! same-name family (all definitions sharing the simple name) and their
+//! reverse-reach impact subgraphs are unioned (deduped by node id / edge),
+//! capped at a bounded node budget. A fully-qualified symbol (e.g. `Foo::bar`)
+//! resolves to exactly that node.
 
 use crate::input_limits::validate_query;
 use crate::tools::{search::format_kind, MAX_OUTPUT_LENGTH};
 use codewiki_core::CodeWikiError;
-use codewiki_storage::{QueryHandle, SearchOptions};
+use codewiki_storage::QueryHandle;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
+/// Upper bound on affected nodes returned to the agent. Keeps the per-call
+/// token cost bounded even for highly-connected same-name families.
+const IMPACT_NODE_CAP: usize = 100;
 
 #[tracing::instrument(skip(handle), fields(symbol_len = %symbol.len(), depth))]
 pub async fn handle_impact(
@@ -19,36 +29,14 @@ pub async fn handle_impact(
 
     let depth = depth.clamp(1, 10);
 
-    // Resolve symbol name → node ids via search
-    let matches = handle.search_nodes(
-        &symbol,
-        SearchOptions {
-            limit: 5,
-            ..Default::default()
-        },
-    )?;
+    let agg = handle.get_impact_aggregated(&symbol, depth, IMPACT_NODE_CAP)?;
 
-    if matches.is_empty() {
+    if agg.resolved_name.is_empty() {
         return Ok(format!("No symbol found matching '{symbol}'."));
     }
 
-    // Merge subgraphs from all matches
-    let mut all_nodes: HashMap<String, codewiki_core::Node> = HashMap::new();
-    let mut all_edges: Vec<codewiki_core::Edge> = Vec::new();
-    let mut seen_edges: HashSet<String> = HashSet::new();
-
-    for sr in &matches {
-        let subgraph = handle.get_impact_radius(&sr.node.id, depth)?;
-        for (id, node) in subgraph.nodes {
-            all_nodes.insert(id, node);
-        }
-        for edge in subgraph.edges {
-            let edge_key = format!("{}->{}", edge.source_id, edge.target_id);
-            if seen_edges.insert(edge_key) {
-                all_edges.push(edge);
-            }
-        }
-    }
+    let all_nodes = &agg.subgraph.nodes;
+    let all_edges = &agg.subgraph.edges;
 
     if all_nodes.is_empty() {
         return Ok(format!(
@@ -61,10 +49,16 @@ pub async fn handle_impact(
 
     let mut out = format!("## Impact Radius of '{symbol}' (depth {depth})\n\n");
     out.push_str(&crate::tools::root_header(root_ref));
+    if agg.family_size > 1 {
+        out.push_str(&format!(
+            "Aggregated across {} definitions named `{}`.\n\n",
+            agg.family_size, agg.resolved_name,
+        ));
+    }
     out.push_str(&format!(
         "**{} affected symbols** across {} files, {} edges\n\n",
         all_nodes.len(),
-        count_unique_files(&all_nodes),
+        count_unique_files(all_nodes),
         all_edges.len(),
     ));
 
