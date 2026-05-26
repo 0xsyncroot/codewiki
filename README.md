@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/0xsyncroot/codewiki/actions/workflows/ci.yml/badge.svg)](https://github.com/0xsyncroot/codewiki/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
 
 Instead of reading whole source files, your AI agent asks the graph:
@@ -83,7 +83,7 @@ feature, impl, blast) over **11 real repos across four size tiers** — **157 ca
 compares CodeWiki to a **grep + read-full-files baseline**, the surface a tool-less agent
 actually uses. Every answer is scored for recall against a frozen ground-truth oracle (the
 baseline is scored on the *identical* oracle). Tokens = output bytes ÷ 4 (conservative).
-Pricing: Claude Sonnet $3.00 / 1M input tokens. Fresh cold run on `codewiki 0.1.1`. Full
+Pricing: Claude Sonnet $3.00 / 1M input tokens. Fresh cold run on `codewiki 0.2.0`. Full
 methodology, recall caveat, and raw data: [`benchmark/README.md`](benchmark/README.md)
 (source: [`results-savings.tsv`](benchmark/results-savings.tsv)).
 
@@ -148,7 +148,7 @@ subsequent query is effectively free.
 > [`benchmark/README.md`](benchmark/README.md) (§4 .NET worked example).
 
 Measured across 5 realistic tasks on eShopOnWeb (254 .cs) and jellyfin (2,065 .cs), freshly
-re-run on `codewiki 0.1.1`. Byte counts from real CLI output and file sizes; tokens =
+re-run on `codewiki 0.2.0`. Byte counts from real CLI output and file sizes; tokens =
 bytes ÷ 4 (conservative). Pricing: Claude Sonnet $3.00 / 1M input tokens.
 
 | Task | CW calls | Baseline calls | Call reduction | CW tokens | Baseline tokens | Token reduction | $ saved |
@@ -198,12 +198,12 @@ Windows (added to your user PATH automatically on Windows). Override with `--dir
 
 ```sh
 # Linux / macOS
-curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh | sh -s -- --version v0.1.1
+curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh | sh -s -- --version v0.2.0
 ```
 
 ```powershell
 # Windows PowerShell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.ps1))) -Version v0.1.1
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.ps1))) -Version v0.2.0
 ```
 
 ### 2. Manual download
@@ -245,7 +245,7 @@ Expand-Archive codewiki-x86_64-pc-windows-msvc.zip -DestinationPath $env:LOCALAP
 
 ```sh
 codewiki --version
-# codewiki 0.1.1
+# codewiki 0.2.0
 ```
 
 The binary includes every feature — graph UI, FTS5 search, full language support — by
@@ -477,7 +477,7 @@ Incremental sync is truly incremental: only changed files and their direct depen
 re-extracted and re-resolved, so sync time stays proportional to the change size, not the
 repo size. A 2,065-file .NET repo re-syncs a single edit in 66 ms.
 
-**Measured 1-file sync (tool-reported parse/DB-write time, fresh on `codewiki 0.1.1`):**
+**Measured 1-file sync (tool-reported parse/DB-write time, fresh on `codewiki 0.2.0`):**
 
 | Repo | Files | Sync time |
 |------|------:|:---------:|
@@ -502,7 +502,7 @@ responses, so the ~98% token / ~74% tool-call savings (see
 
 Full tables, scale analysis, and the agent-savings study live in
 [`benchmark/README.md`](benchmark/README.md). All figures below are a fresh run on
-`codewiki 0.1.1`. Machine: Intel Core i7-14700KF (14 cores / 28 threads), 31 GiB RAM,
+`codewiki 0.2.0`. Machine: Intel Core i7-14700KF (14 cores / 28 threads), 31 GiB RAM,
 WSL2.
 
 **Cross-language results — 8 real repos (one per language, shallow clones of `main`):**
@@ -576,7 +576,7 @@ Liquid, Razor, and Delphi form files (DFM).
 ## Enterprise
 
 CodeWiki is production-tested on enterprise-scale codebases. All figures below are fresh
-`codewiki 0.1.1` runs on shallow clones:
+`codewiki 0.2.0` runs on shallow clones:
 
 | Metric | Result |
 |--------|--------|

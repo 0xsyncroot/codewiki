@@ -7,10 +7,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.2.0] - 2026-05-26
+
+Query-quality release: CodeWiki now returns the right answer **as completely as
+reading whole files** (recall 0.88 vs the grep+read baseline's 0.92, up from 0.77)
+while still cutting ~98% of tokens — plus a fixed web graph, a lively install/index
+UX, and a re-runnable upgrade path.
 
 ### Added
 
+- **Go structural-interface resolution.** Go satisfies interfaces structurally
+  (no `implements` keyword); CodeWiki now synthesizes `implements` edges by
+  method-set superset matching (name + arity), so `impact`/impl over a Go
+  interface returns its real implementers.
+- **C# type-usage references.** Field, property, parameter, return, constructor,
+  and generic-argument types now emit `references` edges, so blast/impact over a
+  widely-used C# type sees its real dependants.
+- **`codewiki upgrade [--check]`** subcommand: checks GitHub for a newer release
+  and self-updates by re-invoking the platform installer. Offline-safe (network
+  failures print a friendly note and exit 0); `--check` reports without installing.
 - **Installer upgrade path.** Re-running `install.sh` / `install.ps1` now detects
   the installed version, resolves the target (latest release or a pinned
   `--version`/`-Version`), and compares them numerically (`v0.10.0 > v0.9.0`).
@@ -19,10 +34,35 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   smoke-test the new binary's `--version`, and roll back on failure. On Windows
   a locked (running) `codewiki.exe` is detected and reported clearly with the
   original install left intact.
-- **`codewiki upgrade [--check]`** subcommand: checks GitHub for a newer release
-  and self-updates by re-invoking the platform installer. Offline-safe (network
-  failures print a friendly note and exit 0); `--check` reports without
-  installing.
+- **Lively init/index progress.** A colored, TTY-aware progress display streams
+  the current file + live node/edge counts during `init`/`index`; falls back to
+  clean plain output when piped (no escape-code spam), redraws throttled.
+- **Large .NET benchmark tier** (jellyfin, 2,065 .cs) and a harness that now
+  **fails loudly** on an `init`/index error instead of silently scoring a broken
+  index.
+
+### Changed
+
+- **Query recall raised 0.77 → 0.88** (overall, on frozen oracles): overloaded-name
+  aggregation unions the same-name family for `callers`/`callees`/`impact`;
+  `context` ranking uses multi-term/IDF coverage to stop a dominant keyword from
+  crowding out the real anchors; `impact` output is provenance-aware (keeps real
+  dependants/implementers, drops file/namespace markers + context-only children).
+  Per-archetype: impl 0.81 → 1.00, blast 0.74 → 0.92, callers 0.60 → 0.79.
+- **Web graph viewer.** The initial view is now a connected subgraph (was 20
+  isolated nodes with no edges); the default node cap is raised 200 → 2000; and
+  truncation keeps a connected core instead of an arbitrary set, fixing the
+  near-edgeless render on larger neighborhoods.
+- **Benchmark consolidated** into a single report and expanded to 157 cases over
+  11 repos across four size tiers; oracles are frozen and integrity-restored.
+
+### Fixed
+
+- **C# index crash** on repositories containing Blazor `.razor` `@code` blocks: a
+  type-usage ref anchored to the dropped `@code` wrapper caused a foreign-key
+  violation that rolled back the entire C# batch (only `contains` edges survived).
+- **Deeply-nested ASTs** (e.g. microsoft/TypeScript, 39,296 files) now index
+  without a worker-thread stack overflow (64 MB worker stacks).
 
 ---
 

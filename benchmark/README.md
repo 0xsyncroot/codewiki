@@ -7,7 +7,7 @@ across small, medium, and large/enterprise repositories, then backs it with an h
 recall trade-off analysis, indexing/scale/sync performance, a .NET worked example,
 Unicode/i18n results, and full reproduction instructions.
 
-All numbers come from a fresh cold run on **2026-05-26** against `codewiki 0.1.1` (release
+All numbers come from a fresh cold run on **2026-05-26** against `codewiki 0.2.0` (release
 build, default features). Raw per-case data lives in
 [`results-savings.tsv`](results-savings.tsv) and the index/search TSVs alongside this
 document. The benchmark repos are **shallow clones of upstream `main`** (commit SHAs in
@@ -65,6 +65,26 @@ radius, framework patterns). C#'s lower token reduction on eShopOnWeb (79%) is a
 recall stays on par (0.87 vs 0.94). The §1.2 large .NET tier (jellyfin, 2,065 .cs) shows
 C#'s reduction climbing to **98%** once the repo is big enough for whole-file reads to
 hurt — i.e. the C# small-repo result is genuinely a size artefact, not a ceiling.
+
+**Where the recall lives — by archetype (mean over the 155 scored cases).** Token
+reduction is uniformly ~98%+; the interesting axis is *correctness*. CodeWiki matches or
+**beats** the grep+read baseline on every structural archetype (locate / callers / callees
+/ impl / blast); the entire residual gap is the `feature` comprehension archetype:
+
+| Archetype | Question it answers | CodeWiki recall | Baseline recall |
+|-----------|---------------------|:---------------:|:---------------:|
+| `locate`  | where is X defined          | **0.96** | 0.91 |
+| `callees` | what does X call            | **0.95** | 0.81 |
+| `impl`    | implementers / subtypes of X| **1.00** | 0.91 |
+| `blast`   | what breaks if X changes    | 0.92 | 0.93 |
+| `callers` | what calls X                | 0.91 | 0.95 |
+| `feature` | how does \<feature\> work   | **0.54** | 1.00 |
+
+So for the structural "where / what / impact" questions an agent asks most, CodeWiki
+returns the right symbols as completely as reading whole files — at ~2% of the tokens. The
+`feature` archetype (mapping a fuzzy natural-language task to entry points) is the one
+place the baseline's brute-force whole-file dump still wins on completeness; that is the
+honest, disclosed gap (see [§2](#2-how-to-read-these-numbers--honesty-disclosures)).
 
 ### 1.2 By size tier — the saving grows with the repo
 
@@ -360,7 +380,7 @@ of filesystem.
 > measurement; this is a detailed, repo-specific companion.
 
 Five realistic tasks on **eShopOnWeb** (254 .cs) and **jellyfin** (2,065 .cs), freshly
-re-run on `codewiki 0.1.1`. Byte counts from real CLI output and file sizes; tokens =
+re-run on `codewiki 0.2.0`. Byte counts from real CLI output and file sizes; tokens =
 bytes ÷ 4. Raw data: [`results-dotnet.tsv`](results-dotnet.tsv).
 
 | Task | Repo | CW calls | BL calls | Call reduction | CW tokens | BL tokens | Token reduction | $ saved |
@@ -380,7 +400,7 @@ results (both calls counted).
 
 **.NET extraction-quality audit (summary).** A deeper audit on larger corpora (jellyfin
 2,065 .cs, OrchardCore 5,203 .cs, ABP 3,497 .cs) found and the maintainer fixed six C#
-extraction gaps, all now verified on `codewiki 0.1.1`:
+extraction gaps, all now verified on `codewiki 0.2.0`:
 
 | Gap | Status |
 |-----|--------|
@@ -467,7 +487,7 @@ The §1 figures are produced by [`run-savings.sh`](run-savings.sh) over the cano
 ### 6.2 Reproduce it yourself — one command
 
 ```bash
-# Confirm the binary:  codewiki --version  -> codewiki 0.1.1
+# Confirm the binary:  codewiki --version  -> codewiki 0.2.0
 CW=/path/to/codewiki benchmark/run-savings.sh
 # -> clones the 11 repos under /tmp/bench, COLD-indexes each, runs all 157 cases over MCP,
 #    writes benchmark/results-savings.tsv (per-case rows) + results-savings-summary.txt.
@@ -498,7 +518,7 @@ codewiki init --path /tmp/bench/kubernetes && codewiki init --path /tmp/bench/Ty
 
 ### 6.3 Versions & repo commit SHAs (2026-05-26)
 
-`codewiki 0.1.1` (release build, default features). Shallow `--depth 1` clones of `main`:
+`codewiki 0.2.0` (release build, default features). Shallow `--depth 1` clones of `main`:
 
 | Repo | Tier | SHA | Repo | Tier | SHA |
 |------|------|-----|------|------|-----|

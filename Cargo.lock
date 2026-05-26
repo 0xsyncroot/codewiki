@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "moka",
  "rusqlite",
@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-extraction"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "clap",
  "codewiki-core",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-graph"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-mcp"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "codewiki-core",
  "codewiki-storage",
@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-resolution"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "codewiki-core",
  "codewiki-storage",
@@ -496,7 +496,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-storage"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "codewiki-core",
  "moka",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-sync"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "codewiki-core",
  "codewiki-extraction",
@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "codewiki-testutil"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "codewiki-core",
  "serde",
