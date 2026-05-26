@@ -133,9 +133,9 @@ fn start_live_sync(project_root: &Path) -> Option<LiveSyncHandle> {
         }
     };
     let sync_db: Arc<dyn SyncStore> = Arc::clone(&store_impl) as Arc<dyn SyncStore>;
-    let extractor = Arc::new(ExtractionOrchestratorImpl::new(Arc::new(StorageAdapter(
-        Arc::clone(&store_impl),
-    ))));
+    let extractor = Arc::new(ExtractionOrchestratorImpl::new(Arc::new(
+        StorageAdapter::new(Arc::clone(&store_impl)),
+    )));
 
     // Post-sync hook: run incremental resolution over the changed paths. Runs
     // on the watcher thread (single writer), so it reuses the same connection

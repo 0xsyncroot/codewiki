@@ -17,7 +17,7 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
     // Open a single StorageImpl and share it for both sync and resolution.
     let store_impl = Arc::new(open_storage(&root)?);
     let sync_storage: Arc<dyn SyncStore> = Arc::clone(&store_impl) as Arc<dyn SyncStore>;
-    let store_adapter = Arc::new(StorageAdapter(Arc::clone(&store_impl)));
+    let store_adapter = Arc::new(StorageAdapter::new(Arc::clone(&store_impl)));
     let extractor = Arc::new(ExtractionOrchestratorImpl::new(store_adapter));
     let tree_cache = TreeCache::new(128);
 

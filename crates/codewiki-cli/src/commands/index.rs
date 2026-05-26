@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::commands::util::{open_storage, resolve_root, run_resolution};
-use crate::ui::shimmer::{IndexProgress, Phase, ShimmerProgress};
+use crate::ui::shimmer::{IndexProgress, Phase, ProgressReporter};
 
 // ---------------------------------------------------------------------------
 // Bridge: codewiki-extraction's ExtractionStore → codewiki-storage StorageImpl
@@ -22,17 +22,46 @@ use crate::ui::shimmer::{IndexProgress, Phase, ShimmerProgress};
 /// sub-batch of up to 200 files, FTS triggers are dropped before the insert
 /// and rebuilt afterwards so that per-row trigger overhead is eliminated for
 /// large initial indexes. `run_maintenance` is called once at the very end.
-pub struct StorageAdapter(pub Arc<StorageImpl>);
+pub struct StorageAdapter {
+    pub storage: Arc<StorageImpl>,
+    /// Live progress sink. The orchestrator has no per-file callback, but it
+    /// flushes extraction batches as it goes — we tap that path to stream the
+    /// current file + running node/edge counts into the progress UI.
+    pub progress: Option<ProgressReporter>,
+}
+
+impl StorageAdapter {
+    pub fn new(storage: Arc<StorageImpl>) -> Self {
+        Self {
+            storage,
+            progress: None,
+        }
+    }
+
+    pub fn with_progress(storage: Arc<StorageImpl>, progress: ProgressReporter) -> Self {
+        Self {
+            storage,
+            progress: Some(progress),
+        }
+    }
+}
 
 impl codewiki_extraction::ExtractionStore for StorageAdapter {
     fn store_batch(&self, batch: codewiki_core::ExtractionBatch) -> Result<(), String> {
-        self.0
+        if let Some(p) = &self.progress {
+            p.on_batch(
+                &batch.file.path.to_string_lossy(),
+                batch.nodes.len() as u64,
+                batch.edges.len() as u64,
+            );
+        }
+        self.storage
             .store_extraction_batch(batch)
             .map_err(|e| e.to_string())
     }
 
     fn delete_file(&self, path: &Path) -> Result<(), String> {
-        StorageTrait::delete_file(&*self.0, path).map_err(|e| e.to_string())
+        StorageTrait::delete_file(&*self.storage, path).map_err(|e| e.to_string())
     }
 
     /// Bulk-insert path: calls `store_extraction_batch_bulk_init` which drops
@@ -41,8 +70,20 @@ impl codewiki_extraction::ExtractionStore for StorageAdapter {
         &self,
         batches: Vec<codewiki_core::ExtractionBatch>,
     ) -> Result<(usize, usize, usize), String> {
+        // Stream each file in the sub-batch through the progress UI before the
+        // bulk insert. The reporter throttles redraws internally, so feeding it
+        // every file here is cheap even on very large repos.
+        if let Some(p) = &self.progress {
+            for b in &batches {
+                p.on_batch(
+                    &b.file.path.to_string_lossy(),
+                    b.nodes.len() as u64,
+                    b.edges.len() as u64,
+                );
+            }
+        }
         let stats = self
-            .0
+            .storage
             .store_extraction_batch_bulk_init(batches)
             .map_err(|e| e.to_string())?;
         Ok((
@@ -63,40 +104,40 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
 
     tracing::info!(root = %root.display(), "starting full index");
 
-    let bar = ShimmerProgress::new();
-    bar.on_progress(&IndexProgress {
+    let reporter = ProgressReporter::new();
+    reporter.on_progress(&IndexProgress {
         phase: Phase::Scanning,
-        percent: 0,
-        count: 0,
     });
 
-    let store_adapter = Arc::new(StorageAdapter(Arc::clone(&storage)));
+    let store_adapter = Arc::new(StorageAdapter::with_progress(
+        Arc::clone(&storage),
+        reporter.clone(),
+    ));
     let orchestrator = ExtractionOrchestratorImpl::new(store_adapter);
 
     let t0 = Instant::now();
 
-    bar.on_progress(&IndexProgress {
+    reporter.on_progress(&IndexProgress {
         phase: Phase::Parsing,
-        percent: 30,
-        count: 0,
     });
 
+    // index_all streams batches → reporter.on_batch fires live during this call.
     let counts = orchestrator.index_all(&root);
-
-    bar.on_progress(&IndexProgress {
-        phase: Phase::Storing,
-        percent: 80,
-        count: counts.files as u64,
-    });
-
-    bar.finish(counts.files as u64);
 
     // Guard against silent total data loss (QA-found regression): if the repo
     // contained source files to index but none were persisted, this is a real
     // failure — surface a clear ERROR and exit non-zero instead of printing a
     // misleading "indexed 0 files" success. A genuinely empty repo (no source
     // files discovered) is handled separately as a clean, informational 0.
-    if !check_index_outcome(&counts)? {
+    let outcome = match check_index_outcome(&counts) {
+        Ok(o) => o,
+        Err(e) => {
+            reporter.abandon();
+            return Err(e);
+        }
+    };
+    if !outcome {
+        reporter.abandon();
         println!("No source files to index under {}.", root.display());
         return Ok(());
     }
@@ -104,19 +145,32 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
     // Run WAL checkpoint + PRAGMA optimize after bulk insert (OPT-7).
     storage.run_maintenance_pub();
 
+    reporter.on_progress(&IndexProgress {
+        phase: Phase::Resolving,
+    });
+
     // Run framework extraction + reference resolution to promote unresolved_refs
     // into real import/call/route edges (AUDIT-2/4/7 blocker fix).
     // Pass None → full framework-extract run (init/index always re-extract).
     let resolved_count = run_resolution(&storage, &root, None)?;
     let elapsed = t0.elapsed();
 
-    println!(
-        "indexed {} files, {} nodes, {} edges in {:.1}s",
-        counts.files,
-        counts.nodes,
-        counts.edges,
-        elapsed.as_secs_f64()
+    // Colored single-line summary on a TTY; plain lines when piped/CI.
+    reporter.finish(
+        counts.files as u64,
+        counts.nodes as u64,
+        counts.edges as u64,
+        elapsed.as_secs_f64(),
     );
+    if !reporter.is_tty() {
+        println!(
+            "indexed {} files, {} nodes, {} edges in {:.1}s",
+            counts.files,
+            counts.nodes,
+            counts.edges,
+            elapsed.as_secs_f64()
+        );
+    }
     println!("resolved {} references", resolved_count);
     Ok(())
 }

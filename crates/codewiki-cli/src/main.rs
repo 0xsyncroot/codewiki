@@ -271,7 +271,7 @@ enum Commands {
         no_open: bool,
 
         /// Hard cap on nodes returned per subgraph endpoint
-        #[arg(long, default_value = "200")]
+        #[arg(long, default_value = "2000")]
         max_nodes: usize,
     },
 

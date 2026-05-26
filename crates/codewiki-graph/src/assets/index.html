@@ -261,19 +261,37 @@ async function loadStats() {
   }
 }
 
-// ── EP-10: top nodes seed ─────────────────────────────────────────────────
-async function loadTopNodes() {
+// ── Initial seed: a real CONNECTED subgraph (nodes + edges) ────────────────
+// Seed from the highest-degree node's neighborhood at a generous depth. The
+// server keeps a connected core when the result exceeds max_nodes, so a fresh
+// load shows real structure (nodes AND edges) instead of isolated dots. For a
+// small repo this naturally pulls (most of) the graph; for a large one it
+// shows a connected neighborhood around the most-connected node, and the
+// "Load more" button expands outward from there.
+async function loadInitialGraph() {
   try {
-    const r = await api('/api/top-nodes?limit=20');
-    if (r.nodes && r.nodes.length > 0) {
-      const fakeSubgraph = {
-        nodes: Object.fromEntries(r.nodes.map(e => [e.node.id, e.node])),
-        edges: [],
-      };
-      replaceGraph(fakeSubgraph, [r.nodes[0].node.id]);
+    const top = await api('/api/top-nodes?limit=5');
+    if (!top.nodes || top.nodes.length === 0) {
+      // Empty index — leave the empty-state visible.
+      updateEmptyState();
+      return;
     }
+    const seedId = top.nodes[0].node.id;
+    state.selectedNodeId = seedId;
+    // depth=2 pulls the connected neighborhood; the server caps to a connected
+    // core if it overflows max_nodes.
+    const r = await api(`/api/neighborhood/${encodeURIComponent(seedId)}?depth=2`);
+    state.truncated = r.truncated;
+    if (r.subgraph && Object.keys(r.subgraph.nodes || {}).length > 0) {
+      replaceGraph(r.subgraph, r.subgraph.roots && r.subgraph.roots.length ? r.subgraph.roots : [seedId]);
+    } else {
+      // Isolated top node with no edges: still show it rather than nothing.
+      replaceGraph({ nodes: { [seedId]: top.nodes[0].node }, edges: [] }, [seedId]);
+    }
+    updateEmptyState();
   } catch(e) {
-    console.warn('top-nodes failed:', e);
+    console.warn('initial graph load failed:', e);
+    updateEmptyState();
   }
 }
 
@@ -376,8 +394,9 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   state.impactDepthMap = {};
   state.truncated = false;
   Graph.graphData({ nodes: [], links: [] });
+  state.selectedNodeId = null;
   updateEmptyState();
-  loadTopNodes();
+  loadInitialGraph();
 });
 
 // ── Sidebar action buttons ─────────────────────────────────────────────────
@@ -595,7 +614,7 @@ document.addEventListener('click', e => {
 // ── Startup ────────────────────────────────────────────────────────────────
 (async () => {
   await loadStats();
-  await loadTopNodes();
+  await loadInitialGraph();
 })();
 </script>
 </body>

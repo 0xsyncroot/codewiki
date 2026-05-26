@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::commands::util::run_resolution;
+use crate::ui::shimmer::{IndexProgress, Phase, ProgressReporter};
 
 // OPT-1: raised from 1_000 to 50_000.
 const NODE_CACHE_CAPACITY: u64 = 50_000;
@@ -42,18 +43,34 @@ pub fn run(path: Option<PathBuf>, no_index: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Auto-index.
+    // Auto-index, with a lively (TTY) / plain (piped) progress display.
     let storage = Arc::new(StorageImpl::new(conn, NODE_CACHE_CAPACITY));
-    let store_adapter = Arc::new(crate::commands::index::StorageAdapter(Arc::clone(&storage)));
+    let reporter = ProgressReporter::new();
+    reporter.on_progress(&IndexProgress {
+        phase: Phase::Parsing,
+    });
+    let store_adapter = Arc::new(crate::commands::index::StorageAdapter::with_progress(
+        Arc::clone(&storage),
+        reporter.clone(),
+    ));
     let orchestrator = codewiki_extraction::ExtractionOrchestratorImpl::new(store_adapter);
 
     let t0 = Instant::now();
+    // index_all streams batches → reporter.on_batch fires live during this call.
     let counts = orchestrator.index_all(&root);
 
     // Guard against silent total data loss: a repo with source files that
     // indexed nothing (or a store error) is a real failure → non-zero exit.
     // A repo with no source files is a clean, informational success.
-    if !crate::commands::index::check_index_outcome(&counts)? {
+    let outcome = match crate::commands::index::check_index_outcome(&counts) {
+        Ok(o) => o,
+        Err(e) => {
+            reporter.abandon();
+            return Err(e);
+        }
+    };
+    if !outcome {
+        reporter.abandon();
         println!(
             "Initialized. No source files to index under {}.",
             root.display()
@@ -65,19 +82,31 @@ pub fn run(path: Option<PathBuf>, no_index: bool) -> Result<()> {
     // Run WAL checkpoint + PRAGMA optimize after bulk insert (OPT-7).
     storage.run_maintenance_pub();
 
+    reporter.on_progress(&IndexProgress {
+        phase: Phase::Resolving,
+    });
+
     // Run framework extraction + reference resolution to promote unresolved_refs
     // into real import/call/route edges (AUDIT-2/4/7 blocker fix).
     // Pass None → full framework-extract run (init always re-extracts).
     let resolved_count = run_resolution(&storage, &root, None)?;
     let elapsed = t0.elapsed();
 
-    println!(
-        "Indexed {} files, {} nodes, {} edges in {:.1}s",
-        counts.files,
-        counts.nodes,
-        counts.edges,
-        elapsed.as_secs_f64()
+    reporter.finish(
+        counts.files as u64,
+        counts.nodes as u64,
+        counts.edges as u64,
+        elapsed.as_secs_f64(),
     );
+    if !reporter.is_tty() {
+        println!(
+            "Indexed {} files, {} nodes, {} edges in {:.1}s",
+            counts.files,
+            counts.nodes,
+            counts.edges,
+            elapsed.as_secs_f64()
+        );
+    }
     println!("Resolved {} references", resolved_count);
 
     // Auto-install git hooks so `sync` runs automatically on commit (AUDIT-5 Bug 3).

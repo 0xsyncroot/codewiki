@@ -30,9 +30,20 @@ pub async fn handle(
     Query(params): Query<NeighborhoodParams>,
 ) -> impl IntoResponse {
     let depth = params.depth.unwrap_or(1).min(4);
-    let limit = params.limit.unwrap_or(200).min(500);
+    // Per-request ceiling is generous; the real cap is `state.max_nodes`
+    // (default 2000, raisable via `--max-nodes`). This lets the client request
+    // the whole connected graph for a typical repo.
+    let limit = params.limit.unwrap_or(state.max_nodes).min(10_000);
     let max_nodes = state.max_nodes;
+    // The DISPLAY cap (what build_subgraph_response trims a connected core to).
     let effective_limit = limit.min(max_nodes);
+    // The TRAVERSAL bound is decoupled from the display cap: traverse_bfs stops
+    // enqueuing edges the instant `nodes.len() >= limit`, so a small display
+    // cap (e.g. 200) on a high-degree seed would otherwise return an edgeless
+    // cloud (the hub's children are enqueued but never popped). Traverse up to
+    // max_nodes so a rich edge set is collected, then let connected_core trim
+    // it down to a connected core of `effective_limit` nodes.
+    let traversal_limit = max_nodes;
 
     let edge_kinds = parse_edge_kinds(params.edge_kinds.as_deref());
     let node_kinds = parse_node_kinds(params.node_kinds.as_deref());
@@ -48,7 +59,7 @@ pub async fn handle(
             max_depth: depth,
             edge_kinds,
             direction,
-            limit: effective_limit + 1, // +1 to detect truncation
+            limit: traversal_limit + 1, // +1 to detect truncation
             include_start: true,
         };
         traverser

@@ -33,9 +33,13 @@ pub async fn handle(
                 .into_response()
         }
     };
-    let limit = params.limit.unwrap_or(200).min(500);
+    // Per-request ceiling is generous; the real cap is `state.max_nodes`.
+    let limit = params.limit.unwrap_or(state.max_nodes).min(10_000);
     let max_nodes = state.max_nodes;
     let effective_limit = limit.min(max_nodes);
+    // Decouple traversal bound from display cap so a rich edge set is collected
+    // before connected_core trims to a connected core (see neighborhood.rs).
+    let traversal_limit = max_nodes;
 
     let db = state.db.clone();
     let result = spawn_blocking(move || {
@@ -58,7 +62,7 @@ pub async fn handle(
             max_depth: 1,
             edge_kinds: vec![],
             direction: TraversalDirection::Both,
-            limit: effective_limit + 1,
+            limit: traversal_limit + 1,
             include_start: true,
         };
 
@@ -68,7 +72,7 @@ pub async fn handle(
         let roots: Vec<String> = file_nodes.iter().map(|n| n.id.clone()).collect();
 
         for seed in &file_nodes {
-            if merged_nodes.len() >= effective_limit {
+            if merged_nodes.len() >= traversal_limit {
                 break;
             }
             let sub = traverser

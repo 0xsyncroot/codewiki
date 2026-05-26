@@ -31,7 +31,11 @@ impl GraphServer {
             db_path,
             port: 7007,
             no_open: false,
-            max_nodes: 200,
+            // Generous default so a typical repo renders as one connected graph
+            // rather than a 200-node stub. build_subgraph_response still keeps a
+            // CONNECTED core when a huge repo exceeds this, and the CLI
+            // `--max-nodes` flag can raise it further for very large indexes.
+            max_nodes: 2000,
         }
     }
 
