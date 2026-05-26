@@ -360,7 +360,15 @@ pub fn run_resolution(
     );
     ref_resolver.warm_caches();
 
-    let runner = ResolutionBatchRunner::new(storage_arc, ref_resolver, true);
+    // Go structural-interface `implements` synthesis: Go satisfies interfaces
+    // structurally (no `implements` keyword), so the extractor emits no
+    // implements edge. Derive them from method-set superset matching over the
+    // warmed node inventory. This is independent of the unresolved-ref drain
+    // (it reads node refs + Go source), so compute it before the resolver is
+    // moved into the runner, then persist through the same commit path.
+    let structural_edges = ref_resolver.synthesize_structural_implements();
+
+    let runner = ResolutionBatchRunner::new(Arc::clone(&storage_arc), ref_resolver, true);
 
     // W5 OPT-11: full-index path uses parallel resolve + large commit batches.
     // Cap at 16 threads — beyond that, Arc<HashMap> read contention and
@@ -375,8 +383,23 @@ pub fn run_resolution(
         .run_until_empty_parallel(thread_count)
         .map_err(|e| anyhow::anyhow!("resolution failed: {}", e))?;
 
+    // Persist the synthesized Go structural `implements` edges (same commit
+    // path the resolver uses). Done after the drain so the edges land in the
+    // same fully-resolved graph; structural matching does not depend on the
+    // drained edges.
+    let structural_count = structural_edges.len();
+    if structural_count > 0 {
+        storage_arc
+            .commit_resolved_batch(structural_edges)
+            .map_err(|e| anyhow::anyhow!("structural implements commit failed: {}", e))?;
+        tracing::info!(
+            structural_count,
+            "synthesized Go structural implements edges"
+        );
+    }
+
     tracing::info!(resolved_count, "resolution pipeline complete");
-    Ok(resolved_count)
+    Ok(resolved_count + structural_count)
 }
 
 /// Incremental resolution for sync: scope `run_for_refs` to only the refs
