@@ -1,0 +1,31 @@
+{
+  "case_id": "csharp_jf_impl_ischeduledtask",
+  "lang": "csharp",
+  "repo": "jellyfin",
+  "archetype": "impl",
+  "symbol": "IScheduledTask",
+  "feature_query": "",
+  "required_symbols": [
+    "AudioNormalizationTask",
+    "ChapterImagesTask",
+    "CleanActivityLogTask",
+    "CleanupUserDataTask",
+    "DeleteCacheFileTask",
+    "DeleteLogFileTask",
+    "DeleteTranscodeFileTask",
+    "KeyframeExtractionScheduledTask"
+  ],
+  "required_files": [
+    "AudioNormalizationTask.cs",
+    "ChapterImagesTask.cs",
+    "CleanActivityLogTask.cs",
+    "CleanupUserDataTask.cs",
+    "DeleteCacheFileTask.cs",
+    "DeleteLogFileTask.cs",
+    "DeleteTranscodeFileTask.cs",
+    "KeyframeExtractionScheduledTask.cs"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "19 implementers; froze top 8",
+  "min_required": 16
+}

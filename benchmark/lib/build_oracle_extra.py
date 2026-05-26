@@ -4,7 +4,7 @@
 Reads the canonical 8-column benchmark/cases.tsv whose final column is a globally-unique
 `case_id`, and writes one frozen oracle per case as oracle/<lang>_<case_id>.json. Because
 every case (including the base 6-archetype suite) now carries a case_id, this single
-builder covers ALL ~139 cases — there is no separate base/extra split.
+builder covers ALL 157 cases — there is no separate base/extra split.
 
 It reuses the derivation logic in build_oracle.py verbatim (same SQL, same TOP_N, same
 prefer_nontest, same impl-def grep fallback) by importing that module, so the two stay in

@@ -1,0 +1,30 @@
+{
+  "case_id": "csharp_jf_callees_getstreamingstate",
+  "lang": "csharp",
+  "repo": "jellyfin",
+  "archetype": "callees",
+  "symbol": "GetStreamingState",
+  "feature_query": "",
+  "required_symbols": [
+    "Contains",
+    "Equals",
+    "FirstOrDefault",
+    "GetUserById",
+    "GetUserId",
+    "IsNullOrEmpty",
+    "Parse",
+    "ToString"
+  ],
+  "required_files": [
+    "EnumerableExtensions.cs",
+    "GuidExtensions.cs",
+    "LocalPlugin.cs",
+    "PasswordHash.cs",
+    "ReadOnlyListExtension.cs",
+    "RequestHelpers.cs",
+    "UserManager.cs"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "32 distinct callees total; froze top 8",
+  "min_required": 15
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "csharp_jf_blast_baseitem",
+  "lang": "csharp",
+  "repo": "jellyfin",
+  "archetype": "blast",
+  "symbol": "BaseItem",
+  "feature_query": "",
+  "required_symbols": [
+    "Folder",
+    "ILibraryManager",
+    "IProviderManager",
+    "InternalItemsQuery",
+    "LibraryManager",
+    "LiveTvManager",
+    "ProviderManager",
+    "SessionManager"
+  ],
+  "required_files": [
+    "Folder.cs",
+    "ILibraryManager.cs",
+    "IProviderManager.cs",
+    "InternalItemsQuery.cs",
+    "LibraryManager.cs",
+    "LiveTvManager.cs",
+    "ProviderManager.cs",
+    "SessionManager.cs"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "258 direct dependants; froze top 8 as must-contain core",
+  "min_required": 16
+}

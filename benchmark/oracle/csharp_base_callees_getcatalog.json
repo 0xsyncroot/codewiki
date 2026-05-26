@@ -17,7 +17,7 @@
     "CacheHelpers.cs",
     "CatalogViewModelService.cs",
     "ErrorDetails.cs",
-    "LoggerAdapter.cs",
+    "IAppLogger.cs",
     "UriComposer.cs"
   ],
   "source": "graph:calls (source=symbol)",

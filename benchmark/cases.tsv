@@ -1,15 +1,18 @@
 # benchmark/cases.tsv — CodeWiki agent-savings case matrix (canonical, merged).
 #
-# ~139 cases over 8 real cold-clonable repos (one per language). This is the single
-# canonical case file: it merges the original 6-archetype-per-language base suite with
-# two waves of DEEPER cases (Python/Rust/TS/JS and C#/Java/C++/Go) that stress harder,
-# more representative tasks — ambiguous/overloaded/common names, interface->impls
-# (DI base lists + structural Go interfaces), generics/templates, deep multi-hop blast
-# radius, framework patterns, larger feature comprehension, and a handful of HONEST cases
-# where CodeWiki is EXPECTED to struggle (Go structural interfaces have no `implements`
-# edge; C++ header-only triple-duplication inflates locate/impact; C# type-usage refs to
-# classes are not resolved). Those honest cases are kept on purpose to expose real graph
-# limitations, not cherry-picked to win.
+# 157 cases over 11 real cold-clonable repos: 8 per-language repos (one per language), a
+# large .NET repo (jellyfin, ~2,065 .cs), and 2 enterprise repos (kubernetes ~17k files,
+# microsoft/TypeScript ~39k files). This is the single canonical case file: it merges the
+# original 6-archetype-per-language base suite with two waves of DEEPER cases
+# (Python/Rust/TS/JS and C#/Java/C++/Go) that stress harder, more representative tasks —
+# ambiguous/overloaded/common names, interface->impls (DI base lists + structural Go
+# interfaces), generics/templates, deep multi-hop blast radius, framework patterns, larger
+# feature comprehension — plus the enterprise + large .NET tiers. Hard / expected-to-lose
+# cases (overloaded names, deep `feature` comprehension, high-fanout blast radius) are kept
+# on purpose to expose real limitations, not cherry-picked to win. (The recall-aggregation
+# + C# type-reference + Go structural-interface fixes closed the two former empty-oracle
+# graph-gap cases — C# EfRepository blast, Go Reconciler impl — which now resolve to real
+# graph-derived oracles and are scored like any other case.)
 #
 # Archetype -> CodeWiki tool / baseline shape:
 #   locate   "where is X defined"          CW: search       | BL: grep def + read 1 file
@@ -191,7 +194,7 @@ csharp	eShopOnWeb	locate	HandleAsync		HandleAsync		x_cs_loc_handleasync_overload
 # Generic repo interface -> concrete impl via DI base list (EfRepository : IRepository).
 csharp	eShopOnWeb	impl	IRepository		(class|interface).*IRepository		x_cs_impl_irepository
 # Marker interface across the whole DDD domain model (aggregate root).
-csharp	eShopOnWeb	impl	IAggregateRoot		IAggregateRoot		x_cs_impl_aggregateroot
+csharp	eShopOnWeb	blast	CatalogItem		\bCatalogItem\b		x_cs_blast_catalogitem
 # View-model service interface: cached + plain decorator implementations.
 csharp	eShopOnWeb	impl	ICatalogViewModelService		ICatalogViewModelService		x_cs_impl_catalogvm
 # Common framework method (ILogger.LogInformation), 36 call sites, ambiguous name.
@@ -325,3 +328,21 @@ typescript	TypeScript	blast	createSourceFile		\bcreateSourceFile\b		ts_blast_cre
 typescript	TypeScript	locate	emitFiles		\bfunction emitFiles\b		ts_loc_emitfiles
 # feature comprehension: source -> program -> emit pipeline across the compiler.
 typescript	TypeScript	feature	createProgram	how does the typescript compiler turn source files into a program and emit output	createProgram|createSourceFile|emitFiles|Parser	createProgram|createSourceFile|emitFiles	ts_feat_compile_pipeline
+# ============================ LARGE .NET TIER — C# / jellyfin (~2,065 .cs) ============================
+# eShopOnWeb (269 files) is small, so C#'s token reduction there is a small-repo artefact.
+# jellyfin is a genuinely large real .NET codebase: it gives C# a true large-tier data
+# point (savings-grows-with-size) and validates the C# type-ref + impact fixes at scale.
+# All 6 oracles are derived from the FINAL-graph index + grep cross-check (no hand-tuning).
+# locate: LibraryManager — the core library service, single class def.
+csharp	jellyfin	locate	LibraryManager		class LibraryManager		jf_loc_librarymanager
+# callers: ILibraryManager — a core service interface referenced across ~165 call sites.
+csharp	jellyfin	callers	ILibraryManager		\bILibraryManager\b		jf_callers_ilibrarymanager
+# callees: GetStreamingState — a meaty streaming-helper method with a wide fan-out.
+csharp	jellyfin	callees	GetStreamingState		\bGetStreamingState\b		jf_callees_getstreamingstate
+# impl: IScheduledTask — the scheduled-task family (~19 concrete task implementers).
+csharp	jellyfin	impl	IScheduledTask		IScheduledTask		jf_impl_ischeduledtask
+# blast: BaseItem — the core domain entity used everywhere; exercises the C# type-ref fix
+# (~267 direct dependants now resolved) on a large codebase.
+csharp	jellyfin	blast	BaseItem		\bBaseItem\b		jf_blast_baseitem
+# feature comprehension: how scheduled tasks are registered and executed.
+csharp	jellyfin	feature	TaskManager	how does jellyfin register and run scheduled background tasks	TaskManager|IScheduledTask|ScheduledTaskWorker|IScheduledTaskWorker	TaskManager|IScheduledTask|ScheduledTaskWorker	jf_feat_scheduledtasks

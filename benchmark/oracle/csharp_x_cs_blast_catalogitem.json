@@ -1,0 +1,31 @@
+{
+  "case_id": "csharp_x_cs_blast_catalogitem",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "blast",
+  "symbol": "CatalogItem",
+  "feature_query": "",
+  "required_symbols": [
+    "BasketViewModelService",
+    "CachedCatalogItemServiceDecorator",
+    "CatalogContext",
+    "CatalogItemService",
+    "CatalogViewModelService",
+    "ICatalogItemService",
+    "IndexModel",
+    "List"
+  ],
+  "required_files": [
+    "BasketViewModelService.cs",
+    "CachedCatalogItemServiceDecorator.cs",
+    "CatalogContext.cs",
+    "CatalogItemService.cs",
+    "CatalogViewModelService.cs",
+    "ICatalogItemService.cs",
+    "Index.cshtml.cs",
+    "List.razor.cs"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "20 direct dependants; froze top 8 as must-contain core",
+  "min_required": 16
+}

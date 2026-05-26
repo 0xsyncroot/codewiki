@@ -1,0 +1,31 @@
+{
+  "case_id": "csharp_jf_callers_ilibrarymanager",
+  "lang": "csharp",
+  "repo": "jellyfin",
+  "archetype": "callers",
+  "symbol": "ILibraryManager",
+  "feature_query": "",
+  "required_symbols": [
+    "BaseItem",
+    "ChannelManager",
+    "Group",
+    "LiveTvController",
+    "LiveTvManager",
+    "MetadataService",
+    "ProviderManager",
+    "SessionManager"
+  ],
+  "required_files": [
+    "BaseItem.cs",
+    "ChannelManager.cs",
+    "Group.cs",
+    "LiveTvController.cs",
+    "LiveTvManager.cs",
+    "MetadataService.cs",
+    "ProviderManager.cs",
+    "SessionManager.cs"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "162 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 16
+}

@@ -2,14 +2,17 @@
 # run-savings.sh — CodeWiki agent-savings BEFORE/AFTER harness (canonical, unified).
 #
 # THE single savings runner. It drives every case in the canonical benchmark/cases.tsv
-# (~139 cases over 8 real repos, one per language) and measures, on a COLD index, both:
+# (157 cases over 11 real repos) and measures, on a COLD index, both:
 #   - CodeWiki: tool-call count, output bytes (tokens = bytes/4), recall vs the frozen
 #     oracle (benchmark/oracle/<lang>_<case_id>.json), scored by lib/score.py.
 #   - Baseline: a grep + read-N-oracle-files agent, same metrics, scored on the same
 #     oracle so recall is comparable.
 # It is the ONLY savings runner: the per-repo baseline source maps for every repo are
-# folded into the single SRC map below (covering all 8 per-language repos + 2 enterprise
-# repos), so there are no per-batch sibling runners to keep in sync.
+# folded into the single SRC map below (covering 8 per-language repos + a large .NET repo
+# + 2 enterprise repos), so there are no per-batch sibling runners to keep in sync.
+#
+# A repo whose `init` exits non-zero OR whose post-index node count is trivial is marked
+# BROKEN and SKIPPED loudly — a silently-broken index is never scored.
 #
 # Each case row carries an 8th `case_id` column; the oracle is resolved as
 # oracle/<lang>_<case_id>.json (so multiple cases sharing an archetype within a language
@@ -62,13 +65,16 @@ SCORE="python3 $HERE/lib/score.py"
 MCP="python3 $HERE/lib/mcp_call.py"
 PRICE_PER_MTOK="${PRICE_PER_MTOK:-3.00}"   # Claude Sonnet input $/1M tokens
 
-# repo -> github slug (for cold clone). 8 per-language repos (small/medium tier) PLUS
-# 2 large/enterprise-tier repos (kubernetes ~17k files, microsoft/TypeScript ~39k files)
-# that substantiate the enterprise size tier and the "saving grows with repo size" claim.
+# repo -> github slug (for cold clone). 8 per-language repos (small/medium tier), a
+# large .NET repo (jellyfin ~2,065 .cs) that gives C# a genuine large-tier data point,
+# PLUS 2 large/enterprise-tier repos (kubernetes ~17k files, microsoft/TypeScript ~39k
+# files) that substantiate the enterprise size tier and the "saving grows with repo size"
+# claim. jellyfin specifically validates the C# type-ref + impact fixes at scale.
 declare -A SLUG=(
   [flask]=pallets/flask [ripgrep]=BurntSushi/ripgrep [express]=expressjs/express
   [zod]=colinhacks/zod [gson]=google/gson [json]=nlohmann/json
   [gin]=gin-gonic/gin [eShopOnWeb]=dotnet-architecture/eShopOnWeb
+  [jellyfin]=jellyfin/jellyfin
   [kubernetes]=kubernetes/kubernetes [TypeScript]=microsoft/TypeScript
 )
 # repo -> source subdir(s) the baseline agent would grep (avoids vendored/test noise
@@ -79,6 +85,9 @@ declare -A SRC=(
   [flask]="src" [ripgrep]="crates" [express]="lib" [zod]="packages/zod/src"
   [gson]="gson/src/main" [json]="include" [gin]="." [eShopOnWeb]="src"
   [kubernetes]="pkg" [TypeScript]="src"
+  # jellyfin's production source is split across several top-level project trees; a real
+  # agent scopes its grep to those (NOT tests/ or fuzz/). Space-separated multi-dir SRC.
+  [jellyfin]="Emby.Server.Implementations MediaBrowser.Controller MediaBrowser.Model Jellyfin.Api MediaBrowser.Providers src"
 )
 
 bytes() { wc -c | tr -d ' '; }
@@ -91,6 +100,28 @@ oracle_files() {  # echo the required_files of an oracle (space-separated)
   python3 -c "import json,sys;print(' '.join(json.load(open(sys.argv[1])).get('required_files',[])))" "$1"
 }
 
+# Minimum post-index node count below which an index is treated as broken (real repos
+# here yield 1.6k–312k nodes; a silent FK/parse collapse drops the count to ~0). This is a
+# floor, NOT a per-repo expectation — any non-trivial repo clears it by orders of magnitude.
+MIN_NODES="${MIN_NODES:-50}"
+# Repos whose index failed (non-zero init exit or trivial node count). These are recorded
+# loudly here and skipped in the scoring loop so a silently-broken index is NEVER measured.
+declare -A BROKEN_REPOS=()
+
+# Run `codewiki init`, capturing its exit code AND its output (so an FK/parse failure is
+# printed, not swallowed). Returns init's exit code.
+do_init() {
+  local dir="$1" log; log="$(mktemp)"
+  "$CW" init --path "$dir" >"$log" 2>&1
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "  !! init FAILED (exit $rc) for $dir — error output:"
+    sed 's/^/       /' "$log"
+  fi
+  rm -f "$log"
+  return $rc
+}
+
 clone_and_index() {
   echo "## Preparing repos (clone=$([ -n "${NO_CLONE:-}" ] && echo skip || echo yes), reindex=$([ -n "${NO_REINDEX:-}" ] && echo skip || echo cold))"
   mkdir -p "$BENCH_ROOT"
@@ -100,16 +131,42 @@ clone_and_index() {
       echo "  clone ${SLUG[$repo]} -> $dir"
       git clone --depth 1 "https://github.com/${SLUG[$repo]}" "$dir" >/dev/null 2>&1
     fi
-    if [ ! -d "$dir" ]; then echo "  MISSING $dir — skipping"; continue; fi
+    if [ ! -d "$dir" ]; then
+      echo "  MISSING $dir — marking BROKEN (will not be scored)"
+      BROKEN_REPOS[$repo]="missing-checkout"; continue
+    fi
+    # Index, capturing the exit code. A non-zero init (e.g. an FK failure) used to be
+    # swallowed by `>/dev/null 2>&1`, letting a broken index get scored silently — that
+    # exact bug once hid a C# collapse. Now: print the error and mark the repo BROKEN.
+    local rc=0
     if [ -z "${NO_REINDEX:-}" ]; then
       rm -rf "$dir/.codewiki"
-      "$CW" init --path "$dir" >/dev/null 2>&1
+      do_init "$dir"; rc=$?
     elif [ ! -f "$dir/.codewiki/codewiki.db" ]; then
-      "$CW" init --path "$dir" >/dev/null 2>&1
+      do_init "$dir"; rc=$?
+    fi
+    if [ "$rc" -ne 0 ]; then
+      BROKEN_REPOS[$repo]="init-exit-$rc"; echo "  $repo: BROKEN (init exit $rc) — SKIPPED"; continue
+    fi
+    # Assert the index exists and has a non-trivial node count. A DB that is missing or
+    # near-empty after a "successful" init is a silent collapse and must never be scored.
+    if [ ! -f "$dir/.codewiki/codewiki.db" ]; then
+      BROKEN_REPOS[$repo]="no-db"; echo "  $repo: BROKEN (no codewiki.db after init) — SKIPPED"; continue
     fi
     local n; n=$(sqlite3 "$dir/.codewiki/codewiki.db" "select count(*) from nodes" 2>/dev/null || echo 0)
+    if [ -z "$n" ] || [ "$n" -lt "$MIN_NODES" ]; then
+      BROKEN_REPOS[$repo]="too-few-nodes-${n:-0}"
+      echo "  $repo: BROKEN (only ${n:-0} nodes < MIN_NODES=$MIN_NODES — index collapsed) — SKIPPED"
+      continue
+    fi
     echo "  $repo: $n nodes"
   done
+  if [ "${#BROKEN_REPOS[@]}" -ne 0 ]; then
+    echo ""
+    echo "## !! ${#BROKEN_REPOS[@]} repo(s) have a BROKEN index and will NOT be scored:"
+    for r in "${!BROKEN_REPOS[@]}"; do echo "     - $r (${BROKEN_REPOS[$r]})"; done
+    echo "   (A silently-broken index is never measured. Fix the index, then re-run.)"
+  fi
 }
 
 # ------- CW side per archetype: writes output to $6 (CWOUT), prints "<calls>\t<bytes>"
@@ -155,8 +212,13 @@ run_mcp_coverage() {
 run_baseline() {
   local repo="$1" arch="$2" regex="$3" oraclepath="$4" BLOUT="$5"
   local dir="$BENCH_ROOT/$repo" src="${SRC[$repo]:-.}"; : > "$BLOUT"
-  # 1 grep call over the scoped source dir
-  grep -rnIE "$regex" "$dir/$src" 2>/dev/null >> "$BLOUT"
+  # 1 grep call over the scoped source dir(s). SRC may name MULTIPLE space-separated
+  # subdirs (a multi-project repo like jellyfin scopes to its production project trees,
+  # not tests/fuzz) — word-split into per-dir paths so each is a real grep target. A
+  # single-dir SRC (the 8 per-language + 2 enterprise repos) behaves exactly as before.
+  local scoped=() s
+  for s in $src; do scoped+=("$dir/$s"); done
+  grep -rnIE "$regex" "${scoped[@]}" 2>/dev/null >> "$BLOUT"
   local gcalls=1
   # read N files = the oracle's required_files (what the agent must open to answer)
   local files; files=$(oracle_files "$oraclepath")
@@ -195,6 +257,7 @@ main() {
     local oraclepath="$ORACLE/${lang}_${case_id}.json"
     if [ ! -f "$oraclepath" ]; then echo "  [skip] no oracle $oraclepath"; continue; fi
     local dir="$BENCH_ROOT/$repo"
+    if [ -n "${BROKEN_REPOS[$repo]:-}" ]; then echo "  [skip] $repo BROKEN (${BROKEN_REPOS[$repo]}) — not scored"; continue; fi
     if [ ! -f "$dir/.codewiki/codewiki.db" ]; then echo "  [skip] $repo not indexed"; continue; fi
 
     # explore probe query: feature query if present else the symbol terms

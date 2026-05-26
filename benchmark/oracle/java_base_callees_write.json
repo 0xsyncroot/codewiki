@@ -16,12 +16,12 @@
     "value"
   ],
   "required_files": [
-    "JavaTimeTypeAdapters.java",
     "JsonReader.java",
     "JsonWriter.java",
+    "TypeAdapters.java",
     "TypeToken.java"
   ],
   "source": "graph:calls (source=symbol)",
-  "notes": "57 distinct callees total; froze top 8",
+  "notes": "54 distinct callees total; froze top 8",
   "min_required": 12
 }

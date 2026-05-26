@@ -6,25 +6,24 @@
   "symbol": "createProgram",
   "feature_query": "",
   "required_symbols": [
-    "add",
     "assert",
     "forEach",
     "getDirectoryPath",
     "getTypeChecker",
     "has",
+    "isArray",
     "push",
     "set"
   ],
   "required_files": [
     "core.ts",
     "debug.ts",
-    "nodeFactory.ts",
+    "moduleNameResolver.ts",
     "path.ts",
     "program.ts",
-    "tracing.ts",
-    "watchUtils.ts"
+    "tracing.ts"
   ],
   "source": "graph:calls (source=symbol)",
-  "notes": "76 distinct callees total; froze top 8",
-  "min_required": 15
+  "notes": "75 distinct callees total; froze top 8",
+  "min_required": 14
 }

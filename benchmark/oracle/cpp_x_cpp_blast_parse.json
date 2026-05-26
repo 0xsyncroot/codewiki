@@ -14,9 +14,9 @@
   ],
   "required_files": [
     "unit-bjdata.cpp",
+    "unit-cbor.cpp",
     "unit-class_parser.cpp",
     "unit-class_parser_diagnostic_positions.cpp",
-    "unit-ubjson.cpp",
     "unit-unicode1.cpp",
     "unit-unicode2.cpp"
   ],

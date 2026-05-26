@@ -5,9 +5,17 @@
   "archetype": "blast",
   "symbol": "EfRepository",
   "feature_query": "",
-  "required_symbols": [],
-  "required_files": [],
+  "required_symbols": [
+    "GetById",
+    "GetByIdWithItemsAsync",
+    "SetQuantities"
+  ],
+  "required_files": [
+    "GetById.cs",
+    "GetByIdWithItemsAsync.cs",
+    "SetQuantities.cs"
+  ],
   "source": "graph:calls+references+implements+extends (1-hop dependants)",
-  "notes": "0 direct dependants; froze top 0 as must-contain core",
-  "min_required": 1
+  "notes": "3 direct dependants; froze top 3 as must-contain core",
+  "min_required": 6
 }

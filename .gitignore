@@ -11,6 +11,10 @@ Thumbs.db
 *.swp
 *~
 
+# Python bytecode cache (benchmark oracle/scoring helpers)
+__pycache__/
+*.pyc
+
 # Editor directories
 .idea/
 .vscode/

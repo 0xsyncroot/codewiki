@@ -20,10 +20,9 @@
     "lib.rs",
     "line_buffer.rs",
     "main.rs",
-    "standard.rs",
-    "types.rs"
+    "standard.rs"
   ],
   "source": "graph:calls (source=symbol)",
   "notes": "24 distinct callees total; froze top 8",
-  "min_required": 14
+  "min_required": 13
 }

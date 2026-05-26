@@ -1,23 +1,23 @@
 
 LANG         N sc  CWcalls BLcalls  call-red     CWtok    BLtok  tok-red   CWrec BLrec    $saved
 --------------------------------------------------------------------------------------------------
-cpp         18 18       18      58       69%     18094  1121997      98%    0.83  0.96    3.3117
-csharp      18 17       18      78       77%     14025    50343      72%    0.84  0.94    0.1090
-go          24 23       24     104       77%     10212   535982      98%    0.76  0.93    1.5773
-java        18 18       18      78       77%     32272   406603      92%    0.54  0.83    1.1230
-javascript  17 17       17      42       60%      9041    90332      90%    0.85  0.91    0.2439
-python      17 17       17      49       65%     15680   231163      93%    0.89  0.95    0.6464
-rust        17 17       17      69       75%     18018   748110      98%    0.79  0.95    2.1903
-typescript  22 22       22      73       70%     26922  2172430      99%    0.70  0.93    6.4365
+cpp         18 18       18      58       69%     18212  1127628      98%    0.90  0.96    3.3283
+csharp      24 24       24     127       81%     20587   473717      96%    0.83  0.89    1.3594
+go          24 24       24     105       77%     18807   523236      96%    0.92  0.90    1.5133
+java        18 18       18      78       77%     21906   411521      95%    0.82  0.83    1.1688
+javascript  17 17       17      42       60%      4582    90332      95%    0.97  0.91    0.2573
+python      17 17       17      49       65%     11602   231163      95%    0.93  0.95    0.6587
+rust        17 17       17      66       74%     13266   733328      98%    0.92  0.95    2.1602
+typescript  22 22       22      72       69%     12325  2131785      99%    0.80  0.93    6.3584
 --------------------------------------------------------------------------------------------------
-TOTAL      151149      151     551       73%    144265  5356960      97%    0.77  0.92   15.6381
+TOTAL      157157      157     597       74%    121286  5722711      98%    0.88  0.91   16.8043
 
-CW  verdicts: PASS=93  PARTIAL=44  FAIL=12  UNSCORABLE=2
-BL  verdicts: PASS=121  PARTIAL=25  FAIL=3  UNSCORABLE=2
+CW  verdicts: PASS=128  PARTIAL=22  FAIL=7  UNSCORABLE=0
+BL  verdicts: PASS=124  PARTIAL=30  FAIL=3  UNSCORABLE=0
 
 (N=total cases, sc=cases scored for recall. UNSCORABLE = empty-oracle honest graph-gap cases — excluded from recall means, kept in call/token totals.)
 
-MCP coverage (explore med-of-3 + node, exercised over stdio, not in totals above): 311386 tokens across 151 cases (~2062 tok/case).
+MCP coverage (explore med-of-3 + node, exercised over stdio, not in totals above): 358712 tokens across 157 cases (~2285 tok/case).
 
-Grand total: 73% fewer tool-calls, 97% fewer tokens, $15.6381 saved across 151 cases (~$2.07 per 20-interaction session).
-Mean recall (scored): CodeWiki 0.77 vs grep+read baseline 0.92.
+Grand total: 74% fewer tool-calls, 98% fewer tokens, $16.8043 saved across 157 cases (~$2.14 per 20-interaction session).
+Mean recall (scored): CodeWiki 0.88 vs grep+read baseline 0.91.

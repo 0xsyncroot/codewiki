@@ -5,18 +5,24 @@
   "archetype": "impl",
   "symbol": "Render",
   "feature_query": "",
-  "required_symbols": [],
+  "required_symbols": [
+    "AsciiJSON",
+    "BSON",
+    "Data",
+    "HTML",
+    "IndentedJSON",
+    "JSON",
+    "JsonpJSON",
+    "MsgPack"
+  ],
   "required_files": [
     "bson.go",
-    "context.go",
     "data.go",
     "html.go",
     "json.go",
-    "msgpack.go",
-    "pdf.go",
-    "protobuf.go"
+    "msgpack.go"
   ],
-  "source": "grep:impl-def-pattern (no implements edge in lang)",
-  "notes": "lang has no implements/extends edges; required = source files with a definition implementing/subtyping Render (pattern: func\\s+\\([^)]*\\)\\s+Render\\s*\\(); hand-verified",
-  "min_required": 8
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "18 implementers; froze top 8",
+  "min_required": 13
 }

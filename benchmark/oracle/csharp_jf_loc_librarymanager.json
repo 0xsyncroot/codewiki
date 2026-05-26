@@ -1,0 +1,21 @@
+{
+  "case_id": "csharp_jf_loc_librarymanager",
+  "lang": "csharp",
+  "repo": "jellyfin",
+  "archetype": "locate",
+  "symbol": "LibraryManager",
+  "feature_query": "",
+  "required_symbols": [
+    "LibraryManager"
+  ],
+  "required_files": [
+    "BaseItem.cs",
+    "BaseNfoSaver.cs",
+    "BaseXmlSaver.cs",
+    "LibraryManager.cs",
+    "MetadataService.cs"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "6 non-test def site(s); answer must name LibraryManager at its source file",
+  "min_required": 6
+}

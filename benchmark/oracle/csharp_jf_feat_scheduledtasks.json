@@ -1,0 +1,21 @@
+{
+  "case_id": "csharp_jf_feat_scheduledtasks",
+  "lang": "csharp",
+  "repo": "jellyfin",
+  "archetype": "feature",
+  "symbol": "TaskManager",
+  "feature_query": "how does jellyfin register and run scheduled background tasks",
+  "required_symbols": [
+    "TaskManager",
+    "IScheduledTask",
+    "ScheduledTaskWorker"
+  ],
+  "required_files": [
+    "IScheduledTask.cs",
+    "ScheduledTaskWorker.cs",
+    "TaskManager.cs"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['TaskManager', 'IScheduledTask', 'ScheduledTaskWorker']",
+  "min_required": 6
+}

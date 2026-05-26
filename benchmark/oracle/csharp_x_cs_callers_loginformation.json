@@ -8,7 +8,6 @@
   "required_symbols": [
     "ChangePassword",
     "EnableAuthenticator",
-    "FetchUser",
     "GetCatalogItems",
     "List",
     "Open",
@@ -17,13 +16,13 @@
   "required_files": [
     "BasketService.cs",
     "CachedCatalogItemServiceDecorator.cs",
+    "CachedCatalogLookupDataServiceDecorator .cs",
     "CatalogItemService.cs",
     "CatalogViewModelService.cs",
     "Create.razor",
-    "CustomAuthStateProvider.cs",
     "ManageController.cs"
   ],
   "source": "graph:calls+references (target=symbol)",
   "notes": "24 distinct callers total; froze top 8 by degree/name order",
-  "min_required": 14
+  "min_required": 13
 }
