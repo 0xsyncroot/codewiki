@@ -8,8 +8,282 @@ use crate::ast_walker::{
     generate_node_id, DocCommentStyle, ExtractCtx, LanguageConfig, LanguageExtractor,
 };
 use codewiki_core::{NodeKind, UnresolvedRef};
+use std::collections::HashSet;
 
 pub struct CSharpExtractor;
+
+/// C# built-in / primitive type names and ubiquitous BCL wrappers that carry no
+/// useful blast-radius signal. Type-usage `references` edges to these are
+/// dropped so impact/blast over a real domain type isn't drowned in `string` /
+/// `int` / `Task` noise.
+///
+/// These appear in the grammar as `predefined_type` (string, int, …) OR as
+/// plain `identifier`s (var, dynamic, Task, …); we filter by bare name so both
+/// representations are covered. Kept deliberately conservative: only names that
+/// are language keywords or universal BCL primitives, never domain types.
+fn is_csharp_builtin_type(name: &str) -> bool {
+    matches!(
+        name,
+        // C# predefined value/reference types & keywords.
+        "bool"
+            | "byte"
+            | "sbyte"
+            | "char"
+            | "decimal"
+            | "double"
+            | "float"
+            | "int"
+            | "uint"
+            | "long"
+            | "ulong"
+            | "short"
+            | "ushort"
+            | "nint"
+            | "nuint"
+            | "string"
+            | "object"
+            | "void"
+            | "var"
+            | "dynamic"
+            | "unmanaged"
+            | "delegate"
+            // Universal BCL wrappers / aliases that are effectively primitives.
+            | "Boolean"
+            | "Byte"
+            | "SByte"
+            | "Char"
+            | "Decimal"
+            | "Double"
+            | "Single"
+            | "Int16"
+            | "Int32"
+            | "Int64"
+            | "UInt16"
+            | "UInt32"
+            | "UInt64"
+            | "IntPtr"
+            | "UIntPtr"
+            | "String"
+            | "Object"
+            | "Task"
+            | "ValueTask"
+            | "Void"
+    )
+}
+
+/// Strip generic brackets and namespace qualifiers from a raw type token,
+/// yielding the bare type name (`App.IRepo<T>` → `IRepo`).
+fn bare_type_name(raw: &str) -> &str {
+    let bare = raw.split('<').next().unwrap_or(raw).trim();
+    let bare = bare.rsplit('.').next().unwrap_or(bare).trim();
+    // Drop nullable `?` / array `[]` suffixes that may ride along.
+    bare.trim_end_matches('?')
+        .trim_end_matches("[]")
+        .trim_end_matches('?')
+        .trim()
+}
+
+/// Recursively harvest bare type names referenced by a "type" subtree.
+///
+/// Handles the C# type grammar: `identifier`, `qualified_name`, `generic_name`
+/// (yields BOTH the generic base AND every type argument — e.g. `IRepo<Order>`
+/// → `IRepo` + `Order`), `array_type`, `nullable_type`, `pointer_type`,
+/// `tuple_type`, and `type_argument_list`. `predefined_type` (string/int/…) and
+/// built-in names are skipped. Results are inserted into `out` (de-duplicated by
+/// the caller's `HashSet`).
+fn collect_type_names(node: &tree_sitter::Node, src: &[u8], out: &mut HashSet<String>) {
+    match node.kind() {
+        // A leaf type name: `Order`, or a dotted `App.Order` (last segment wins).
+        "identifier" | "qualified_name" => {
+            let raw = node.utf8_text(src).unwrap_or("").trim();
+            let bare = bare_type_name(raw);
+            if !bare.is_empty() && !is_csharp_builtin_type(bare) {
+                out.insert(bare.to_string());
+            }
+        }
+        // Built-in primitives are intentionally dropped.
+        "predefined_type" => {}
+        // `IRepo<Order>` → base identifier + recurse into the argument list.
+        "generic_name" => {
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                collect_type_names(&child, src, out);
+            }
+        }
+        // Wrappers around an inner element/type: recurse into children.
+        "array_type" | "nullable_type" | "pointer_type" | "tuple_type" | "type_argument_list"
+        | "ref_type" | "scoped_type" => {
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                collect_type_names(&child, src, out);
+            }
+        }
+        _ => {
+            // Unknown wrapper node: recurse so nested types are not missed, but
+            // do not treat the node's own text as a type.
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                collect_type_names(&child, src, out);
+            }
+        }
+    }
+}
+
+/// Identify the "type" child of a member declaration.
+///
+/// For `field_declaration` the type lives inside `variable_declaration`; for
+/// `property_declaration` / `method_declaration` / `parameter` it is the first
+/// type-shaped child preceding the member name. Returns the node whose subtree
+/// `collect_type_names` should walk.
+fn member_type_node<'a>(member: &tree_sitter::Node<'a>) -> Option<tree_sitter::Node<'a>> {
+    // `type:` field is present on parameters and some members in this grammar.
+    if let Some(t) = member.child_by_field_name("type") {
+        return Some(t);
+    }
+    // Fallback: first child that looks like a type expression.
+    let mut cursor = member.walk();
+    let found = member
+        .named_children(&mut cursor)
+        .find(|child| is_type_node(child));
+    found
+}
+
+/// True if `node` is one of the type-expression node kinds we harvest.
+fn is_type_node(node: &tree_sitter::Node) -> bool {
+    matches!(
+        node.kind(),
+        "identifier"
+            | "qualified_name"
+            | "generic_name"
+            | "predefined_type"
+            | "array_type"
+            | "nullable_type"
+            | "pointer_type"
+            | "tuple_type"
+            | "ref_type"
+            | "scoped_type"
+    )
+}
+
+/// Collect every distinct, non-built-in type name USED by the members of a type
+/// declaration's `declaration_list` body: field types, property types, method
+/// return + parameter types, constructor parameter types, and the generic type
+/// arguments of all of those.
+///
+/// De-duplication is per type declaration (one ref per distinct type), so a
+/// repository class that uses `Order` in ten signatures yields a single
+/// `references` edge to `Order`.
+fn collect_member_type_usages(body: &tree_sitter::Node, src: &[u8], out: &mut HashSet<String>) {
+    let mut cursor = body.walk();
+    for member in body.named_children(&mut cursor) {
+        match member.kind() {
+            "field_declaration" => {
+                // field_declaration → variable_declaration → <type> declarator…
+                let mut fc = member.walk();
+                for child in member.named_children(&mut fc) {
+                    if child.kind() == "variable_declaration" {
+                        if let Some(t) = member_type_node(&child) {
+                            collect_type_names(&t, src, out);
+                        }
+                    }
+                }
+            }
+            "property_declaration"
+            | "indexer_declaration"
+            | "event_declaration"
+            | "event_field_declaration" => {
+                if let Some(t) = member_type_node(&member) {
+                    collect_type_names(&t, src, out);
+                }
+            }
+            "method_declaration" => {
+                // Return type: first type-shaped child before the name.
+                if let Some(t) = member_type_node(&member) {
+                    collect_type_names(&t, src, out);
+                }
+                collect_parameter_types(&member, src, out);
+            }
+            "constructor_declaration" => {
+                collect_parameter_types(&member, src, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Emit one `references` unresolved-ref per distinct non-built-in type USED by
+/// the body of a type declaration. The source of every ref is the enclosing
+/// type node (`from_id`), so blast/impact over the referenced type reaches the
+/// using type. Deduplicated per declaration.
+fn emit_type_usage_refs(
+    node: &tree_sitter::Node,
+    ctx: &mut ExtractCtx,
+    type_name: &str,
+    kind: &NodeKind,
+    from_id: &str,
+) {
+    let src = ctx.source.as_bytes();
+    // The member body is the (last) `declaration_list` child. (A class also has
+    // an outer `declaration_list` only at namespace level — here `node` is the
+    // declaration itself, whose own `declaration_list` child is the body.)
+    let mut body: Option<tree_sitter::Node> = None;
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if child.kind() == "declaration_list" {
+            body = Some(child);
+        }
+    }
+    let body = match body {
+        Some(b) => b,
+        None => return,
+    };
+
+    let mut types: HashSet<String> = HashSet::new();
+    collect_member_type_usages(&body, src, &mut types);
+    // Never reference oneself.
+    types.remove(type_name);
+
+    let line = node.start_position().row as u32 + 1;
+    // Stable, deterministic ordering so node ids don't churn across runs.
+    let mut sorted: Vec<String> = types.into_iter().collect();
+    sorted.sort_unstable();
+    for ty in sorted {
+        let ref_id = generate_node_id(
+            ctx.file_path,
+            kind,
+            &format!("references:{type_name}:{ty}"),
+            line,
+        );
+        ctx.unresolved.push(UnresolvedRef {
+            id: ref_id,
+            from_node_id: from_id.to_string(),
+            reference_name: ty,
+            reference_kind: "references".to_string(),
+            file_path: ctx.file_path.to_string(),
+            line: Some(line),
+            col: None,
+            metadata: None,
+        });
+    }
+}
+
+/// Harvest the types of every `parameter` in a member's `parameter_list`.
+fn collect_parameter_types(member: &tree_sitter::Node, src: &[u8], out: &mut HashSet<String>) {
+    let mut cursor = member.walk();
+    for child in member.named_children(&mut cursor) {
+        if child.kind() != "parameter_list" {
+            continue;
+        }
+        let mut pc = child.walk();
+        for param in child.named_children(&mut pc) {
+            if param.kind() == "parameter" {
+                if let Some(t) = member_type_node(&param) {
+                    collect_type_names(&t, src, out);
+                }
+            }
+        }
+    }
+}
 
 static CONFIG: LanguageConfig = LanguageConfig {
     function_types: &[],
@@ -117,9 +391,38 @@ impl LanguageExtractor for CSharpExtractor {
                             }
                         }
                     }
+
+                    // Type-usage `references` edges (recall fix): emit one
+                    // `references` ref per distinct, non-built-in type the class
+                    // body USES via field/property/method/ctor signatures and
+                    // their generic arguments. Without these, blast/impact over a
+                    // widely-used type (e.g. a repository class referenced only
+                    // through fields/generics) is near-empty.
+                    emit_type_usage_refs(node, ctx, &cname, &NodeKind::Class, &from_id);
                 }
             }
             return false; // let extract_class emit the class node + recurse
+        }
+
+        // Type-usage `references` for the remaining declaration kinds. Each
+        // routes to its own extractor (struct/record→Struct, interface→Interface,
+        // enum→Enum) which still runs because we return `false`.
+        let decl_kind = match node.kind() {
+            "struct_declaration" | "record_declaration" => Some(NodeKind::Struct),
+            "interface_declaration" => Some(NodeKind::Interface),
+            _ => None,
+        };
+        if let Some(kind) = decl_kind {
+            let src = ctx.source.as_bytes();
+            if let Some(name_node) = node.child_by_field_name("name") {
+                let tname = name_node.utf8_text(src).unwrap_or("").to_string();
+                if !tname.is_empty() {
+                    let line = node.start_position().row as u32 + 1;
+                    let from_id = generate_node_id(ctx.file_path, &kind, &tname, line);
+                    emit_type_usage_refs(node, ctx, &tname, &kind, &from_id);
+                }
+            }
+            return false; // let the per-kind extractor emit the node + recurse
         }
 
         false
@@ -381,6 +684,162 @@ namespace App
             impls,
             vec!["IGreeter"],
             "Greeter should implement IGreeter exactly once; impls: {impls:?}"
+        );
+    }
+
+    // ── Type-usage `references` edges (recall fix) ────────────────────────────
+
+    /// Collect the `references` ref names emitted for a single C# source.
+    fn references_of(source: &str) -> Vec<String> {
+        let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let mut names: Vec<String> = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_kind == "references")
+            .map(|r| r.reference_name.clone())
+            .collect();
+        names.sort();
+        names
+    }
+
+    // Field, property, method param/return, ctor param, and generic args all
+    // produce `references` refs; built-ins are skipped; the generic
+    // `IRepository<Order>` yields BOTH `IRepository` and `Order`.
+    #[test]
+    fn csharp_type_usage_references_emitted() {
+        let source = r#"
+namespace App {
+    public class OrderService {
+        private readonly OrderRepository _repo;
+        public IList<Order> Orders { get; set; }
+        public Customer FindCustomer(int id, Address addr) { return null; }
+        public OrderService(IRepository<Order> repo, ILogger log) { }
+    }
+}
+"#;
+        let refs = references_of(source);
+        for expected in [
+            "OrderRepository",
+            "Order",
+            "Customer",
+            "Address",
+            "IRepository",
+            "ILogger",
+            "IList",
+        ] {
+            assert!(
+                refs.contains(&expected.to_string()),
+                "expected reference to {expected}, got {refs:?}"
+            );
+        }
+        // Built-ins must NOT appear.
+        for builtin in ["int", "string", "void", "Task", "var"] {
+            assert!(
+                !refs.contains(&builtin.to_string()),
+                "built-in {builtin} must be skipped, got {refs:?}"
+            );
+        }
+    }
+
+    // A type used in many member sites must yield exactly ONE `references` ref
+    // (dedup per declaration), not one per use.
+    #[test]
+    fn csharp_type_usage_references_deduped() {
+        let source = r#"
+namespace App {
+    public class Repo {
+        private Order _a;
+        private Order _b;
+        public Order Get(Order o) { return o; }
+        public IList<Order> All { get; set; }
+    }
+}
+"#;
+        let refs = references_of(source);
+        let order_count = refs.iter().filter(|r| r.as_str() == "Order").count();
+        assert_eq!(
+            order_count, 1,
+            "Order should be referenced exactly once (deduped), got {refs:?}"
+        );
+    }
+
+    // Struct, record, and interface member signatures also emit `references`.
+    #[test]
+    fn csharp_type_usage_references_struct_record_interface() {
+        let struct_src = r#"
+namespace App {
+    public struct Holder {
+        public Payload Data { get; set; }
+    }
+}
+"#;
+        assert!(
+            references_of(struct_src).contains(&"Payload".to_string()),
+            "struct member type should be referenced"
+        );
+
+        let iface_src = r#"
+namespace App {
+    public interface IService {
+        Result Handle(Command cmd);
+    }
+}
+"#;
+        let iface_refs = references_of(iface_src);
+        assert!(
+            iface_refs.contains(&"Result".to_string())
+                && iface_refs.contains(&"Command".to_string()),
+            "interface method return + param types should be referenced, got {iface_refs:?}"
+        );
+    }
+
+    // A built-in-only signature must emit no `references` refs at all.
+    #[test]
+    fn csharp_type_usage_no_refs_for_builtins_only() {
+        let source = r#"
+namespace App {
+    public class Calc {
+        private int _x;
+        public string Name { get; set; }
+        public double Add(int a, int b) { return 0; }
+    }
+}
+"#;
+        assert!(
+            references_of(source).is_empty(),
+            "built-in-only members must emit no references refs"
+        );
+    }
+
+    // The source of every type-usage ref is the enclosing type node, so blast
+    // over the referenced type reaches the using type.
+    #[test]
+    fn csharp_type_usage_ref_source_is_enclosing_type() {
+        let source = r#"
+namespace App {
+    public class Consumer {
+        private Widget _w;
+    }
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let consumer = batch
+            .nodes
+            .iter()
+            .find(|n| n.name == "Consumer")
+            .expect("Consumer node");
+        let widget_ref = batch
+            .unresolved_refs
+            .iter()
+            .find(|r| r.reference_kind == "references" && r.reference_name == "Widget")
+            .expect("Widget references ref");
+        assert_eq!(
+            widget_ref.from_node_id, consumer.id,
+            "type-usage ref source must be the enclosing type node"
         );
     }
 
