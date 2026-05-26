@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # T-446 — CodeWiki one-liner installer (Linux / macOS)
 # Usage:  curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh | sh
 #    Or:  ./install.sh [--version <tag>] [--dir <install-dir>] [--uninstall] [--help]
@@ -11,8 +11,10 @@
 #   * exits as a no-op when already on the target version,
 #   * upgrades (or downgrades, with a notice) otherwise,
 # backing up the current binary and rolling back if the new one fails to run.
+#
+# POSIX sh — works under dash/ash/bash; no bashisms (so `curl … | sh` is safe).
 
-set -euo pipefail
+set -eu
 
 REPO="0xsyncroot/codewiki"
 INSTALL_DIR="${CODEWIKI_INSTALL_DIR:-$HOME/.local/bin}"
@@ -43,7 +45,7 @@ EOF
   exit 0
 }
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --version)  VERSION="$2"; shift 2 ;;
     --dir)      INSTALL_DIR="$2"; shift 2 ;;
@@ -55,9 +57,9 @@ done
 
 # ── Uninstall path ────────────────────────────────────────────────────────────
 
-if [[ $UNINSTALL -eq 1 ]]; then
+if [ "$UNINSTALL" -eq 1 ]; then
   target="$INSTALL_DIR/codewiki"
-  if [[ -f "$target" ]]; then
+  if [ -f "$target" ]; then
     rm -f "$target"
     echo "Removed $target"
   else
@@ -71,47 +73,52 @@ fi
 # Strip a leading `v`, drop any -prerelease/+build suffix, echo MAJOR.MINOR.PATCH
 # (missing components default to 0). Echoes nothing if unparseable.
 normalize_version() {
-  local raw="${1:-}"
+  raw="${1:-}"
   raw="${raw#v}"; raw="${raw#V}"
   # Drop everything from the first '-' or '+'.
   raw="${raw%%-*}"; raw="${raw%%+*}"
-  [[ -z "$raw" ]] && return 0
-  local IFS='.'
-  # shellcheck disable=SC2206
-  local parts=($raw)
-  local major="${parts[0]:-0}" minor="${parts[1]:-0}" patch="${parts[2]:-0}"
+  [ -z "$raw" ] && return 0
+  # Split on '.' without arrays (POSIX): set the positional params via IFS.
+  _oldifs="$IFS"; IFS='.'
+  # shellcheck disable=SC2086
+  set -- $raw
+  IFS="$_oldifs"
+  _major="${1:-0}"; _minor="${2:-0}"; _patch="${3:-0}"; _extra="${4:-}"
   # All three must be pure integers, and there must be no 4th component.
-  if [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ \
-        && -z "${parts[3]:-}" ]]; then
-    echo "${major}.${minor}.${patch}"
-  fi
+  [ -z "$_extra" ] || return 0
+  case "$_major" in ''|*[!0-9]*) return 0 ;; esac
+  case "$_minor" in ''|*[!0-9]*) return 0 ;; esac
+  case "$_patch" in ''|*[!0-9]*) return 0 ;; esac
+  echo "${_major}.${_minor}.${_patch}"
 }
 
 # Numeric semver compare. Echoes -1 (a<b), 0 (a==b), or 1 (a>b).
 # Inputs must already be normalized MAJOR.MINOR.PATCH.
 compare_versions() {
-  local a="$1" b="$2"
-  local IFS='.'
-  # shellcheck disable=SC2206
-  local av=($a) bv=($b)
-  local i
-  for i in 0 1 2; do
-    if (( ${av[i]} > ${bv[i]} )); then printf '%s\n' 1; return; fi
-    if (( ${av[i]} < ${bv[i]} )); then printf '%s\n' -1; return; fi
-  done
-  printf '%s\n' 0
+  _a="$1"; _b="$2"
+  _oldifs="$IFS"; IFS='.'
+  # shellcheck disable=SC2086
+  set -- $_a; _a1="${1:-0}"; _a2="${2:-0}"; _a3="${3:-0}"
+  # shellcheck disable=SC2086
+  set -- $_b; _b1="${1:-0}"; _b2="${2:-0}"; _b3="${3:-0}"
+  IFS="$_oldifs"
+  if [ "$_a1" -gt "$_b1" ]; then echo 1; return; fi
+  if [ "$_a1" -lt "$_b1" ]; then echo -1; return; fi
+  if [ "$_a2" -gt "$_b2" ]; then echo 1; return; fi
+  if [ "$_a2" -lt "$_b2" ]; then echo -1; return; fi
+  if [ "$_a3" -gt "$_b3" ]; then echo 1; return; fi
+  if [ "$_a3" -lt "$_b3" ]; then echo -1; return; fi
+  echo 0
 }
 
 # Echo the installed version token (raw tag) by running the binary, or nothing.
 detect_installed_version() {
-  local bin="$1"
-  [[ -x "$bin" ]] || return 0
-  local out token
+  _bin="$1"
+  [ -x "$_bin" ] || return 0
   # `codewiki --version` prints e.g. "codewiki 0.1.1"; grab the last whitespace
   # token. Tolerate any failure → echo nothing (treated as force install).
-  out="$("$bin" --version 2>/dev/null)" || return 0
-  token="$(printf '%s\n' "$out" | head -1 | awk '{print $NF}')"
-  echo "$token"
+  _out="$("$_bin" --version 2>/dev/null)" || return 0
+  printf '%s\n' "$_out" | head -1 | awk '{print $NF}'
 }
 
 # ── OS / arch detection ───────────────────────────────────────────────────────
@@ -135,12 +142,12 @@ TARGET_TRIPLE="${ARCH_NORM}-${OSFAM}"
 
 # ── Target version resolution ─────────────────────────────────────────────────
 
-if [[ "$VERSION" == "latest" ]]; then
+if [ "$VERSION" = "latest" ]; then
   echo "Resolving latest version…"
   VERSION=$(curl -fsSL "$RELEASE_API" \
     | grep '"tag_name"' \
     | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-  if [[ -z "$VERSION" ]]; then
+  if [ -z "$VERSION" ]; then
     echo "Could not resolve latest version. Set CODEWIKI_VERSION explicitly." >&2
     exit 1
   fi
@@ -154,7 +161,7 @@ INSTALLED_RAW="$(detect_installed_version "$DEST")"
 INSTALLED_NORM="$(normalize_version "$INSTALLED_RAW")"
 TARGET_NORM="$(normalize_version "$VERSION")"
 
-if [[ -n "$INSTALLED_NORM" && -n "$TARGET_NORM" ]]; then
+if [ -n "$INSTALLED_NORM" ] && [ -n "$TARGET_NORM" ]; then
   cmp="$(compare_versions "$INSTALLED_NORM" "$TARGET_NORM")"
   case "$cmp" in
     0)
@@ -168,7 +175,7 @@ if [[ -n "$INSTALLED_NORM" && -n "$TARGET_NORM" ]]; then
       echo "Upgrading ${INSTALLED_RAW} -> ${VERSION}…"
       ;;
   esac
-elif [[ -n "$INSTALLED_RAW" ]]; then
+elif [ -n "$INSTALLED_RAW" ]; then
   # Binary exists but its version is unparseable → force (re)install.
   echo "Reinstalling codewiki (installed version '${INSTALLED_RAW}' unparseable) -> ${VERSION}…"
 else
@@ -193,9 +200,9 @@ curl -fsSL "${BASE_URL}/${CHECKSUM_FILE}" -o "${TMP_DIR}/${CHECKSUM_FILE}"
 
 echo "Verifying checksum…"
 cd "$TMP_DIR"
-if command -v sha256sum &>/dev/null; then
+if command -v sha256sum >/dev/null 2>&1; then
   sha256sum -c "$CHECKSUM_FILE"
-elif command -v shasum &>/dev/null; then
+elif command -v shasum >/dev/null 2>&1; then
   shasum -a 256 -c "$CHECKSUM_FILE"
 else
   echo "WARNING: Neither sha256sum nor shasum found; skipping checksum verification." >&2
@@ -207,7 +214,7 @@ cd - >/dev/null
 tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "$TMP_DIR"
 mkdir -p "$INSTALL_DIR"
 BINARY=$(find "$TMP_DIR" -maxdepth 1 -name "codewiki" -not -name "*.tar.gz" | head -1)
-if [[ -z "$BINARY" ]]; then
+if [ -z "$BINARY" ]; then
   echo "Could not find codewiki binary in archive." >&2
   exit 1
 fi
@@ -215,7 +222,7 @@ fi
 # ── Install / atomic replace with backup + smoke test + rollback ──────────────
 
 BACKUP=""
-if [[ -f "$DEST" ]]; then
+if [ -f "$DEST" ]; then
   # Back up the current binary so we can roll back if the new one is broken.
   BACKUP="${DEST}.bak.$$"
   cp -p "$DEST" "$BACKUP"
@@ -230,7 +237,7 @@ mv -f "$STAGED" "$DEST"
 # Smoke test: the freshly-installed binary must run `--version`.
 if ! "$DEST" --version >/dev/null 2>&1; then
   echo "ERROR: the new codewiki binary failed its smoke test." >&2
-  if [[ -n "$BACKUP" ]]; then
+  if [ -n "$BACKUP" ]; then
     echo "Rolling back to the previous version…" >&2
     mv -f "$BACKUP" "$DEST"
     BACKUP=""
@@ -241,7 +248,7 @@ if ! "$DEST" --version >/dev/null 2>&1; then
 fi
 
 # Success → drop the backup.
-if [[ -n "$BACKUP" ]]; then
+if [ -n "$BACKUP" ]; then
   rm -f "$BACKUP"
 fi
 
@@ -256,7 +263,7 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
   echo ""
 fi
 
-if [[ -n "$INSTALLED_NORM" && -n "$TARGET_NORM" && "$INSTALLED_NORM" != "$TARGET_NORM" ]]; then
+if [ -n "$INSTALLED_NORM" ] && [ -n "$TARGET_NORM" ] && [ "$INSTALLED_NORM" != "$TARGET_NORM" ]; then
   echo "Upgraded ${INSTALLED_RAW} -> ${VERSION} (${INSTALL_DIR}/codewiki)"
 else
   echo "codewiki ${VERSION} installed to ${INSTALL_DIR}/codewiki"
