@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/0xsyncroot/codewiki/actions/workflows/ci.yml/badge.svg)](https://github.com/0xsyncroot/codewiki/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.1-green.svg)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
 
 Instead of reading whole source files, your AI agent asks the graph:
@@ -198,12 +198,12 @@ Windows (added to your user PATH automatically on Windows). Override with `--dir
 
 ```sh
 # Linux / macOS
-curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh | sh -s -- --version v0.2.0
+curl -fsSL https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.sh | sh -s -- --version v0.2.1
 ```
 
 ```powershell
 # Windows PowerShell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.ps1))) -Version v0.2.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/0xsyncroot/codewiki/main/install.ps1))) -Version v0.2.1
 ```
 
 ### 2. Manual download
@@ -245,7 +245,7 @@ Expand-Archive codewiki-x86_64-pc-windows-msvc.zip -DestinationPath $env:LOCALAP
 
 ```sh
 codewiki --version
-# codewiki 0.2.0
+# codewiki 0.2.1
 ```
 
 The binary includes every feature — graph UI, FTS5 search, full language support — by

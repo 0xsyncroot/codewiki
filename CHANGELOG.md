@@ -7,6 +7,31 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.1] - 2026-05-26
+
+Small UX release: the `init`/`index` indexing display is now a determinate,
+colorized progress bar instead of an indeterminate spinner.
+
+### Changed
+
+- **Determinate progress bar for `init`/`index`.** The indexing display now
+  fills 0→100% as files are processed, showing the live phase, a filled bar +
+  percent, `pos / len files`, and running node/edge counts with the file
+  currently streaming by — ending in two `✓` summary lines (Indexed, Resolved).
+  Uses a cyan/green/magenta accent palette with a smooth fractional-block bar
+  edge on a TTY; degrades to ASCII glyphs and 16-color ANSI on basic terminals,
+  honors `NO_COLOR`, and stays plain and non-spammy when piped/CI. The total is
+  sized up front via a new no-op-by-default `ExtractionStore::begin_index` hook,
+  so the bar fills exactly to 100% without a second filesystem walk.
+
+### Removed
+
+- **Dead `-i` / `--interactive` flag on `codewiki init`.** It was parsed then
+  discarded and never did anything; `codewiki init` behaves exactly as before
+  (auto-index unless `--no_index`). Scripts that passed `-i` should drop it.
+
+---
+
 ## [0.2.0] - 2026-05-26
 
 Query-quality release: CodeWiki now returns the right answer **as completely as
