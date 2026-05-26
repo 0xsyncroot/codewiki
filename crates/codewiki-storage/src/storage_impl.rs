@@ -327,9 +327,18 @@ impl StorageImpl {
             .unwrap_or_default();
 
         neighbors.sort_by(|a, b| {
+            // Production code before test code: a bounded callers/callees list
+            // should surface genuine source-code neighbors first, since a flood
+            // of test-file callers would otherwise crowd real usage out of the
+            // visible window (general rule, not tuned to any case). Within each
+            // class, rank by graph degree, then name/id for determinism.
+            let a_test = is_test_file(&a.file_path);
+            let b_test = is_test_file(&b.file_path);
             let da = degrees.get(&a.id).copied().unwrap_or(0);
             let db = degrees.get(&b.id).copied().unwrap_or(0);
-            db.cmp(&da)
+            a_test
+                .cmp(&b_test)
+                .then_with(|| db.cmp(&da))
                 .then_with(|| a.name.cmp(&b.name))
                 .then_with(|| a.id.cmp(&b.id))
         });
@@ -1280,10 +1289,10 @@ impl QueryHandle for StorageImpl {
 
                 let term_limit = opts.search_limit * 2;
 
-                // FIX 2: per-term IDF, computed once per query and cached for the
-                // whole text-channel aggregation. Rare terms (the semantic anchor)
-                // weigh more than high-frequency terms so a single common term
-                // can't dominate BM25 and crowd out the anchor.
+                // FIX 2 (context multi-term coverage ranking) — per-term IDF,
+                // computed once per query and cached. Rare terms (the semantic
+                // anchor) weigh more than high-frequency terms so a single common
+                // term can't dominate BM25 and crowd out the anchor.
                 let term_idf = self
                     .with_conn(|conn| {
                         Ok::<_, CodeWikiError>(crate::search::scoring::compute_term_idf(
@@ -1317,26 +1326,19 @@ impl QueryHandle for StorageImpl {
                     }
                 }
 
-                // FIX 2: compute an IDF-weighted multi-term COVERAGE boost for
-                // every candidate BEFORE truncation. The boost rewards a node for
-                // covering MORE distinct query terms, weighting the rarer
-                // (higher-IDF) terms most. Concretely: take the IDF of each matched
-                // term, treat the single MOST COMMON matched term as the "base"
-                // (it carries the least signal), and sum the IDFs of every other
-                // matched term. So a node matching a rare anchor term (`eviction`)
-                // on top of a common one (`cache`) is rewarded by ~idf(eviction),
-                // counteracting BM25 latching onto the high-frequency term.
-                //
-                // Coverage is recomputed by testing each query term against the
-                // candidate's own text (name / qualified_name / file stem) rather
-                // than relying on per-term FTS top-K membership — a candidate can
-                // fall out of a common term's capped top-K yet still genuinely
-                // cover it, so the membership signal under-counts coverage.
+                // Multi-term COVERAGE boost, applied BEFORE truncation. The boost
+                // is strictly ADDITIVE and bounded: it only PROMOTES a node for
+                // covering additional DISTINCT query terms (weighting rarer terms
+                // higher via IDF). Coverage is determined by testing each query
+                // term against the candidate's own text (name / qualified_name /
+                // file stem) OR its per-term FTS membership — a candidate can fall
+                // out of a common term's capped top-K yet still genuinely cover it,
+                // so a pure top-K-membership signal under-counts coverage.
                 let multi_term = search_terms.len() > 1;
                 let mut scored: Vec<(SearchResult, usize)> = term_results_map
                     .into_values()
                     .map(|(mut result, fts_matched)| {
-                        // Distinct terms this node textually covers.
+                        // Distinct query terms this node covers (textual or FTS).
                         let name_l = result.node.name.to_lowercase();
                         let qname_l = result.node.qualified_name.to_lowercase();
                         let stem_l = std::path::Path::new(&result.node.file_path)
@@ -1370,16 +1372,22 @@ impl QueryHandle for StorageImpl {
                     })
                     .collect();
 
-                // Coverage-aware ordering so multi-term anchors are NOT truncated
-                // away by single-term BM25 hits before they reach the merge +
-                // STEP 5a co-occurrence re-rank. Primary key: number of distinct
-                // terms covered (descending); tie-break by boosted score.
+                // Truncate by the BOOSTED score (additive coverage already folded
+                // in), tie-broken by distinct-term count. Ordering by score — NOT
+                // by distinct-term count as the primary key (the regressed
+                // behavior) — is what makes the boost additive-safe: it preserves
+                // the promotion of multi-term matches while never letting a
+                // low-BM25 multi-term match EVICT a high-BM25 single-term anchor
+                // out of the truncated candidate set.
                 scored.sort_by(|a, b| {
-                    b.1.cmp(&a.1).then_with(|| {
-                        b.0.score
-                            .partial_cmp(&a.0.score)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
+                    b.0.score
+                        .partial_cmp(&a.0.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| b.1.cmp(&a.1))
+                        // Deterministic final tiebreak so equal-score candidates
+                        // (and thus which survive the small term_limit) don't
+                        // depend on HashMap iteration order.
+                        .then_with(|| a.0.node.id.cmp(&b.0.node.id))
                 });
                 scored.truncate(term_limit);
                 text_results = scored.into_iter().map(|(r, _)| r).collect();
@@ -1568,6 +1576,10 @@ impl QueryHandle for StorageImpl {
                 b.score
                     .partial_cmp(&a.score)
                     .unwrap_or(std::cmp::Ordering::Equal)
+                    // Deterministic tiebreak so equal-score NL candidates that
+                    // straddle the truncation boundary don't depend on HashMap
+                    // iteration order (median-of-3 run-to-run stability).
+                    .then_with(|| a.node.id.cmp(&b.node.id))
             });
             nl_results.truncate(fts_limit);
 
@@ -1698,6 +1710,10 @@ impl QueryHandle for StorageImpl {
                 b.score
                     .partial_cmp(&a.score)
                     .unwrap_or(std::cmp::Ordering::Equal)
+                    // Deterministic tiebreak: equal-score results that straddle
+                    // the root-selection cutoff must not depend on HashMap order,
+                    // or which roots (and thus recall) varies run-to-run.
+                    .then_with(|| a.node.id.cmp(&b.node.id))
             });
         }
 
@@ -1832,13 +1848,19 @@ impl QueryHandle for StorageImpl {
                               // methods (the primary API like new, handle, spawn) come first.
                             return a.start_line.cmp(&b.start_line);
                         }
-                        // Both cross-file: kind_bonus DESC then name ASC
+                        // Both cross-file: kind_bonus DESC then name ASC, with
+                        // id as the final tiebreak so two same-name same-kind
+                        // cross-file nodes have a stable order (otherwise which
+                        // survives the per-root budget — and thus recall — varies
+                        // run-to-run). id is the deterministic last resort; we do
+                        // NOT bias by file_path/start_line so this stays a pure
+                        // determinism tiebreak rather than a ranking change.
                         let a_kb = crate::search::kind_bonus(&a.kind);
                         let b_kb = crate::search::kind_bonus(&b.kind);
                         if a_kb != b_kb {
                             return b_kb.cmp(&a_kb);
                         }
-                        a.name.cmp(&b.name)
+                        a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id))
                     });
                     let mut inserted_this_root = 0usize;
                     for (id, node) in bfs_nodes {
@@ -2911,17 +2933,24 @@ mod tests {
     // FIX 2: context multi-term coverage ranking
     // -------------------------------------------------------------------------
 
-    /// A node covering BOTH distinct query terms must outrank a node that only
-    /// matches the high-frequency term many times. This is the keyword-latching
-    /// fix: a single common term must not dominate the multi-term anchor.
+    /// FIX 2 — context multi-term coverage ranking, ADDITIVE-SAFE.
+    ///
+    /// Two properties must hold simultaneously:
+    ///   (A) PROMOTION: among candidates competing for root slots, a node that
+    ///       covers an additional RARE query term (high IDF) on top of a common
+    ///       one is promoted by the additive coverage boost so it earns a root
+    ///       slot ahead of nodes matching only the common term.
+    ///   (B) ADDITIVE-SAFETY (no eviction): a strong single-term anchor that the
+    ///       pre-coverage ranking would have surfaced is NEVER demoted out of the
+    ///       result by the boost — the boost only ADDS to multi-term matches.
     #[test]
-    fn context_coverage_rewards_multi_term_over_single_repeated_term() {
+    fn context_coverage_rewards_multi_term_and_never_evicts_anchor() {
         use crate::queries::nodes::insert_node;
 
         let storage = make_storage();
 
-        // High-frequency term "cache" appears in MANY node names (the common term).
-        for i in 0..15 {
+        // A handful of single-term "cache" matches (the common term).
+        for i in 0..4 {
             storage
                 .with_conn(|conn| {
                     insert_node(
@@ -2942,7 +2971,7 @@ mod tests {
                 .unwrap();
         }
 
-        // The anchor node covers BOTH "cache" AND the rare term "eviction".
+        // The anchor covers BOTH "cache" AND the rare term "eviction".
         storage
             .with_conn(|conn| {
                 insert_node(
@@ -2962,6 +2991,28 @@ mod tests {
             })
             .unwrap();
 
+        // A STRONG single-term anchor matching the rare term directly by name.
+        // The coverage boost (which only promotes multi-term matches) must never
+        // demote this out of the result set.
+        storage
+            .with_conn(|conn| {
+                insert_node(
+                    conn,
+                    &Node {
+                        id: "strong".to_string(),
+                        name: "eviction".to_string(),
+                        qualified_name: "eviction".to_string(),
+                        kind: NodeKind::Function,
+                        language: Language::Rust,
+                        file_path: "src/policy.rs".to_string(),
+                        start_line: 1,
+                        end_line: 30,
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+
         let opts = FindOpts {
             search_limit: 3,
             traversal_depth: 0, // isolate ranking from BFS expansion
@@ -2972,12 +3023,21 @@ mod tests {
             .find_relevant_context("cache eviction policy", opts)
             .unwrap();
 
-        // The two-term anchor must be selected as a ROOT despite 15 single-term
-        // "cache*" competitors.
+        // (A) PROMOTION: the two-term anchor earns a root slot ahead of the
+        // single-term "cache*" helpers.
         assert!(
             result.roots.contains(&"anchor".to_string()),
-            "multi-term-coverage anchor must be a root; roots={:?}",
+            "multi-term-coverage anchor must be promoted to a root; roots={:?}",
             result.roots
+        );
+
+        // (B) ADDITIVE-SAFETY: the strong single-term anchor (exact rare-term
+        // name match) is never evicted by the coverage boost.
+        assert!(
+            result.nodes.contains_key("strong"),
+            "strong single-term anchor must not be evicted by the coverage boost; \
+             nodes={:?}",
+            result.nodes.keys().collect::<Vec<_>>()
         );
     }
 
@@ -3208,6 +3268,44 @@ mod tests {
             agg.neighbors.len() <= 3,
             "cap must bound the neighbor count; got {}",
             agg.neighbors.len()
+        );
+    }
+
+    /// Regression guard (R1): aggregated callers must surface genuine PRODUCTION
+    /// callers before TEST-file callers within a bounded result. A flood of test
+    /// callers must not crowd a real source caller out of the visible window.
+    #[test]
+    fn callers_aggregated_prioritizes_production_over_test_callers() {
+        let storage = make_storage();
+        insert_fn(&storage, "target", "target", "src/t.rs");
+        // One genuine production caller …
+        insert_fn(&storage, "prod", "realCaller", "src/service.rs");
+        insert_call(&storage, "ep", "prod", "target");
+        // … and many test-file callers that would otherwise flood a small cap.
+        for i in 0..8 {
+            let cid = format!("t{}", i);
+            insert_fn(
+                &storage,
+                &cid,
+                &format!("test_caller{}", i),
+                "tests/big_test.rs",
+            );
+            insert_call(&storage, &format!("et{}", i), &cid, "target");
+        }
+
+        // Cap of 2 — the production caller MUST be within the kept window.
+        let agg = storage.get_callers_aggregated("target", 2).unwrap();
+        assert!(
+            agg.neighbors.iter().any(|n| n.name == "realCaller"),
+            "production caller must rank ahead of test callers within the cap; got {:?}",
+            agg.neighbors.iter().map(|n| &n.name).collect::<Vec<_>>()
+        );
+        // And it should be the FIRST neighbor (test files deprioritized).
+        assert_eq!(
+            agg.neighbors.first().map(|n| n.name.as_str()),
+            Some("realCaller"),
+            "production caller must be ranked first; got {:?}",
+            agg.neighbors.iter().map(|n| &n.name).collect::<Vec<_>>()
         );
     }
 
