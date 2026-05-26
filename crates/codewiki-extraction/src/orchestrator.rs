@@ -59,6 +59,15 @@ pub trait ExtractionStore: Send + Sync {
         }
         Ok((files, nodes, edges))
     }
+
+    /// Called once at the start of `index_all`, after the discovery + filter
+    /// pass, with the number of source files that will be parsed and streamed.
+    ///
+    /// This is exactly the number of `flush_bulk`/`store_batch` items that
+    /// follow, so a UI adapter can use it to size a determinate progress bar.
+    /// Default: no-op, so `NoopStore`, test stores, and the incremental-sync
+    /// path need not implement it.
+    fn begin_index(&self, _total_files: usize) {}
 }
 
 /// A set of changed files passed by the file-watcher (A5).
@@ -176,6 +185,12 @@ impl ExtractionOrchestratorImpl {
         // caller can tell "no source files found" apart from "found files but
         // indexed none" (a genuine failure that must exit non-zero).
         let discovered = work.len();
+
+        // Tell the store the total up-front so a progress UI can render a
+        // determinate bar. `discovered` is exactly the number of batches that
+        // will stream through `flush_bulk` below. No-op for stores that don't
+        // override `begin_index`.
+        self.store.begin_index(discovered);
 
         // Set up bounded channel between rayon workers and the writer thread.
         let (tx, rx) = std::sync::mpsc::sync_channel::<ExtractionBatch>(EXTRACTION_CHANNEL_DEPTH);

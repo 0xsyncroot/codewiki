@@ -82,6 +82,14 @@ pub fn run(path: Option<PathBuf>, no_index: bool) -> Result<()> {
     // Run WAL checkpoint + PRAGMA optimize after bulk insert (OPT-7).
     storage.run_maintenance_pub();
 
+    // Indexing (parse + store + maintenance) is done — leave a ✓ summary line.
+    reporter.finish_index(
+        counts.files as u64,
+        counts.nodes as u64,
+        counts.edges as u64,
+        t0.elapsed().as_secs_f64(),
+    );
+
     reporter.on_progress(&IndexProgress {
         phase: Phase::Resolving,
     });
@@ -90,24 +98,7 @@ pub fn run(path: Option<PathBuf>, no_index: bool) -> Result<()> {
     // into real import/call/route edges (AUDIT-2/4/7 blocker fix).
     // Pass None → full framework-extract run (init always re-extracts).
     let resolved_count = run_resolution(&storage, &root, None)?;
-    let elapsed = t0.elapsed();
-
-    reporter.finish(
-        counts.files as u64,
-        counts.nodes as u64,
-        counts.edges as u64,
-        elapsed.as_secs_f64(),
-    );
-    if !reporter.is_tty() {
-        println!(
-            "Indexed {} files, {} nodes, {} edges in {:.1}s",
-            counts.files,
-            counts.nodes,
-            counts.edges,
-            elapsed.as_secs_f64()
-        );
-    }
-    println!("Resolved {} references", resolved_count);
+    reporter.finish_resolve(resolved_count as u64);
 
     // Auto-install git hooks so `sync` runs automatically on commit (AUDIT-5 Bug 3).
     let git_hooks_dir = root.join(".git").join("hooks");

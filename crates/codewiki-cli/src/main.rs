@@ -102,10 +102,6 @@ enum Commands {
     /// Create + index this project's .codewiki/ (DB + git hooks)
     #[command(next_help_heading = "Advanced")]
     Init {
-        /// Interactive mode: prompts for options
-        #[arg(short = 'i', long)]
-        interactive: bool,
-
         /// Path to project root (defaults to cwd)
         #[arg(long)]
         path: Option<std::path::PathBuf>,
@@ -367,7 +363,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             installer::run_uninstaller(opts)
         }
         Commands::Upgrade { check } => commands::upgrade::run(check),
-        Commands::Init { path, no_index, .. } => commands::init::run(path, no_index),
+        Commands::Init { path, no_index } => commands::init::run(path, no_index),
         Commands::Uninit { force, path } => commands::uninit::run(force, path),
         Commands::Index { path } => commands::index::run(path),
         Commands::Sync { path } => commands::sync::run(path),

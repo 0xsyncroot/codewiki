@@ -30,5 +30,5 @@ Use codewiki for **structural** questions — what calls what, what would break,
 
 ### If `.codewiki/` doesn't exist
 
-The MCP server returns "not initialized." Ask the user: *"I notice this project doesn't have CodeWiki initialized. Want me to run `codewiki init -i` to build the index?"*
+The MCP server returns "not initialized." Ask the user: *"I notice this project doesn't have CodeWiki initialized. Want me to run `codewiki init` to build the index?"*
 <!-- CODEWIKI_END -->
