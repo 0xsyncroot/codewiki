@@ -39,29 +39,30 @@ agent actually uses. Every answer is scored for **recall** against a frozen grou
 oracle. Tokens = output bytes ÷ 4 (conservative; code tokenises more efficiently).
 Pricing: Claude Sonnet input at **$3.00 / 1M tokens**.
 
-**157 cases. CodeWiki uses 74% fewer tool-calls and 98% fewer tokens than grep+read,
-saving ~$16.80 of input tokens across the run.** Mean recall is **0.88 for CodeWiki vs
-0.91 for the baseline** — CodeWiki now **nearly matches grep+read recall while cutting 98%
-of the tokens** (see [§2](#2-how-to-read-these-numbers--honesty-disclosures)).
+**157 cases (155 scored). CodeWiki uses 74% fewer tool-calls and 98% fewer tokens than
+grep+read, saving ~$16.98 of input tokens across the run.** Mean recall is **0.88 for
+CodeWiki (0.877) vs 0.92 for the baseline (0.921)** — CodeWiki now **nearly matches
+grep+read recall while cutting 98% of the tokens** (see
+[§2](#2-how-to-read-these-numbers--honesty-disclosures)).
 
 ### 1.1 By language — 8 repos, one per language (small/medium tier)
 
 | Language | Repo | Files | Tool-call reduction | **Token reduction** | CodeWiki recall | Baseline recall |
 |----------|------|------:|:-------------------:|:-------------------:|:---------------:|:---------------:|
 | Python | pallets/flask | 83 | 65% | **95%** | 0.93 | 0.95 |
-| Rust | BurntSushi/ripgrep | 101 | 74% | **98%** | 0.92 | 0.95 |
+| Rust | BurntSushi/ripgrep | 101 | 75% | **98%** | 0.92 | 0.95 |
 | JavaScript | expressjs/express | 141 | 60% | **95%** | 0.97 | 0.91 |
 | TypeScript | colinhacks/zod | 408 | 62% | **99%** | 0.79 | 0.93 |
 | Java | google/gson | 262 | 77% | **95%** | 0.82 | 0.83 |
 | C++ | nlohmann/json | 499 | 69% | **98%** | 0.90 | 0.96 |
 | Go | gin-gonic/gin | 99 | 75% | **96%** | 0.98 | 0.95 |
-| C# | dotnet-architecture/eShopOnWeb | 269 | 78% | **79%** | 0.87 | 0.92 |
+| C# | dotnet-architecture/eShopOnWeb | 269 | 78% | **79%** | 0.87 | 0.94 |
 
 Each row is the aggregate of ~16–18 task cases on that repo (the base 6 archetypes plus
 ~10–12 deeper cases: ambiguous/overloaded names, generic/trait-heavy symbols, deep blast
 radius, framework patterns). C#'s lower token reduction on eShopOnWeb (79%) is a
 **small-repo artefact** — its files are already cheap to read, so there is little to save;
-recall stays on par (0.87 vs 0.92). The §1.2 large .NET tier (jellyfin, 2,065 .cs) shows
+recall stays on par (0.87 vs 0.94). The §1.2 large .NET tier (jellyfin, 2,065 .cs) shows
 C#'s reduction climbing to **98%** once the repo is big enough for whole-file reads to
 hurt — i.e. the C# small-repo result is genuinely a size artefact, not a ceiling.
 
@@ -75,60 +76,62 @@ frozen-oracle scheme and identical baseline scoring apply.
 
 | Size tier | Repos | Cases | Avg CW tokens/case | Avg baseline tokens/case | Token reduction | CW recall | BL recall |
 |-----------|-------|------:|------------------:|-------------------------:|:---------------:|:---------:|:---------:|
-| **Small** (<300 files) | flask, express, gin, eShopOnWeb, ripgrep | 87 | 611 | 15,703 | **96%** | 0.93 | 0.94 |
-| **Medium** (300–700 files) | zod, gson, json | 52 | 941 | 51,282 | **98%** | 0.84 | 0.90 |
-| **Large .NET** (~2k .cs) | jellyfin | 6 | 1,376 | 69,365 | **98%** | 0.70 | 0.81 |
-| **Enterprise** (>15k files) | kubernetes, microsoft/TypeScript | 12 | 915 | **106,139** | **99%** | 0.78 | 0.84 |
+| **Small** (<300 files) | flask, express, gin, eShopOnWeb, ripgrep | 87 | 601 | 16,142 | **96%** | 0.93 | 0.94 |
+| **Medium** (300–700 files) | zod, gson, json | 52 | 935 | 51,079 | **98%** | 0.84 | 0.90 |
+| **Large .NET** (~2k .cs) | jellyfin | 6 | 1,442 | 69,365 | **98%** | 0.70 | 0.81 |
+| **Enterprise** (>15k files) | kubernetes, microsoft/TypeScript | 12 | 865 | **108,573** | **99%** | 0.73 | 0.89 |
 
 This is the central scaling result: **CodeWiki's per-query answer stays bounded
 (~0.6–1.4k tokens) regardless of repo size, while the grep+read baseline's byte cost
-explodes** — from ~16k tokens/case on a small repo to **~106k tokens/case** on a 17k–39k
+explodes** — from ~16k tokens/case on a small repo to **~109k tokens/case** on a 17k–39k
 file monorepo (a single scoped grep over `pkg/` or `src/` returns hundreds of KB, and
 each required file read adds many KB more). So the per-query dollar saving is *largest*
 on the biggest codebases — exactly where agent token budgets hurt most.
 
 **The jellyfin row is the C# size-artefact control.** On the 269-file eShopOnWeb, C#'s
 token reduction is only 79% (§1.1) — its files are already cheap to read. On jellyfin
-(2,065 .cs) the same six C# archetypes hit **98%** reduction (1,376 vs 69,365 tokens/case)
-and CodeWiki *beats* the grep+read baseline's recall on three of the six tasks
-(`locate` 1.00 vs 0.33, `callers` 1.00 vs 1.00, `callees` 0.80 vs 0.53) — confirming the
-small-eShopOnWeb C# result was a size artefact and that the C# type-reference + impact
-fixes hold up on a large codebase.
+(2,065 .cs) the same six C# archetypes hit **98%** reduction (1,442 vs 69,365 tokens/case)
+and CodeWiki *beats* the grep+read baseline's recall on `locate` (1.00 vs 0.33) and
+`callees` (0.87 vs 0.53) while *matching* it on `callers` and `impl` (both 1.00 vs 1.00) —
+confirming the small-eShopOnWeb C# result was a size artefact and that the C#
+type-reference + impact fixes hold up on a large codebase.
 
 Large .NET (jellyfin) per-case rows (all in [`results-savings.tsv`](results-savings.tsv)):
 
 | Archetype | Symbol | CW tokens | BL tokens | CW recall | BL recall |
 |-----------|--------|----------:|----------:|:---------:|:---------:|
 | locate | `LibraryManager` | 590 | 86,746 | 1.00 | 0.33 |
-| callers | `ILibraryManager` (165 refs) | 467 | 124,753 | 1.00 | 1.00 |
-| callees | `GetStreamingState` | 469 | 18,288 | 0.80 | 0.53 |
-| impl | `IScheduledTask` (19 impls) | 1,879 | 12,405 | 1.00 | 1.00 |
-| blast | `BaseItem` (267 dependants) | 3,760 | 162,781 | 0.38 | 1.00 |
-| feature | scheduled-task pipeline | 1,087 | 11,215 | 0.00 | 1.00 |
+| callers | `ILibraryManager` (165 refs) | 468 | 124,754 | 1.00 | 1.00 |
+| callees | `GetStreamingState` | 484 | 18,288 | 0.87 | 0.53 |
+| impl | `IScheduledTask` (19 impls) | 2,262 | 12,405 | 1.00 | 1.00 |
+| blast | `BaseItem` (267 dependants) | 3,760 | 162,782 | 0.31 | 1.00 |
+| feature | `TaskManager` scheduled-task pipeline | 1,088 | 11,216 | 0.00 | 1.00 |
 
 Enterprise per-case rows (all in [`results-savings.tsv`](results-savings.tsv)):
 
 | Repo | Archetype | Symbol | CW tokens | BL tokens | CW recall | BL recall |
 |------|-----------|--------|----------:|----------:|:---------:|:---------:|
 | kubernetes | locate | `syncPod` (5 defs) | 250 | 37,274 | 1.00 | 1.00 |
-| kubernetes | callers | `NewServer` (300+ refs) | 541 | 84,573 | 0.85 | 0.54 |
-| kubernetes | callees | `SyncPod` | 463 | 64,739 | 0.53 | 0.53 |
-| kubernetes | blast | `SyncPod` | 1,398 | 23,064 | 1.00 | 1.00 |
-| kubernetes | impl | `Reconciler` (232 impls) | 3,760 | 15,099 | 1.00 | 0.29 |
-| kubernetes | feature | kubelet pod-sync | 1,040 | 44,643 | 0.00 | 1.00 |
+| kubernetes | callers | `NewServer` (300+ refs) | 542 | 84,573 | 0.85 | 0.54 |
+| kubernetes | callees | `SyncPod` | 495 | 68,402 | 0.50 | 0.57 |
+| kubernetes | blast | `SyncPod` | 783 | 23,065 | 1.00 | 1.00 |
+| kubernetes | impl | `Reconciler` (232 impls) | 3,760 | — | UNSCORABLE | UNSCORABLE |
+| kubernetes | feature | kubelet pod-sync (`SyncPod`) | 753 | 44,644 | 0.20 | 1.00 |
 | microsoft/TypeScript | locate | `createProgram` (4 defs) | 310 | 96,465 | 1.00 | 1.00 |
 | microsoft/TypeScript | callers | `createSourceFile` | 424 | 212,744 | 0.86 | 1.00 |
-| microsoft/TypeScript | callees | `createProgram` | 360 | 169,517 | 0.93 | 0.71 |
-| microsoft/TypeScript | blast | `createSourceFile` | 1,452 | 212,744 | 1.00 | 1.00 |
+| microsoft/TypeScript | callees | `createProgram` | 358 | 210,162 | 0.67 | 0.67 |
+| microsoft/TypeScript | blast | `createSourceFile` | 1,502 | 212,744 | 1.00 | 1.00 |
 | microsoft/TypeScript | locate | `emitFiles` | 297 | 68,354 | 1.00 | 1.00 |
-| microsoft/TypeScript | feature | compile pipeline | 680 | 244,449 | 0.17 | 1.00 |
+| microsoft/TypeScript | feature | compile pipeline (`createProgram`) | 905 | 244,449 | 0.00 | 1.00 |
 
 Note the honesty signals in these tables — kept, not cherry-picked: the `feature`
 cases (jellyfin scheduled-tasks, kubernetes pod-sync, TS compile-pipeline) and the
 high-fanout `jellyfin blast BaseItem` (267 dependants) score **lower** recall than the
-baseline, while on `kubernetes callers NewServer`, `kubernetes impl Reconciler`,
-`TS callees createProgram` and the jellyfin `locate`/`callees` cases CodeWiki scores
-**higher**. The savings are real and large; the recall trade-off is real and now small.
+baseline, while on `kubernetes callers NewServer` and the jellyfin `locate`/`callees`
+cases CodeWiki scores **higher**. The `kubernetes impl Reconciler` case is **UNSCORABLE**
+by design — see §2: we will not score CodeWiki against an oracle derived from its own
+newly-synthesized `implements` edges. The savings are real and large; the recall
+trade-off is real and now small.
 
 ---
 
@@ -153,44 +156,60 @@ We deliberately do not hide the methodology caveats.
   **same** frozen oracle by [`lib/score.py`](lib/score.py), so the comparison is symmetric.
 
 - **The oracle is not rigged for CodeWiki — the baseline still wins recall overall.** The
-  telling result: the grep+read baseline scores **higher** mean recall (0.91) than
-  CodeWiki (0.88). If the oracle had been tuned to flatter CodeWiki, CodeWiki would win
+  telling result: the grep+read baseline scores **higher** mean recall (0.921) than
+  CodeWiki (0.877). If the oracle had been tuned to flatter CodeWiki, CodeWiki would win
   recall outright. It does not. **CodeWiki now nearly matches the baseline's recall (0.88
-  vs 0.91) while cutting 98% of the tokens** — that is the value proposition, stated
-  plainly. (CodeWiki actually *wins* recall on 34 of the 157 cases — mostly structural
-  `callees`/`impl`/`blast` tasks where grep over-reads or misses cross-file edges — and
-  loses on 28, almost all `feature` cases; see the weakness analysis.)
+  vs 0.92) while cutting 98% of the tokens** — that is the value proposition, stated
+  plainly. (Over the 155 scored cases CodeWiki *wins* recall on 30 — mostly structural
+  `callees`/`impl`/`blast` tasks where grep over-reads or misses cross-file edges — loses
+  on 29, almost all `feature` cases, and ties on the remaining 96; see the weakness
+  analysis.)
 
 - **No cherry-picking — cases where the baseline wins are kept.** The suite intentionally
   includes hard and expected-to-lose cases: ambiguous/overloaded names (`_parse` has 37
   same-name defs in zod; `build` has 24 defs in ripgrep) and `feature`-comprehension tasks
-  on large repos. There are **no UNSCORABLE cases in this run**: the two former graph-gap
-  cases (C# `EfRepository` blast, Go `Reconciler` impl) now resolve to real, non-empty,
-  graph-derived oracles after the type-reference and structural-interface fixes (see the
-  disclosure box below), so they are scored like any other case. CodeWiki verdicts across
-  the 157 cases: **128 PASS / 22 PARTIAL / 7 FAIL / 0 UNSCORABLE.**
+  on large repos. Two cases are deliberately **UNSCORABLE** — the C# `EfRepository` blast
+  and the Go `Reconciler` impl — and we keep them that way on purpose rather than score
+  CodeWiki against an answer key derived from its own newly-synthesized edges (the
+  circularity disclosure below explains why). Of the **157 cases, 155 are scored**;
+  CodeWiki verdicts: **125 PASS / 24 PARTIAL / 6 FAIL / 2 UNSCORABLE.**
 
-> **Disclosure — what changed since the prior report.** This run reflects a
-> recall-improvement code change plus two benchmark-coverage additions, all disclosed:
-> 1. **Overall recall rose 0.77 → 0.88** (baseline unchanged at ~0.91) from
->    recall-aggregation fixes: high-fanout `callers`/`callees`/`impact` now aggregate
->    across the resolved family instead of answering for a single node
->    (e.g. k8s `NewServer` 0.08 → 0.85, TS `createSourceFile` callers 0.43 → 0.86).
-> 2. **The two former UNSCORABLE cases are now scored.** The C# type-reference fix gives
->    `EfRepository` a real (test-file) blast radius and the Go structural-interface fix
->    gives `Reconciler` 232 graph implementers — so both have non-empty graph-derived
->    oracles now. Net effect on the recall mean is small; both are PASS.
+> **Disclosure — what changed, and the one win we deliberately do NOT claim.** This run
+> reflects a recall-improvement code change plus benchmark-coverage additions, all
+> disclosed — and one place where we deliberately decline to score a "win":
+> 1. **The legitimate, non-circular improvement: recall 0.770 → 0.883 (+0.113).** Measured
+>    on the **shared original cases** (the suite *excluding* the newly-added jellyfin large
+>    .NET tier), against the **original frozen oracles**, the recall-aggregation code fixes
+>    raised CodeWiki's mean recall from **0.770 to 0.883** with the baseline unchanged.
+>    These fixes make high-fanout `callers`/`callees`/`impact` aggregate across the
+>    resolved family instead of answering for a single node (e.g. k8s `NewServer`
+>    0.08 → 0.85, TS `createSourceFile` callers 0.43 → 0.86). This is a real improvement
+>    scored against an answer key CodeWiki did **not** author.
+> 2. **The two UNSCORABLE cases stay UNSCORABLE — on purpose, to avoid circularity.** The
+>    C# `EfRepository` blast and the Go `Reconciler` impl have **no source-grounded frozen
+>    oracle**: the only "ground truth" available would be derived from CodeWiki's *own*
+>    newly-synthesized C# type-reference / Go structural-`implements` edges. Scoring
+>    CodeWiki against an oracle built from its own answers would be circular, so we keep
+>    both cases UNSCORABLE (counted in the call/token totals, excluded from the recall
+>    mean) rather than book a self-graded win. To be clear, the underlying capabilities are
+>    **real** — CodeWiki's Go structural-`implements` resolution and C# type-reference
+>    edges do work, and they show up on the **source-grounded** cases (e.g. the C#
+>    `blast CatalogItem` and the .NET worked example in §4) — we simply will not claim a
+>    *scored* recall win on a self-derived answer key. An earlier draft of this report
+>    scored both cases as PASS off such self-derived oracles; that was reverted for
+>    integrity, the original frozen oracles were restored, and the harness re-run.
 > 3. **C# coverage was rebalanced and grown.** A duplicate C# `impl IAggregateRoot` case
 >    (`x_cs_impl_aggregateroot`, byte-identical to `base_impl_aggregateroot`) was replaced
 >    with a genuinely distinct `blast CatalogItem` case (a domain entity used via generic
->    `IReadRepository<T>` + specifications — it exercises the C# type-reference fix), and a
->    **6-case large .NET tier on jellyfin (2,065 .cs)** was added. The dedup keeps the C#
->    case count honest (replace, not delete); jellyfin gives C# a true large-repo data
->    point. C# recall (24 cases incl. jellyfin) is 0.83; eShopOnWeb-only is 0.87.
+>    `IReadRepository<T>` + specifications — it exercises the C# type-reference fix, and is
+>    source-grounded so it *is* scored, PASS), and a **6-case large .NET tier on jellyfin
+>    (2,065 .cs)** was added. The dedup keeps the C# case count honest (replace, not
+>    delete); jellyfin gives C# a true large-repo data point. C# recall (24 cases, 23
+>    scored incl. jellyfin) is 0.82; eShopOnWeb-only is 0.87.
 
 ### Weakness analysis (what the recall gap is made of)
 
-The remaining 0.88 vs 0.91 recall delta is now small and concentrates in **one** dominant
+The remaining 0.88 vs 0.92 recall delta is now small and concentrates in **one** dominant
 limitation plus a couple of residual hard cases — all tracked, none hidden:
 
 1. **Context keyword-latching is now the dominant gap.** The `feature` archetype's
@@ -201,18 +220,22 @@ limitation plus a couple of residual hard cases — all tracked, none hidden:
    several zod/java feature cases all score low). This is the main thing left to close.
 2. **Very high-fanout blast radius gets truncated.** `impact` returns a bounded,
    ranked slice; on an entity with hundreds of direct dependants (jellyfin `BaseItem`,
-   267 dependants) it can miss part of the frozen top-N must-contain core (0.38 here) even
+   267 dependants) it can miss part of the frozen top-N must-contain core (0.31 here) even
    though it still answers correctly for the slice it returns at 98% fewer tokens.
 3. **Residual overloaded-name cases.** A few bare names with dozens of same-name defs
    (zod `parse` hooks, java `read`, ripgrep `build`) still under-recall when the oracle
    aggregates across a family the tool ranks differently. The aggregation fix shrank this
    substantially but did not eliminate it.
 
-The recall-aggregation fix **closed** the two limitations the prior report led with — the
-Go structural-`implements` gap and the C# type-usage-reference gap — which is why those
-two cases moved from UNSCORABLE to PASS and why C#/Go recall rose. No spin: the value
-proposition is **"near-baseline answers (0.88 vs 0.91) at ~2% of the tokens,"** and the
-small residual delta is the cost, concentrated in `feature` comprehension.
+The code fixes addressed the two limitations the prior report led with — the Go
+structural-`implements` gap and the C# type-usage-reference gap — and those capabilities
+now demonstrably work on **source-grounded** cases (the C# `blast CatalogItem`, the §4
+.NET worked example, and the broad C#/Go recall lift). What we do **not** do is convert
+the two self-derived `EfRepository`/`Reconciler` cases into scored PASSes — those stay
+UNSCORABLE on purpose (see the disclosure above) to keep the answer key independent of
+CodeWiki's own edges. No spin: the value proposition is **"near-baseline answers (0.88 vs
+0.92) at ~2% of the tokens,"** and the small residual delta is the cost, concentrated in
+`feature` comprehension.
 
 ---
 

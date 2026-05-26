@@ -19,7 +19,7 @@ Measured across **11 real-world repos and 157 tasks** (Python, Rust, TypeScript,
 JavaScript, C#, Java, C++, Go — from 83-file libraries up to the 2k-file jellyfin .NET
 server, the 17k-file kubernetes, and the 39k-file TypeScript compiler), CodeWiki uses
 **~74% fewer tool-calls and ~98% fewer tokens** than grepping and reading files, at
-**near-identical recall (0.88 vs 0.91)**. 100% local, single static binary — no cloud,
+**near-identical recall (0.88 vs 0.92)**. 100% local, single static binary — no cloud,
 no telemetry, no API keys.
 
 ---
@@ -92,43 +92,46 @@ methodology, recall caveat, and raw data: [`benchmark/README.md`](benchmark/READ
 | C++ | nlohmann/json | 499 | 69% | **98%** |
 | Go | gin-gonic/gin | 99 | 75% | **96%** |
 | TypeScript | colinhacks/zod | 408 | 62% | **99%** |
-| Rust | BurntSushi/ripgrep | 101 | 74% | **98%** |
+| Rust | BurntSushi/ripgrep | 101 | 75% | **98%** |
 | Python | pallets/flask | 83 | 65% | **95%** |
 | Java | google/gson | 262 | 77% | **95%** |
 | JavaScript | expressjs/express | 141 | 60% | **95%** |
 | C# | dotnet-architecture/eShopOnWeb | 269 | 78% | **79%** |
 | **Overall** | **157 cases / 11 repos** | — | **74%** | **98%** |
 
-Across all 157 cases CodeWiki uses **74% fewer tool-calls and 98% fewer tokens** than
-grep+read, saving **~$16.80** of input tokens over the run. The token win is so large
-because the baseline reads whole candidate files while CodeWiki returns a small, ranked,
-structurally-resolved slice. (C#'s 79% on eShopOnWeb is a small-repo artefact: its files
-are already cheap to read, so there is little to save — on the large .NET repo jellyfin
-the same six archetypes hit **98%**; recall stays on par, 0.87 vs 0.92.)
+Across all 157 cases (155 scored) CodeWiki uses **74% fewer tool-calls and 98% fewer
+tokens** than grep+read, saving **~$16.98** of input tokens over the run. The token win is
+so large because the baseline reads whole candidate files while CodeWiki returns a small,
+ranked, structurally-resolved slice. (C#'s 79% on eShopOnWeb is a small-repo artefact: its
+files are already cheap to read, so there is little to save — on the large .NET repo
+jellyfin the same six archetypes hit **98%**; recall stays on par, 0.87 vs 0.94.)
 
 **The saving grows with repo size.** CodeWiki's per-query answer stays bounded
 (~0.6–1.4k tokens) no matter how big the codebase, while the grep+read baseline explodes:
 
 | Size tier | Repos | Avg CW tokens/query | Avg baseline tokens/query | Token reduction |
 |-----------|-------|--------------------:|--------------------------:|:---------------:|
-| Small (<300 files) | flask, express, gin, eShopOnWeb, ripgrep | 611 | 15,703 | **96%** |
-| Medium (300–700) | zod, gson, json | 941 | 51,282 | **98%** |
-| Large .NET (~2k .cs) | jellyfin | 1,376 | 69,365 | **98%** |
-| Enterprise (>15k) | kubernetes (17k), microsoft/TypeScript (39k) | 915 | **106,139** | **99%** |
+| Small (<300 files) | flask, express, gin, eShopOnWeb, ripgrep | 601 | 16,142 | **96%** |
+| Medium (300–700) | zod, gson, json | 935 | 51,079 | **98%** |
+| Large .NET (~2k .cs) | jellyfin | 1,442 | 69,365 | **98%** |
+| Enterprise (>15k) | kubernetes (17k), microsoft/TypeScript (39k) | 865 | **108,573** | **99%** |
 
 On a 17k–39k-file monorepo a single scoped grep plus the file reads it forces costs
-**~106k tokens per query**; CodeWiki answers the same task in ~900. The biggest codebases
+**~109k tokens per query**; CodeWiki answers the same task in ~900. The biggest codebases
 — where agent token budgets hurt most — are where CodeWiki saves the most.
 
 **Honest recall note.** CodeWiki now **nearly matches** the baseline's completeness while
-keeping the token/call win: mean recall is **0.88 for CodeWiki vs 0.91 for the grep+read
-baseline**. The oracle is not rigged for CodeWiki — the baseline still *edges* recall, and
-CodeWiki delivers *near-baseline answers at ~2% of the tokens*. CodeWiki actually *wins*
-recall on 34 of 157 cases (structural `callees`/`impl`/`blast` tasks) and loses on 28,
-almost all `feature`-comprehension queries — the residual gap is concentrated there. The
-suite keeps hard and expected-to-lose cases (overloaded names, deep `feature` tasks,
-high-fanout blast radius) — no cherry-picking. Full methodology, weakness analysis,
-per-case breakdown, and the disclosure of what changed since the prior report:
+keeping the token/call win: mean recall is **0.88 for CodeWiki vs 0.92 for the grep+read
+baseline** (0.877 vs 0.921 over the 155 scored cases). The oracle is not rigged for
+CodeWiki — the baseline still *edges* recall, and CodeWiki delivers *near-baseline answers
+at ~2% of the tokens*. CodeWiki *wins* recall on 30 of the 155 scored cases (structural
+`callees`/`impl`/`blast` tasks), loses on 29 (almost all `feature`-comprehension queries —
+the residual gap is concentrated there), and ties on the rest. Two cases (C# `EfRepository`
+blast, Go `Reconciler` impl) are kept **UNSCORABLE** on purpose — we will not score
+CodeWiki against an oracle derived from its own newly-synthesized edges. The suite keeps
+hard and expected-to-lose cases (overloaded names, deep `feature` tasks, high-fanout blast
+radius) — no cherry-picking. Full methodology, weakness analysis, per-case breakdown, and
+the disclosure of what changed since the prior report:
 [`benchmark/README.md`](benchmark/README.md).
 
 The savings compound: the index is built once and maintained automatically at a per-edit
