@@ -622,11 +622,126 @@ impl QueryHandle for StorageImpl {
             Ok::<_, CodeWikiError>(())
         })?;
 
-        // Cap nodes by degree when the union exceeds the budget. Family roots
-        // are always retained so the focal symbols never get dropped.
+        // ---- Provenance-aware de-bloat (regression fix) ----
+        //
+        // The reverse-reach impact traversal pulls in three classes of node:
+        //   (A) ANSWER nodes — genuine dependants/implementers reached via a
+        //       calls/references/implements/extends/instantiates/uses edge.
+        //       These ARE the answer for an `impl`/`blast` query and must NEVER
+        //       be dropped to make room for noise.
+        //   (B) pure-marker nodes — `file` / `namespace` nodes that only appear
+        //       because a file imports/contains a dependent. They carry no
+        //       information for impact and are always safe to strip.
+        //   (C) context nodes — everything else (e.g. contains-expansion
+        //       children, import-only nodes). Kept only if budget remains.
+        //
+        // We classify each node by the edges in the merged subgraph: a node is
+        // an ANSWER node when it is the SOURCE of an answer-kind edge whose
+        // target is in the subgraph (i.e. it genuinely depends on a member).
+        // Family roots are always answer nodes. Then we drop class (B) outright
+        // and cap class (C) by degree, but keep ALL of class (A).
+        let root_set: std::collections::HashSet<String> = roots.iter().cloned().collect();
+
+        // Edge kinds that mark a real dependency relationship (the answer).
+        let is_answer_edge = |k: &codewiki_core::EdgeKind| {
+            matches!(
+                k,
+                codewiki_core::EdgeKind::Calls
+                    | codewiki_core::EdgeKind::References
+                    | codewiki_core::EdgeKind::Implements
+                    | codewiki_core::EdgeKind::Extends
+                    | codewiki_core::EdgeKind::Instantiates
+                    | codewiki_core::EdgeKind::Uses
+            )
+        };
+        let mut answer_ids: std::collections::HashSet<String> = root_set.clone();
+        // Reverse adjacency over answer edges: target -> [sources that depend on it].
+        // Used to BFS distance-from-root so DIRECT (depth-1) dependants outrank
+        // transitive (depth-2+) ones when the budget forces a choice — the direct
+        // implementers/callers are the answer for impl/blast; deep transitive
+        // nodes are bloat that a depth-3 traversal would otherwise pile on.
+        let mut rev_adj: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for edge in &all_edges {
+            if is_answer_edge(&edge.kind)
+                && all_nodes.contains_key(&edge.source_id)
+                && all_nodes.contains_key(&edge.target_id)
+            {
+                // The SOURCE depends on the target → source is a dependant/
+                // implementer (an answer node). Roots are already included.
+                answer_ids.insert(edge.source_id.clone());
+                rev_adj
+                    .entry(edge.target_id.clone())
+                    .or_default()
+                    .push(edge.source_id.clone());
+            }
+        }
+
+        // Authoritative DIRECT-dependant fetch. The reverse-reach traversal only
+        // records the edge that FIRST reached a node, so a node pulled in via a
+        // weak edge (e.g. a depth-2 `references`) loses its genuine 1-hop
+        // `implements`/`extends`/`calls` edge to the focal — leaving real
+        // implementers misclassified as transitive. Re-query each root's
+        // incoming answer-kind edges directly so every genuine direct dependant
+        // is classified as a distance-1 answer node regardless of traversal
+        // edge-recording order. Bounded: one edge query per root.
+        const ANSWER_EDGE_KINDS: &[codewiki_core::EdgeKind] = &[
+            codewiki_core::EdgeKind::Calls,
+            codewiki_core::EdgeKind::References,
+            codewiki_core::EdgeKind::Implements,
+            codewiki_core::EdgeKind::Extends,
+            codewiki_core::EdgeKind::Instantiates,
+            codewiki_core::EdgeKind::Uses,
+        ];
+        self.with_conn(|conn| {
+            for root_id in &roots {
+                let incoming = eq::get_incoming_edges(conn, root_id, Some(ANSWER_EDGE_KINDS))?;
+                for edge in incoming {
+                    if all_nodes.contains_key(&edge.source_id) {
+                        answer_ids.insert(edge.source_id.clone());
+                        rev_adj
+                            .entry(root_id.clone())
+                            .or_default()
+                            .push(edge.source_id.clone());
+                    }
+                }
+            }
+            Ok::<_, CodeWikiError>(())
+        })?;
+
+        // BFS distance from the roots over answer edges (roots = 0). Nodes not
+        // reached this way get a large sentinel distance (transitive/context).
+        let mut distance: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        let mut queue: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+        for r in &roots {
+            distance.insert(r.clone(), 0);
+            queue.push_back(r.clone());
+        }
+        while let Some(cur) = queue.pop_front() {
+            let d = distance[&cur];
+            if let Some(deps) = rev_adj.get(&cur) {
+                for dep in deps {
+                    if !distance.contains_key(dep) {
+                        distance.insert(dep.clone(), d + 1);
+                        queue.push_back(dep.clone());
+                    }
+                }
+            }
+        }
+        let dist_of = |id: &String| -> u32 { distance.get(id).copied().unwrap_or(u32::MAX) };
+
+        // (B) Drop pure file/namespace markers (never answer nodes for impact).
+        // A root is never dropped even if it were such a kind (defensive).
+        all_nodes.retain(|id, n| {
+            root_set.contains(id) || !matches!(n.kind, NodeKind::File | NodeKind::Namespace)
+        });
+
+        // (C) Cap remaining nodes when over budget. Priority: roots, then answer
+        // nodes ordered by distance-from-root (direct dependants first), then
+        // context. Ties broken by degree desc then id. ALL answer nodes are kept
+        // even if they exceed `cap` — only context is subject to the budget.
         if all_nodes.len() > cap {
-            let root_set: std::collections::HashSet<&String> = roots.iter().collect();
-            let mut scored: Vec<(String, u64)> = self.with_conn(|conn| {
+            let degrees: std::collections::HashMap<String, u64> = self.with_conn(|conn| {
                 Ok::<_, CodeWikiError>(
                     all_nodes
                         .keys()
@@ -637,20 +752,51 @@ impl QueryHandle for StorageImpl {
                         .collect(),
                 )
             })?;
-            // Roots first (by giving them max priority), then by degree desc.
-            scored.sort_by(|a, b| {
-                let a_root = root_set.contains(&a.0);
-                let b_root = root_set.contains(&b.0);
-                b_root
-                    .cmp(&a_root)
-                    .then_with(|| b.1.cmp(&a.1))
-                    .then_with(|| a.0.cmp(&b.0))
+            let mut ids: Vec<String> = all_nodes.keys().cloned().collect();
+            ids.sort_by(|a, b| {
+                let rank = |id: &String| -> u8 {
+                    if root_set.contains(id) {
+                        0
+                    } else if answer_ids.contains(id) {
+                        1
+                    } else {
+                        2
+                    }
+                };
+                rank(a)
+                    .cmp(&rank(b))
+                    .then_with(|| dist_of(a).cmp(&dist_of(b)))
+                    .then_with(|| {
+                        degrees
+                            .get(b)
+                            .copied()
+                            .unwrap_or(0)
+                            .cmp(&degrees.get(a).copied().unwrap_or(0))
+                    })
+                    .then_with(|| a.cmp(b))
             });
-            let keep: std::collections::HashSet<String> =
-                scored.into_iter().take(cap).map(|(id, _)| id).collect();
+            // Never truncate below the number of DIRECT (1-hop) dependants —
+            // those are the genuine implementers/callers an impl/blast query
+            // asks for and must all survive even if they exceed `cap`. Deeper
+            // transitive answer nodes (distance >= 2) and pure context ARE
+            // subject to the budget, so a depth-3 traversal can't pile on the
+            // whole transitive closure and crowd the direct answers out.
+            let direct_answer_count = all_nodes
+                .keys()
+                .filter(|id| !root_set.contains(*id) && dist_of(id) <= 1)
+                .count();
+            let keep_n = std::cmp::max(
+                cap,
+                (roots.len() + direct_answer_count).min(all_nodes.len()),
+            );
+            let keep: std::collections::HashSet<String> = ids.into_iter().take(keep_n).collect();
             all_nodes.retain(|id, _| keep.contains(id));
-            all_edges.retain(|e| keep.contains(&e.source_id) && keep.contains(&e.target_id));
         }
+
+        // Re-sync edges to surviving nodes.
+        all_edges.retain(|e| {
+            all_nodes.contains_key(&e.source_id) && all_nodes.contains_key(&e.target_id)
+        });
 
         Ok(AggregatedImpact {
             subgraph: Subgraph {
@@ -3092,12 +3238,173 @@ mod tests {
             names
         );
 
-        // Cap must bound the node count (roots are always retained).
-        let capped = storage.get_impact_aggregated("save", 3, 2).unwrap();
+        // Cap is PROVENANCE-AWARE: it bounds context/transitive nodes but must
+        // NEVER drop a DIRECT (1-hop) dependant — those are the answer for an
+        // impl/blast query. With a tight cap, both direct dependants survive.
+        let capped = storage.get_impact_aggregated("save", 3, 1).unwrap();
+        let capped_names: std::collections::HashSet<&str> = capped
+            .subgraph
+            .nodes
+            .values()
+            .map(|n| n.name.as_str())
+            .collect();
         assert!(
-            capped.subgraph.nodes.len() <= 2,
-            "node cap must bound the impact subgraph; got {}",
-            capped.subgraph.nodes.len()
+            capped_names.contains("depA") && capped_names.contains("depB"),
+            "direct dependants must survive even a tight cap; got {:?}",
+            capped_names
+        );
+    }
+
+    /// Provenance-aware de-bloat (regression guard). Verifies that:
+    ///   - an `impl`-style query KEEPS implementer classes (implements/extends),
+    ///   - a `blast`-style query KEEPS dependant methods (calls/references),
+    ///   - file / namespace marker nodes are DROPPED,
+    ///   - pure context (contains-only / import-only) is dropped under budget,
+    ///   - genuine answer nodes are never sacrificed to the cap.
+    #[test]
+    fn impact_keeps_answer_nodes_drops_markers_and_context() {
+        use crate::queries::edges::insert_edge;
+        use crate::queries::nodes::insert_node;
+        use codewiki_core::{Edge, EdgeKind};
+
+        let storage = make_storage();
+
+        let mk = |id: &str, name: &str, kind: NodeKind, file: &str| Node {
+            id: id.to_string(),
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind,
+            language: Language::Rust,
+            file_path: file.to_string(),
+            start_line: 1,
+            end_line: 5,
+            ..Default::default()
+        };
+
+        storage
+            .with_conn(|conn| {
+                // Focal interface + two genuine implementers (implements/extends).
+                insert_node(
+                    conn,
+                    &mk("iface", "Shape", NodeKind::Interface, "src/shape.rs"),
+                )?;
+                insert_node(
+                    conn,
+                    &mk("impl1", "Circle", NodeKind::Class, "src/circle.rs"),
+                )?;
+                insert_node(
+                    conn,
+                    &mk("impl2", "Square", NodeKind::Class, "src/square.rs"),
+                )?;
+                // A genuine dependant METHOD (calls the focal) — the blast answer.
+                insert_node(conn, &mk("dep", "render", NodeKind::Method, "src/draw.rs"))?;
+                // Pure-marker nodes that must be dropped.
+                insert_node(
+                    conn,
+                    &mk("filemark", "shape.rs", NodeKind::File, "src/shape.rs"),
+                )?;
+                insert_node(
+                    conn,
+                    &mk("nsmark", "geometry", NodeKind::Namespace, "src/shape.rs"),
+                )?;
+
+                // implements/extends → answer (impl)
+                insert_edge(
+                    conn,
+                    &Edge {
+                        id: "ei1".into(),
+                        source_id: "impl1".into(),
+                        target_id: "iface".into(),
+                        kind: EdgeKind::Implements,
+                        ..Default::default()
+                    },
+                )?;
+                insert_edge(
+                    conn,
+                    &Edge {
+                        id: "ei2".into(),
+                        source_id: "impl2".into(),
+                        target_id: "iface".into(),
+                        kind: EdgeKind::Extends,
+                        ..Default::default()
+                    },
+                )?;
+                // calls → answer (blast)
+                insert_edge(
+                    conn,
+                    &Edge {
+                        id: "ec".into(),
+                        source_id: "dep".into(),
+                        target_id: "iface".into(),
+                        kind: EdgeKind::Calls,
+                        ..Default::default()
+                    },
+                )?;
+                // file/namespace markers attach via non-answer edges (imports/contains).
+                insert_edge(
+                    conn,
+                    &Edge {
+                        id: "em1".into(),
+                        source_id: "filemark".into(),
+                        target_id: "iface".into(),
+                        kind: EdgeKind::Imports,
+                        ..Default::default()
+                    },
+                )?;
+                insert_edge(
+                    conn,
+                    &Edge {
+                        id: "em2".into(),
+                        source_id: "nsmark".into(),
+                        target_id: "iface".into(),
+                        kind: EdgeKind::Contains,
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+
+        // Tight cap (1) must still keep ALL genuine answer nodes (3 direct
+        // dependants) and the root, and DROP the file/namespace markers.
+        let agg = storage.get_impact_aggregated("Shape", 3, 1).unwrap();
+        let names: std::collections::HashSet<&str> = agg
+            .subgraph
+            .nodes
+            .values()
+            .map(|n| n.name.as_str())
+            .collect();
+
+        // impl answer: implementer classes kept.
+        assert!(
+            names.contains("Circle") && names.contains("Square"),
+            "implementer classes (implements/extends) must be kept; got {:?}",
+            names
+        );
+        // blast answer: dependant method kept.
+        assert!(
+            names.contains("render"),
+            "dependant method (calls) must be kept; got {:?}",
+            names
+        );
+        // markers dropped.
+        assert!(
+            !names.contains("shape.rs"),
+            "file marker node must be dropped; got {:?}",
+            names
+        );
+        assert!(
+            !names.contains("geometry"),
+            "namespace marker node must be dropped; got {:?}",
+            names
+        );
+
+        // No File/Namespace kind survives in the subgraph.
+        assert!(
+            agg.subgraph
+                .nodes
+                .values()
+                .all(|n| !matches!(n.kind, NodeKind::File | NodeKind::Namespace)),
+            "no file/namespace marker may remain in the impact subgraph"
         );
     }
 
