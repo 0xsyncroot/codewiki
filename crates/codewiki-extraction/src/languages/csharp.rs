@@ -12,6 +12,12 @@ use std::collections::HashSet;
 
 pub struct CSharpExtractor;
 
+/// Sentinel class name the Razor extractor wraps `@code { … }` bodies in before
+/// delegating to this C# extractor (`languages/razor.rs`). That wrapper node is
+/// intentionally dropped from the persisted batch, so refs must never anchor to
+/// it. Kept in sync with the identical literal in `razor.rs`.
+const RAZOR_CODE_BLOCK_WRAPPER: &str = "__RazorCodeBlock__";
+
 /// C# built-in / primitive type names and ubiquitous BCL wrappers that carry no
 /// useful blast-radius signal. Type-usage `references` edges to these are
 /// dropped so impact/blast over a real domain type isn't drowned in `string` /
@@ -222,6 +228,21 @@ fn emit_type_usage_refs(
     kind: &NodeKind,
     from_id: &str,
 ) {
+    // The Razor extractor wraps `@code { … }` bodies in a synthetic
+    // `class __RazorCodeBlock__ { … }` before delegating to this C# extractor,
+    // then DROPS that wrapper node from the batch (languages/razor.rs forwards
+    // the inner members but skips the wrapper class itself). Anchoring
+    // type-usage refs to the wrapper's node id would therefore reference a node
+    // that is never persisted, orphaning the ref and tripping the
+    // `unresolved_refs.from_node_id → nodes.id` FK in the bulk-init path
+    // (rolling back the whole batch). The wrapper is the C# extractor's only
+    // anchor for `@code`-level field/property types, so we simply skip type-usage
+    // refs for it; method-level `calls` refs (anchored to real method nodes that
+    // ARE forwarded) are unaffected. See RAZOR_CODE_BLOCK_WRAPPER.
+    if type_name == RAZOR_CODE_BLOCK_WRAPPER {
+        return;
+    }
+
     let src = ctx.source.as_bytes();
     // The member body is the (last) `declaration_list` child. (A class also has
     // an outer `declaration_list` only at namespace level — here `node` is the
@@ -840,6 +861,88 @@ namespace App {
         assert_eq!(
             widget_ref.from_node_id, consumer.id,
             "type-usage ref source must be the enclosing type node"
+        );
+    }
+
+    // ── Bulk-insert FK invariant (regression for the C# index break) ──────────
+    //
+    // The bulk-init store path enforces `unresolved_refs.from_node_id → nodes.id`
+    // as a SQLite FK; an orphaned `from_node_id` rolls back the whole batch and
+    // collapses the index. Every ref a batch emits MUST anchor to a node that is
+    // actually present in that SAME batch. This invariant is what the original
+    // unit tests missed (they checked ref names, not the FK relationship).
+    fn assert_no_orphan_refs(batch: &codewiki_core::ExtractionBatch, ctx: &str) {
+        let ids: std::collections::HashSet<&str> =
+            batch.nodes.iter().map(|n| n.id.as_str()).collect();
+        for r in &batch.unresolved_refs {
+            assert!(
+                ids.contains(r.from_node_id.as_str()),
+                "{ctx}: orphan ref from_node_id={} (kind={}, name={}) not in batch node set \
+                 — would trip the unresolved_refs FK and roll back the batch",
+                r.from_node_id,
+                r.reference_kind,
+                r.reference_name
+            );
+        }
+    }
+
+    #[test]
+    fn csharp_no_orphan_refs_plain_class() {
+        let source = r#"
+namespace App {
+    public class OrderService {
+        private readonly OrderRepository _repo;
+        public IList<Order> Orders { get; set; }
+        public Customer Find(int id, Address addr) { return null; }
+        public OrderService(IRepository<Order> repo) { }
+    }
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".cs").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        assert_no_orphan_refs(&batch, "plain C# class");
+    }
+
+    // The exact bug: a Blazor `.razor` `@code { … }` block is wrapped in a
+    // synthetic `class __RazorCodeBlock__ { … }` and delegated to this C#
+    // extractor; razor.rs then DROPS the wrapper node. Type-usage refs must NOT
+    // anchor to that dropped wrapper, or the bulk insert FK-fails on real repos
+    // (e.g. eShopOnWeb), zeroing all C# calls/implements/references edges.
+    #[test]
+    fn razor_code_block_emits_no_orphan_refs() {
+        let source = r#"@page "/edit"
+@using Microsoft.eShopWeb.Models
+
+<h1>Edit</h1>
+
+@code {
+    private CatalogItem _item;
+    public IEnumerable<CatalogBrand> Brands { get; set; }
+
+    private void Save(CatalogType type) {
+        _item = new CatalogItem();
+    }
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".razor").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        // The whole point: no ref may dangle, AND the synthetic wrapper must not
+        // appear as a node (razor.rs drops it).
+        assert_no_orphan_refs(&batch, "Blazor @code block");
+        assert!(
+            !batch
+                .nodes
+                .iter()
+                .any(|n| n.name == super::RAZOR_CODE_BLOCK_WRAPPER),
+            "the synthetic Razor wrapper class must never be persisted as a node"
+        );
+        // Real method nodes inside @code ARE forwarded, so their calls refs still
+        // anchor correctly — the index keeps its signal where a real node exists.
+        assert!(
+            batch.nodes.iter().any(|n| n.name == "Save"),
+            "the @code method node should be forwarded by the Razor delegation"
         );
     }
 
