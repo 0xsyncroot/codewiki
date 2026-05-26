@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# run-savings.sh — CodeWiki agent-savings BEFORE/AFTER harness (Wave 0, D2 design).
+# run-savings.sh — CodeWiki agent-savings BEFORE/AFTER harness (canonical, unified).
 #
-# Supersedes run-dotnet.sh. For each case in cases.tsv (6 archetypes x 8 languages)
-# it measures, on a COLD index, both:
+# THE single savings runner. It drives every case in the canonical benchmark/cases.tsv
+# (~139 cases over 8 real repos, one per language) and measures, on a COLD index, both:
 #   - CodeWiki: tool-call count, output bytes (tokens = bytes/4), recall vs the frozen
-#     oracle (benchmark/oracle/<lang>_<arch>.json), scored by lib/score.py.
+#     oracle (benchmark/oracle/<lang>_<case_id>.json), scored by lib/score.py.
 #   - Baseline: a grep + read-N-oracle-files agent, same metrics, scored on the same
 #     oracle so recall is comparable.
-# Non-deterministic ranked tools (context for `feature`, explore for the MCP-coverage
-# probe) are measured median-of-3.
+# It is the ONLY savings runner: the per-repo baseline source maps for every repo are
+# folded into the single SRC map below (covering all 8 per-language repos + 2 enterprise
+# repos), so there are no per-batch sibling runners to keep in sync.
+#
+# Each case row carries an 8th `case_id` column; the oracle is resolved as
+# oracle/<lang>_<case_id>.json (so multiple cases sharing an archetype within a language
+# never collide). Build the oracles with lib/build_oracle_extra.py (the shared,
+# language-agnostic builder) against this same cases.tsv.
 #
 # IMPORTANT — measured over MCP, NOT the CLI. Every CodeWiki tool call goes through the
 # MCP stdio server (`codewiki serve --mcp`, via lib/mcp_call.py): initialize ->
@@ -26,21 +32,26 @@
 # call/token comparison, so the per-archetype reduction stays apples-to-apples vs the
 # baseline's same task. node is deterministic; explore is median-of-3.
 #
+# Recall means EXCLUDE empty-oracle UNSCORABLE cases (deliberate honest graph-gap cases)
+# so one expected-failure case doesn't skew recall; those rows STILL count in the
+# call/token totals.
+#
 # Usage:
-#   CW=/tmp/codewiki-before-opt benchmark/run-savings.sh                 # -> results-savings.tsv
-#   CW=/tmp/codewiki-before-opt OUT=results-savings-before.tsv \
-#       benchmark/run-savings.sh                                          # BEFORE capture
-#   NO_CLONE=1 ...   skip git clone (use repos already in $BENCH_ROOT)
-#   NO_REINDEX=1 ... skip cold re-index (reuse existing .codewiki)
+#   benchmark/run-savings.sh                              # cold clone+index -> results-savings.tsv
+#   NO_CLONE=1 ...     skip git clone (use repos already in $BENCH_ROOT)
+#   NO_REINDEX=1 ...   skip cold re-index (reuse existing .codewiki)
+#   CW=/tmp/codewiki-before-opt OUT=results-savings-before.tsv benchmark/run-savings.sh   # BEFORE capture
 #
 # Env:
-#   CW          CodeWiki binary (default: codewiki). For BEFORE: /tmp/codewiki-before-opt
+#   CW          CodeWiki binary (default: ../target/release/codewiki if present, else codewiki)
 #   BENCH_ROOT  repo checkout root (default: /tmp/bench)
 #   OUT         output TSV basename under benchmark/ (default: results-savings.tsv)
 
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-CW="${CW:-codewiki}"
+if [ -z "${CW:-}" ]; then
+  if [ -x "$HERE/../target/release/codewiki" ]; then CW="$HERE/../target/release/codewiki"; else CW="codewiki"; fi
+fi
 BENCH_ROOT="${BENCH_ROOT:-/tmp/bench}"
 OUT_NAME="${OUT:-results-savings.tsv}"
 OUT="$HERE/$OUT_NAME"
@@ -51,38 +62,31 @@ SCORE="python3 $HERE/lib/score.py"
 MCP="python3 $HERE/lib/mcp_call.py"
 PRICE_PER_MTOK="${PRICE_PER_MTOK:-3.00}"   # Claude Sonnet input $/1M tokens
 
-# repo -> github slug (for cold clone)
+# repo -> github slug (for cold clone). 8 per-language repos (small/medium tier) PLUS
+# 2 large/enterprise-tier repos (kubernetes ~17k files, microsoft/TypeScript ~39k files)
+# that substantiate the enterprise size tier and the "saving grows with repo size" claim.
 declare -A SLUG=(
   [flask]=pallets/flask [ripgrep]=BurntSushi/ripgrep [express]=expressjs/express
   [zod]=colinhacks/zod [gson]=google/gson [json]=nlohmann/json
   [gin]=gin-gonic/gin [eShopOnWeb]=dotnet-architecture/eShopOnWeb
+  [kubernetes]=kubernetes/kubernetes [TypeScript]=microsoft/TypeScript
 )
 # repo -> source subdir(s) the baseline agent would grep (avoids vendored/test noise
-# dominating the grep byte count; mirrors what a real agent scopes to).
+# dominating the grep byte count; mirrors what a real agent scopes to). For the two
+# enterprise repos the baseline is scoped to the production source tree (k8s pkg/, TS
+# src/) exactly as a real agent would — NOT vendor/ or generated test baselines.
 declare -A SRC=(
   [flask]="src" [ripgrep]="crates" [express]="lib" [zod]="packages/zod/src"
   [gson]="gson/src/main" [json]="include" [gin]="." [eShopOnWeb]="src"
+  [kubernetes]="pkg" [TypeScript]="src"
 )
 
 bytes() { wc -c | tr -d ' '; }
-filebytes() {  # sum byte size of the given files (resolved by basename under repo)
-  local repo="$1"; shift; local total=0 f hit
-  for f in "$@"; do
-    [ -z "$f" ] && continue
-    hit=$(find "$BENCH_ROOT/$repo" -name "$f" -type f 2>/dev/null | head -1)
-    [ -n "$hit" ] && total=$(( total + $(wc -c < "$hit") ))
-  done
-  echo "$total"
-}
 median3() { printf '%s\n' "$1" "$2" "$3" | sort -n | sed -n 2p; }
-
 # JSON-encode a bash string into a quoted JSON scalar (handles quotes/backslashes).
 jstr() { python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1"; }
 # One MCP tool call over stdio; prints the tool's text payload.
-jsonq() {  # bin dir tool argsjson
-  $MCP --bin "$1" --path "$2" --tool "$3" --args "$4" 2>/dev/null
-}
-
+jsonq() { $MCP --bin "$1" --path "$2" --tool "$3" --args "$4" 2>/dev/null; }
 oracle_files() {  # echo the required_files of an oracle (space-separated)
   python3 -c "import json,sys;print(' '.join(json.load(open(sys.argv[1])).get('required_files',[])))" "$1"
 }
@@ -111,22 +115,12 @@ clone_and_index() {
 # ------- CW side per archetype: writes output to $6 (CWOUT), prints "<calls>\t<bytes>"
 run_cw() {
   local lang="$1" repo="$2" arch="$3" symbol="$4" feature="$5" CWOUT="$6"
-  local dir="$BENCH_ROOT/$repo"
-  local calls=0
-  : > "$CWOUT"
-
-  # ALL archetypes are measured over the MCP stdio path (NOT the CLI): the agent-savings
-  # optimisations (relative-path rendering, node include* options, context density) live
-  # only in the MCP tool renderers, so MCP is the surface that BEFORE/AFTER must compare.
+  local dir="$BENCH_ROOT/$repo"; local calls=0; : > "$CWOUT"
   case "$arch" in
-    locate)
-      jsonq "$CW" "$dir" codewiki_search "{\"query\":$(jstr "$symbol"),\"limit\":10}" > "$CWOUT"; calls=1 ;;
-    callers)
-      jsonq "$CW" "$dir" codewiki_callers "{\"symbol\":$(jstr "$symbol"),\"limit\":20}" > "$CWOUT"; calls=1 ;;
-    callees)
-      jsonq "$CW" "$dir" codewiki_callees "{\"symbol\":$(jstr "$symbol"),\"limit\":20}" > "$CWOUT"; calls=1 ;;
-    impl|blast)
-      jsonq "$CW" "$dir" codewiki_impact "{\"symbol\":$(jstr "$symbol"),\"depth\":3}" > "$CWOUT"; calls=1 ;;
+    locate)  jsonq "$CW" "$dir" codewiki_search "{\"query\":$(jstr "$symbol"),\"limit\":10}" > "$CWOUT"; calls=1 ;;
+    callers) jsonq "$CW" "$dir" codewiki_callers "{\"symbol\":$(jstr "$symbol"),\"limit\":20}" > "$CWOUT"; calls=1 ;;
+    callees) jsonq "$CW" "$dir" codewiki_callees "{\"symbol\":$(jstr "$symbol"),\"limit\":20}" > "$CWOUT"; calls=1 ;;
+    impl|blast) jsonq "$CW" "$dir" codewiki_impact "{\"symbol\":$(jstr "$symbol"),\"depth\":3}" > "$CWOUT"; calls=1 ;;
     feature)
       # context is ranked/non-deterministic -> median-of-3 by output bytes; keep the
       # median run's text for scoring.
@@ -137,22 +131,17 @@ run_cw() {
       jsonq "$CW" "$dir" codewiki_context "{\"task\":$(jstr "$feature")}" > "$t3"
       b1=$(wc -c < "$t1"); b2=$(wc -c < "$t2"); b3=$(wc -c < "$t3")
       med=$(median3 "$b1" "$b2" "$b3")
-      if [ "$med" = "$b1" ]; then cp "$t1" "$CWOUT";
-      elif [ "$med" = "$b2" ]; then cp "$t2" "$CWOUT";
-      else cp "$t3" "$CWOUT"; fi
+      if [ "$med" = "$b1" ]; then cp "$t1" "$CWOUT"; elif [ "$med" = "$b2" ]; then cp "$t2" "$CWOUT"; else cp "$t3" "$CWOUT"; fi
       rm -f "$t1" "$t2" "$t3"; calls=1 ;;
   esac
-
-  local b; b=$(wc -c < "$CWOUT")
-  echo -e "${calls}\t${b}"
+  local b; b=$(wc -c < "$CWOUT"); echo -e "${calls}\t${b}"
 }
 
 # ------- MCP coverage probe (explore median-of-3 + node), bytes only.
-# These exercise the MCP server path and represent the extra answer surface a real
-# agent pulls for the same task. Their bytes are added to CW's total; calls += 2.
+# Exercises the MCP server path and represents the extra answer surface a real agent
+# pulls for the same task. Bytes recorded separately, NOT folded into the primary totals.
 run_mcp_coverage() {
-  local repo="$1" symbol="$2" query="$3"
-  local dir="$BENCH_ROOT/$repo"
+  local repo="$1" symbol="$2" query="$3"; local dir="$BENCH_ROOT/$repo"
   local eb1 eb2 eb3 emed nb
   eb1=$($MCP --bin "$CW" --path "$dir" --tool codewiki_explore --args "{\"query\":\"$query\",\"maxFiles\":5}" 2>/dev/null | bytes)
   eb2=$($MCP --bin "$CW" --path "$dir" --tool codewiki_explore --args "{\"query\":\"$query\",\"maxFiles\":5}" 2>/dev/null | bytes)
@@ -165,8 +154,7 @@ run_mcp_coverage() {
 # ------- Baseline side: grep + read N oracle files. writes to $5 (BLOUT), prints "<calls>\t<bytes>"
 run_baseline() {
   local repo="$1" arch="$2" regex="$3" oraclepath="$4" BLOUT="$5"
-  local dir="$BENCH_ROOT/$repo" src="${SRC[$repo]}"
-  : > "$BLOUT"
+  local dir="$BENCH_ROOT/$repo" src="${SRC[$repo]:-.}"; : > "$BLOUT"
   # 1 grep call over the scoped source dir
   grep -rnIE "$regex" "$dir/$src" 2>/dev/null >> "$BLOUT"
   local gcalls=1
@@ -182,18 +170,17 @@ run_baseline() {
     [ -z "$hit" ] && hit=$(find "$dir" -name "$f" -type f 2>/dev/null | sort | head -1)
     if [ -n "$hit" ]; then cat "$hit" >> "$BLOUT" 2>/dev/null; nfiles=$((nfiles+1)); fi
   done
-  local b; b=$(wc -c < "$BLOUT")
-  echo -e "$(( gcalls + nfiles ))\t${b}"
+  local b; b=$(wc -c < "$BLOUT"); echo -e "$(( gcalls + nfiles ))\t${b}"
 }
 
 main() {
   clone_and_index
-  echo -e "lang\trepo\tarchetype\tsymbol\tcw_calls\tcw_bytes\tcw_recall\tcw_verdict\tbl_calls\tbl_bytes\tbl_recall\tbl_verdict\tmcp_coverage_bytes" > "$OUT"
+  echo -e "lang\trepo\tarchetype\tcase_id\tsymbol\tcw_calls\tcw_bytes\tcw_recall\tcw_verdict\tbl_calls\tbl_bytes\tbl_recall\tbl_verdict\tmcp_coverage_bytes" > "$OUT"
 
   # NOTE: read with IFS=tab collapses consecutive tabs (tab is IFS-whitespace), which
   # eats empty middle columns. Extract each column with cut from the raw line instead
-  # so empty `feature`/`regex`/`anchors` fields stay aligned.
-  local raw lang repo arch symbol feature regex anchors
+  # so empty feature/regex/anchors fields stay aligned.
+  local raw lang repo arch symbol feature regex anchors case_id
   while IFS= read -r raw; do
     lang="$(printf '%s' "$raw" | cut -f1)"
     case "$lang" in ""|\#*|lang) continue;; esac
@@ -203,20 +190,18 @@ main() {
     feature="$(printf '%s' "$raw" | cut -f5)"
     regex="$(printf '%s' "$raw" | cut -f6)"
     anchors="$(printf '%s' "$raw" | cut -f7)"
-    local oraclepath="$ORACLE/${lang}_${arch}.json"
+    case_id="$(printf '%s' "$raw" | cut -f8)"
+    [ -z "$case_id" ] && { echo "  [skip] no case_id for $lang/$arch/$symbol"; continue; }
+    local oraclepath="$ORACLE/${lang}_${case_id}.json"
     if [ ! -f "$oraclepath" ]; then echo "  [skip] no oracle $oraclepath"; continue; fi
     local dir="$BENCH_ROOT/$repo"
     if [ ! -f "$dir/.codewiki/codewiki.db" ]; then echo "  [skip] $repo not indexed"; continue; fi
 
     # explore probe query: feature query if present else the symbol terms
-    local probe="${feature:-$symbol}"
-    [ -z "$probe" ] && probe="$symbol"
-
+    local probe="${feature:-$symbol}"; [ -z "$probe" ] && probe="$symbol"
     local CWOUT BLOUT; CWOUT="$(mktemp)"; BLOUT="$(mktemp)"
 
     # --- CW primary tool (the one that answers this archetype) ---
-    # This is the apples-to-apples comparison vs the baseline's same task: 1 CW call
-    # (3 for the median-of-3 `feature`/context) vs the baseline's grep + N reads.
     local cwline cw_calls cw_bytes
     cwline=$(run_cw "$lang" "$repo" "$arch" "$symbol" "$feature" "$CWOUT")
     cw_calls=$(echo "$cwline" | cut -f1); cw_bytes=$(echo "$cwline" | cut -f2)
@@ -225,9 +210,7 @@ main() {
     cw_recall=$(echo "$cw_score" | python3 -c "import json,sys;print(json.load(sys.stdin)['recall'])" 2>/dev/null || echo 0)
     cw_verdict=$(echo "$cw_score" | python3 -c "import json,sys;print(json.load(sys.stdin)['verdict'])" 2>/dev/null || echo UNSCORABLE)
 
-    # --- MCP coverage probe (explore median-of-3 + node), measured but NOT folded into
-    # the primary call/token comparison: it exercises the MCP stdio path and records the
-    # extra-answer-surface cost of those two tools per case (separate columns). ---
+    # --- MCP coverage probe (explore median-of-3 + node), measured but NOT folded in ---
     local mcp_bytes; mcp_bytes=$(run_mcp_coverage "$repo" "$symbol" "$probe")
 
     # --- Baseline (grep + read N oracle files), same task, scored on same oracle ---
@@ -238,10 +221,10 @@ main() {
     bl_recall=$(echo "$bl_score" | python3 -c "import json,sys;print(json.load(sys.stdin)['recall'])" 2>/dev/null || echo 0)
     bl_verdict=$(echo "$bl_score" | python3 -c "import json,sys;print(json.load(sys.stdin)['verdict'])" 2>/dev/null || echo UNSCORABLE)
 
-    echo -e "${lang}\t${repo}\t${arch}\t${symbol}\t${cw_calls}\t${cw_bytes}\t${cw_recall}\t${cw_verdict}\t${bl_calls}\t${bl_bytes}\t${bl_recall}\t${bl_verdict}\t${mcp_bytes}" >> "$OUT"
-    printf "  %-11s %-8s  CW %dc/%dB r=%s %-7s  BL %dc/%dB r=%s %-7s  [mcp:%dB]\n" \
-      "$lang" "$arch" "$cw_calls" "$cw_bytes" "$cw_recall" "$cw_verdict" \
-      "$bl_calls" "$bl_bytes" "$bl_recall" "$bl_verdict" "$mcp_bytes"
+    echo -e "${lang}\t${repo}\t${arch}\t${case_id}\t${symbol}\t${cw_calls}\t${cw_bytes}\t${cw_recall}\t${cw_verdict}\t${bl_calls}\t${bl_bytes}\t${bl_recall}\t${bl_verdict}\t${mcp_bytes}" >> "$OUT"
+    printf "  %-11s %-8s %-30s CW %dc/%dB r=%s %-10s  BL %dc/%dB r=%s %-10s\n" \
+      "$lang" "$arch" "$case_id" "$cw_calls" "$cw_bytes" "$cw_recall" "$cw_verdict" \
+      "$bl_calls" "$bl_bytes" "$bl_recall" "$bl_verdict"
     rm -f "$CWOUT" "$BLOUT"
   done < "$CASES"
 
@@ -256,43 +239,47 @@ import csv, sys, os
 rows = list(csv.DictReader(open(sys.argv[1]), delimiter='\t'))
 price = float(os.environ.get("PRICE", "3.00"))
 def agg(rs):
+    # recall mean over SCORABLE cases only (UNSCORABLE empty-oracle honest graph-gap
+    # cases stay in call/token totals but are not counted in the recall denominator).
+    rs_s = [r for r in rs if r['cw_verdict'] != 'UNSCORABLE' and r['bl_verdict'] != 'UNSCORABLE']
     cwc=sum(int(r['cw_calls']) for r in rs); blc=sum(int(r['bl_calls']) for r in rs)
     cwb=sum(int(r['cw_bytes']) for r in rs); blb=sum(int(r['bl_bytes']) for r in rs)
-    cwt=cwb/4; blt=blb/4
-    cwr=sum(float(r['cw_recall']) for r in rs)/len(rs)
-    blr=sum(float(r['bl_recall']) for r in rs)/len(rs)
+    cwt=cwb/4; blt=blb/4; ns=len(rs_s) or 1
+    cwr=sum(float(r['cw_recall']) for r in rs_s)/ns
+    blr=sum(float(r['bl_recall']) for r in rs_s)/ns
     callred=100*(blc-cwc)/blc if blc else 0
     tokred=100*(blt-cwt)/blt if blt else 0
     saved=(blt-cwt)*price/1_000_000
-    return dict(n=len(rs),cwc=cwc,blc=blc,cwt=cwt,blt=blt,cwr=cwr,blr=blr,
+    return dict(n=len(rs),ns=len(rs_s),cwc=cwc,blc=blc,cwt=cwt,blt=blt,cwr=cwr,blr=blr,
                 callred=callred,tokred=tokred,saved=saved)
 langs=sorted({r['lang'] for r in rows})
-print(f"\n{'LANG':<11}{'N':>3}  {'CWcalls':>7}{'BLcalls':>8} {'call-red':>9}  "
-      f"{'CWtok':>7}{'BLtok':>8} {'tok-red':>8}  {'CWrec':>6}{'BLrec':>6}  {'$saved':>8}")
-print("-"*92)
+print(f"\n{'LANG':<11}{'N':>3}{'sc':>3}  {'CWcalls':>7}{'BLcalls':>8} {'call-red':>9}  "
+      f"{'CWtok':>8}{'BLtok':>9} {'tok-red':>8}  {'CWrec':>6}{'BLrec':>6}  {'$saved':>8}")
+print("-"*98)
 for lg in langs:
     a=agg([r for r in rows if r['lang']==lg])
-    print(f"{lg:<11}{a['n']:>3}  {a['cwc']:>7}{a['blc']:>8} {a['callred']:>8.0f}%  "
-          f"{a['cwt']:>7.0f}{a['blt']:>8.0f} {a['tokred']:>7.0f}%  "
+    print(f"{lg:<11}{a['n']:>3}{a['ns']:>3}  {a['cwc']:>7}{a['blc']:>8} {a['callred']:>8.0f}%  "
+          f"{a['cwt']:>8.0f}{a['blt']:>9.0f} {a['tokred']:>7.0f}%  "
           f"{a['cwr']:>6.2f}{a['blr']:>6.2f}  {a['saved']:>8.4f}")
-print("-"*92)
+print("-"*98)
 g=agg(rows)
-print(f"{'TOTAL':<11}{g['n']:>3}  {g['cwc']:>7}{g['blc']:>8} {g['callred']:>8.0f}%  "
-      f"{g['cwt']:>7.0f}{g['blt']:>8.0f} {g['tokred']:>7.0f}%  "
+print(f"{'TOTAL':<11}{g['n']:>3}{g['ns']:>3}  {g['cwc']:>7}{g['blc']:>8} {g['callred']:>8.0f}%  "
+      f"{g['cwt']:>8.0f}{g['blt']:>9.0f} {g['tokred']:>7.0f}%  "
       f"{g['cwr']:>6.2f}{g['blr']:>6.2f}  {g['saved']:>8.4f}")
-# verdict histogram
 from collections import Counter
 hc=Counter(r['cw_verdict'] for r in rows); hb=Counter(r['bl_verdict'] for r in rows)
 order=['PASS','PARTIAL','FAIL','UNSCORABLE']
 print(f"\nCW  verdicts: " + "  ".join(f"{k}={hc.get(k,0)}" for k in order))
 print(f"BL  verdicts: " + "  ".join(f"{k}={hb.get(k,0)}" for k in order))
+print(f"\n(N=total cases, sc=cases scored for recall. UNSCORABLE = empty-oracle honest "
+      f"graph-gap cases — excluded from recall means, kept in call/token totals.)")
 mcp_b=sum(int(r.get('mcp_coverage_bytes',0) or 0) for r in rows)
 print(f"\nMCP coverage (explore med-of-3 + node, exercised over stdio, not in totals above): "
       f"{mcp_b/4:.0f} tokens across {g['n']} cases (~{mcp_b/4/g['n']:.0f} tok/case).")
 print(f"\nGrand total: {g['callred']:.0f}% fewer tool-calls, {g['tokred']:.0f}% fewer tokens, "
       f"${g['saved']:.4f} saved across {g['n']} cases "
       f"(~${g['saved']/g['n']*20:.2f} per 20-interaction session).")
-print(f"Mean recall: CodeWiki {g['cwr']:.2f} vs grep+read baseline {g['blr']:.2f}.")
+print(f"Mean recall (scored): CodeWiki {g['cwr']:.2f} vs grep+read baseline {g['blr']:.2f}.")
 PY
   echo ""
   echo "Raw: $OUT"

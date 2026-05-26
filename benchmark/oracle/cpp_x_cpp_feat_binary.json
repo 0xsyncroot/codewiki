@@ -1,0 +1,21 @@
+{
+  "case_id": "cpp_x_cpp_feat_binary",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "feature",
+  "symbol": "binary_reader",
+  "feature_query": "how are binary formats like cbor and messagepack decoded",
+  "required_symbols": [
+    "binary_reader",
+    "from_cbor",
+    "get_token"
+  ],
+  "required_files": [
+    "binary_reader.hpp",
+    "json.hpp",
+    "parser.hpp"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['binary_reader', 'from_cbor', 'get_token']",
+  "min_required": 6
+}

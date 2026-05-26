@@ -1,0 +1,20 @@
+{
+  "case_id": "python_flask_callees_fulldispatch",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "callees",
+  "symbol": "full_dispatch_request",
+  "feature_query": "",
+  "required_symbols": [
+    "dispatch_request",
+    "finalize_request",
+    "handle_user_exception",
+    "preprocess_request"
+  ],
+  "required_files": [
+    "app.py"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "4 distinct callees total; froze top 4",
+  "min_required": 5
+}

@@ -1,0 +1,18 @@
+{
+  "case_id": "typescript_zod_loc_parse_v3v4",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "locate",
+  "symbol": "parse",
+  "feature_query": "",
+  "required_symbols": [
+    "parse"
+  ],
+  "required_files": [
+    "parse.ts",
+    "types.ts"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "3 non-test def site(s); answer must name parse at its source file",
+  "min_required": 3
+}

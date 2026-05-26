@@ -1,0 +1,26 @@
+{
+  "case_id": "cpp_x_cpp_blast_parse",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "blast",
+  "symbol": "parse",
+  "feature_query": "",
+  "required_symbols": [
+    "CAPTURE",
+    "accept_helper",
+    "check_utf8string",
+    "parser_helper",
+    "roundtrip"
+  ],
+  "required_files": [
+    "unit-bjdata.cpp",
+    "unit-class_parser.cpp",
+    "unit-class_parser_diagnostic_positions.cpp",
+    "unit-ubjson.cpp",
+    "unit-unicode1.cpp",
+    "unit-unicode2.cpp"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "39 direct dependants; froze top 8 as must-contain core",
+  "min_required": 11
+}

@@ -1,0 +1,27 @@
+{
+  "case_id": "rust_rg_callers_matched_sink",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "callers",
+  "symbol": "matched",
+  "feature_query": "",
+  "required_symbols": [
+    "find_iter_at_in_context",
+    "matched_dir_entry",
+    "matched_ignore",
+    "sink_matched",
+    "sink_slow_multi_line_only_matching",
+    "sink_slow_multi_per_match",
+    "start_color_match",
+    "write_colored_line"
+  ],
+  "required_files": [
+    "core.rs",
+    "dir.rs",
+    "standard.rs",
+    "util.rs"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "17 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 12
+}

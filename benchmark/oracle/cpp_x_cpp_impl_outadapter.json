@@ -1,0 +1,20 @@
+{
+  "case_id": "cpp_x_cpp_impl_outadapter",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "impl",
+  "symbol": "output_adapter_protocol",
+  "feature_query": "",
+  "required_symbols": [
+    "output_stream_adapter",
+    "output_string_adapter",
+    "output_vector_adapter"
+  ],
+  "required_files": [
+    "json.hpp",
+    "output_adapters.hpp"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "6 implementers; froze top 6",
+  "min_required": 5
+}

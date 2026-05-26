@@ -1,0 +1,28 @@
+{
+  "case_id": "java_x_java_callers_nextstring",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "callers",
+  "symbol": "nextString",
+  "feature_query": "",
+  "required_symbols": [
+    "deserializeToDate",
+    "readTerminal",
+    "readToken",
+    "timeBagOfPrimitivesReflectionStreaming",
+    "timeBagOfPrimitivesStreaming",
+    "timeCollectionsReflectionStreaming",
+    "timeCollectionsStreaming"
+  ],
+  "required_files": [
+    "BagOfPrimitivesDeserializationBenchmark.java",
+    "CollectionsDeserializationBenchmark.java",
+    "DefaultDateTypeAdapter.java",
+    "JsonElementTypeAdapter.java",
+    "ObjectTypeAdapter.java",
+    "ParseBenchmark.java"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "15 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 13
+}

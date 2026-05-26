@@ -1,0 +1,18 @@
+{
+  "case_id": "typescript_zod_loc_parseasync_versions",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "locate",
+  "symbol": "parseAsync",
+  "feature_query": "",
+  "required_symbols": [
+    "parseAsync"
+  ],
+  "required_files": [
+    "parse.ts",
+    "types.ts"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "3 non-test def site(s); answer must name parseAsync at its source file",
+  "min_required": 3
+}

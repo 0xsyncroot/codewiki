@@ -1,0 +1,23 @@
+
+LANG         N sc  CWcalls BLcalls  call-red     CWtok    BLtok  tok-red   CWrec BLrec    $saved
+--------------------------------------------------------------------------------------------------
+cpp         18 18       18      58       69%     18094  1121997      98%    0.83  0.96    3.3117
+csharp      18 17       18      78       77%     14025    50343      72%    0.84  0.94    0.1090
+go          24 23       24     104       77%     10212   535982      98%    0.76  0.93    1.5773
+java        18 18       18      78       77%     32272   406603      92%    0.54  0.83    1.1230
+javascript  17 17       17      42       60%      9041    90332      90%    0.85  0.91    0.2439
+python      17 17       17      49       65%     15680   231163      93%    0.89  0.95    0.6464
+rust        17 17       17      69       75%     18018   748110      98%    0.79  0.95    2.1903
+typescript  22 22       22      73       70%     26922  2172430      99%    0.70  0.93    6.4365
+--------------------------------------------------------------------------------------------------
+TOTAL      151149      151     551       73%    144265  5356960      97%    0.77  0.92   15.6381
+
+CW  verdicts: PASS=93  PARTIAL=44  FAIL=12  UNSCORABLE=2
+BL  verdicts: PASS=121  PARTIAL=25  FAIL=3  UNSCORABLE=2
+
+(N=total cases, sc=cases scored for recall. UNSCORABLE = empty-oracle honest graph-gap cases — excluded from recall means, kept in call/token totals.)
+
+MCP coverage (explore med-of-3 + node, exercised over stdio, not in totals above): 311386 tokens across 151 cases (~2062 tok/case).
+
+Grand total: 73% fewer tool-calls, 97% fewer tokens, $15.6381 saved across 151 cases (~$2.07 per 20-interaction session).
+Mean recall (scored): CodeWiki 0.77 vs grep+read baseline 0.92.

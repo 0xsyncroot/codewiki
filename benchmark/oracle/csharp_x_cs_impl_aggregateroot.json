@@ -1,0 +1,27 @@
+{
+  "case_id": "csharp_x_cs_impl_aggregateroot",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "impl",
+  "symbol": "IAggregateRoot",
+  "feature_query": "",
+  "required_symbols": [
+    "Basket",
+    "Buyer",
+    "CatalogBrand",
+    "CatalogItem",
+    "CatalogType",
+    "Order"
+  ],
+  "required_files": [
+    "Basket.cs",
+    "Buyer.cs",
+    "CatalogBrand.cs",
+    "CatalogItem.cs",
+    "CatalogType.cs",
+    "Order.cs"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "6 implementers; froze top 6",
+  "min_required": 12
+}

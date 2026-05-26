@@ -1,0 +1,19 @@
+{
+  "case_id": "typescript_zod_callers_parse_hook",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "callers",
+  "symbol": "_parse",
+  "feature_query": "",
+  "required_symbols": [
+    "_parseAsync",
+    "_parseSync",
+    "safeParseAsync"
+  ],
+  "required_files": [
+    "types.ts"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "3 distinct callers total; froze top 3 by degree/name order",
+  "min_required": 4
+}

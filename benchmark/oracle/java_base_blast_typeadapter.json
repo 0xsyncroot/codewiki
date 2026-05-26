@@ -1,0 +1,29 @@
+{
+  "case_id": "java_base_blast_typeadapter",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "blast",
+  "symbol": "TypeAdapter",
+  "feature_query": "",
+  "required_symbols": [
+    "Adapter",
+    "DefaultDateTypeAdapter",
+    "EnumTypeAdapter",
+    "ObjectTypeAdapter",
+    "TypeAdapterRuntimeTypeWrapper",
+    "UtcDateTypeAdapter"
+  ],
+  "required_files": [
+    "DefaultDateTypeAdapter.java",
+    "EnumTypeAdapter.java",
+    "LegacyProtoTypeAdapterFactory.java",
+    "MapTypeAdapterFactory.java",
+    "ObjectTypeAdapter.java",
+    "ReflectiveTypeAdapterFactory.java",
+    "TypeAdapterRuntimeTypeWrapper.java",
+    "UtcDateTypeAdapter.java"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "23 direct dependants; froze top 8 as must-contain core",
+  "min_required": 14
+}

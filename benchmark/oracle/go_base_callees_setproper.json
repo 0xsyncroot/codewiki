@@ -1,0 +1,27 @@
+{
+  "case_id": "go_base_callees_setproper",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "callees",
+  "symbol": "setWithProperType",
+  "feature_query": "",
+  "required_symbols": [
+    "New",
+    "Set",
+    "StringToBytes",
+    "setIntField",
+    "setTimeField",
+    "setUintField",
+    "trySetCustom",
+    "trySetUsingParser"
+  ],
+  "required_files": [
+    "bytesconv.go",
+    "context.go",
+    "form_mapping.go",
+    "gin.go"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "11 distinct callees total; froze top 8",
+  "min_required": 12
+}

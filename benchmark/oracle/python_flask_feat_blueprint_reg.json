@@ -1,0 +1,19 @@
+{
+  "case_id": "python_flask_feat_blueprint_reg",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "feature",
+  "symbol": "register_blueprint",
+  "feature_query": "how do blueprints register routes and nest under url prefixes",
+  "required_symbols": [
+    "register_blueprint",
+    "add_url_rule",
+    "Blueprint"
+  ],
+  "required_files": [
+    "blueprints.py"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['register_blueprint', 'add_url_rule', 'Blueprint']",
+  "min_required": 4
+}

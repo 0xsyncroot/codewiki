@@ -1,0 +1,18 @@
+{
+  "case_id": "cpp_x_cpp_loc_binreader",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "locate",
+  "symbol": "binary_reader",
+  "feature_query": "",
+  "required_symbols": [
+    "binary_reader"
+  ],
+  "required_files": [
+    "binary_reader.hpp",
+    "json.hpp"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "10 non-test def site(s); answer must name binary_reader at its source file",
+  "min_required": 3
+}

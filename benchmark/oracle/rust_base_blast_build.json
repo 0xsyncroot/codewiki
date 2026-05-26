@@ -1,0 +1,27 @@
+{
+  "case_id": "rust_base_blast_build",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "blast",
+  "symbol": "build",
+  "feature_query": "",
+  "required_symbols": [
+    "line_number",
+    "max_columns",
+    "max_matches_context",
+    "max_matches_context_invert",
+    "new",
+    "path",
+    "printer_standard",
+    "visit"
+  ],
+  "required_files": [
+    "hiargs.rs",
+    "lib.rs",
+    "standard.rs",
+    "walk.rs"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "213 direct dependants; froze top 8 as must-contain core",
+  "min_required": 12
+}

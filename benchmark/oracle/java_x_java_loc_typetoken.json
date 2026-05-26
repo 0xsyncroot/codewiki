@@ -1,0 +1,17 @@
+{
+  "case_id": "java_x_java_loc_typetoken",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "locate",
+  "symbol": "TypeToken",
+  "feature_query": "",
+  "required_symbols": [
+    "TypeToken"
+  ],
+  "required_files": [
+    "TypeToken.java"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "3 non-test def site(s); answer must name TypeToken at its source file",
+  "min_required": 2
+}

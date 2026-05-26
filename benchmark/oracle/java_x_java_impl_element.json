@@ -1,0 +1,23 @@
+{
+  "case_id": "java_x_java_impl_element",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "impl",
+  "symbol": "JsonElement",
+  "feature_query": "",
+  "required_symbols": [
+    "JsonArray",
+    "JsonNull",
+    "JsonObject",
+    "JsonPrimitive"
+  ],
+  "required_files": [
+    "JsonArray.java",
+    "JsonNull.java",
+    "JsonObject.java",
+    "JsonPrimitive.java"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "4 implementers; froze top 4",
+  "min_required": 8
+}

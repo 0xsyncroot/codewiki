@@ -1,0 +1,17 @@
+{
+  "case_id": "csharp_x_cs_callers_transfer",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "callers",
+  "symbol": "TransferBasketAsync",
+  "feature_query": "",
+  "required_symbols": [
+    "TransferAnonymousBasketToUserAsync"
+  ],
+  "required_files": [
+    "Login.cshtml.cs"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "1 distinct callers total; froze top 1 by degree/name order",
+  "min_required": 2
+}

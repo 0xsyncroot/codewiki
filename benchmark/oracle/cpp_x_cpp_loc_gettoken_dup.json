@@ -1,0 +1,18 @@
+{
+  "case_id": "cpp_x_cpp_loc_gettoken_dup",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "locate",
+  "symbol": "get_token",
+  "feature_query": "",
+  "required_symbols": [
+    "get_token"
+  ],
+  "required_files": [
+    "json.hpp",
+    "parser.hpp"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name get_token at its source file",
+  "min_required": 3
+}

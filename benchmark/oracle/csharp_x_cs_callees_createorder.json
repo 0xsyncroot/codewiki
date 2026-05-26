@@ -1,0 +1,19 @@
+{
+  "case_id": "csharp_x_cs_callees_createorder",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "callees",
+  "symbol": "CreateOrderAsync",
+  "feature_query": "",
+  "required_symbols": [
+    "ComposePicUri",
+    "EmptyBasketOnCheckout"
+  ],
+  "required_files": [
+    "GuardExtensions.cs",
+    "UriComposer.cs"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "2 distinct callees total; froze top 2",
+  "min_required": 4
+}

@@ -1,49 +1,152 @@
-lang	repo	archetype	symbol	cw_calls	cw_bytes	cw_recall	cw_verdict	bl_calls	bl_bytes	bl_recall	bl_verdict	mcp_coverage_bytes
-python	flask	locate	Flask	1	1168	1.0	PASS	2	65479	1.0	PASS	7586
-python	flask	callers	add_url_rule	1	1599	0.5	PARTIAL	4	102097	1.0	PASS	14287
-python	flask	callees	save_session	1	812	1.0	PASS	3	24719	0.9	PASS	3726
-python	flask	feature	dispatch_request	1	4144	0.0	FAIL	4	82471	1.0	PASS	9429
-python	flask	impl	SessionInterface	1	2301	1.0	PASS	2	15133	1.0	PASS	9489
-python	flask	blast	Flask	1	15042	0.7333	PARTIAL	8	119554	0.6	PARTIAL	7567
-rust	ripgrep	locate	search_parallel	1	247	1.0	PASS	2	18601	1.0	PASS	18531
-rust	ripgrep	callers	write_line_term	1	963	1.0	PASS	3	178109	1.0	PASS	9155
-rust	ripgrep	callees	search_parallel	1	1380	0.9333	PASS	8	319444	0.6667	PARTIAL	18531
-rust	ripgrep	feature	Searcher	1	7050	0.6667	PARTIAL	4	82022	1.0	PASS	17632
-rust	ripgrep	impl	Flag	1	15042	1.0	PASS	2	243393	1.0	PASS	15103
-rust	ripgrep	blast	build	1	12372	0.5833	PARTIAL	5	335546	1.0	PASS	12372
-javascript	express	locate	init	1	332	1.0	PASS	2	13977	0.5	PARTIAL	3128
-javascript	express	callers	send	1	1304	0.0	FAIL	2	26486	1.0	PASS	5483
-javascript	express	callees	init	1	271	1.0	PASS	2	14098	1.0	PASS	3124
-javascript	express	feature	handle	1	1411	0.75	PARTIAL	3	18019	1.0	PASS	1299
-javascript	express	impl	View	1	476	1.0	PASS	3	17856	0.5	PARTIAL	5001
-javascript	express	blast	send	1	6826	1.0	PASS	2	26486	1.0	PASS	5483
-typescript	zod	locate	safeParse	1	1183	1.0	FAIL	3	311739	1.0	FAIL	4053
-typescript	zod	callers	_parseSync	1	593	1.0	PASS	2	161651	1.0	PASS	6817
-typescript	zod	callees	convertBaseSchema	1	1551	0.75	PARTIAL	5	342489	0.6667	PARTIAL	13678
-typescript	zod	feature	ZodType	1	1968	0.8	PASS	3	868376	1.0	PASS	7899
-typescript	zod	impl	ZodType	1	15042	0.6667	PARTIAL	2	176468	1.0	PASS	8112
-typescript	zod	blast	safeParse	1	15042	1.0	PASS	2	285383	1.0	PASS	4058
-java	gson	locate	fromJson	1	2447	1.0	PASS	3	72134	1.0	PASS	2546
-java	gson	callers	fillBuffer	1	1283	1.0	PASS	2	64668	1.0	PASS	5981
-java	gson	callees	write	1	742	0.5833	PARTIAL	5	166140	0.9167	PASS	9288
-java	gson	feature	TypeAdapter	1	3667	0.25	PARTIAL	2	186048	1.0	PASS	18369
-java	gson	impl	JsonSerializer	1	15042	0.0	FAIL	2	18743	0.5	PARTIAL	3592
-java	gson	blast	TypeAdapter	1	15042	0.7857	PARTIAL	9	144123	0.8571	PASS	16300
-cpp	json	locate	sax_parse	1	960	1.0	PASS	3	231462	1.0	PASS	13917
-cpp	json	callers	get_token	1	1006	1.0	PASS	3	227555	1.0	PASS	5631
-cpp	json	callees	sax_parse	1	959	1.0	PASS	4	241638	1.0	PASS	13918
-cpp	json	feature	parse	1	13567	1.0	PASS	2	80578	1.0	PASS	14597
-cpp	json	impl	conjunction	1	979	1.0	PASS	3	237648	1.0	PASS	1065
-cpp	json	blast	value	1	468	0.1667	PARTIAL	3	335521	1.0	PASS	5455
-go	gin	locate	RouterGroup	1	712	1.0	PASS	2	9340	1.0	PASS	6143
-go	gin	callers	New	1	1268	0.5833	PARTIAL	5	111104	1.0	PASS	3106
-go	gin	callees	setWithProperType	1	889	0.9231	PASS	6	89398	0.6923	PARTIAL	6275
-go	gin	feature	RouterGroup	1	4089	1.0	PASS	3	59638	1.0	PASS	10182
-go	gin	impl	Render	1	572	0.25	PARTIAL	9	70851	1.0	PASS	1951
-go	gin	blast	Context	1	2107	1.0	PASS	2	105905	1.0	PASS	4218
-csharp	eShopOnWeb	locate	BasketService	1	1739	1.0	PASS	2	3288	1.0	PASS	7915
-csharp	eShopOnWeb	callers	AddItem	1	2177	1.0	PASS	2	3615	1.0	PASS	4930
-csharp	eShopOnWeb	callees	GetCatalogItems	1	582	0.9091	PASS	6	7175	0.6364	PARTIAL	6913
-csharp	eShopOnWeb	feature	BasketService	1	3498	0.6667	PARTIAL	4	8021	1.0	PASS	3033
-csharp	eShopOnWeb	impl	IAggregateRoot	1	9960	1.0	PASS	7	7976	1.0	PASS	2577
-csharp	eShopOnWeb	blast	AddItem	1	5325	1.0	PASS	2	3615	1.0	PASS	4968
+lang	repo	archetype	case_id	symbol	cw_calls	cw_bytes	cw_recall	cw_verdict	bl_calls	bl_bytes	bl_recall	bl_verdict	mcp_coverage_bytes
+python	flask	locate	base_loc_flask	Flask	1	1168	1.0	PASS	2	65479	1.0	PASS	7569
+python	flask	callers	base_callers_add_url_rule	add_url_rule	1	1540	1.0	PASS	4	102097	1.0	PASS	14192
+python	flask	callees	base_callees_save_session	save_session	1	812	1.0	PASS	3	24719	0.9	PASS	3733
+python	flask	feature	base_feat_dispatch	dispatch_request	1	4144	0.0	FAIL	4	82471	1.0	PASS	9427
+python	flask	impl	base_impl_sessioniface	SessionInterface	1	2301	1.0	PASS	2	15133	1.0	PASS	9478
+python	flask	blast	base_blast_flask	Flask	1	15042	0.7333	PARTIAL	8	119554	0.6	PARTIAL	7598
+rust	ripgrep	locate	base_loc_search_parallel	search_parallel	1	247	1.0	PASS	2	18601	1.0	PASS	18531
+rust	ripgrep	callers	base_callers_write_line_term	write_line_term	1	963	1.0	PASS	3	178109	1.0	PASS	9070
+rust	ripgrep	callees	base_callees_search_parallel	search_parallel	1	1378	1.0	PASS	7	279114	0.7143	PARTIAL	18531
+rust	ripgrep	feature	base_feat_parallel	Searcher	1	7050	0.6667	PARTIAL	4	82022	1.0	PASS	17639
+rust	ripgrep	impl	base_impl_flag	Flag	1	15042	1.0	PASS	2	243393	1.0	PASS	15101
+rust	ripgrep	blast	base_blast_build	build	1	12372	0.5833	PARTIAL	5	335546	1.0	PASS	12307
+javascript	express	locate	base_loc_init	init	1	332	1.0	PASS	2	13977	0.5	PARTIAL	3130
+javascript	express	callers	base_callers_send	send	1	1316	0.0	FAIL	2	26486	1.0	PASS	5483
+javascript	express	callees	base_callees_init	init	1	271	1.0	PASS	2	14098	1.0	PASS	3124
+javascript	express	feature	base_feat_router	handle	1	1411	0.75	PARTIAL	3	18019	1.0	PASS	1303
+javascript	express	impl	base_impl_view	View	1	476	1.0	PASS	3	17856	0.5	PARTIAL	5005
+javascript	express	blast	base_blast_send	send	1	6826	1.0	PASS	2	26486	1.0	PASS	5483
+typescript	zod	locate	base_loc_safeparse	safeParse	1	1183	1.0	FAIL	3	311739	1.0	FAIL	4054
+typescript	zod	callers	base_callers_parsesync	_parseSync	1	593	1.0	PASS	2	161651	1.0	PASS	6796
+typescript	zod	callees	base_callees_convertbase	convertBaseSchema	1	1518	0.75	PARTIAL	5	342489	0.6667	PARTIAL	8115
+typescript	zod	feature	base_feat_parsing	ZodType	1	1875	0.4	PARTIAL	3	868376	1.0	PASS	7876
+typescript	zod	impl	base_impl_zodtype	ZodType	1	15042	0.6667	PARTIAL	2	176468	1.0	PASS	3344
+typescript	zod	blast	base_blast_safeparse	safeParse	1	15042	1.0	PASS	2	285383	1.0	PASS	4057
+java	gson	locate	base_loc_fromjson	fromJson	1	2447	1.0	PASS	3	72134	1.0	PASS	2473
+java	gson	callers	base_callers_fillbuffer	fillBuffer	1	1283	1.0	PASS	2	64668	1.0	PASS	5979
+java	gson	callees	base_callees_write	write	1	1053	0.75	PARTIAL	5	146466	0.9167	PASS	7598
+java	gson	feature	base_feat_typeadapter	TypeAdapter	1	3667	0.25	PARTIAL	2	186048	1.0	PASS	18370
+java	gson	impl	base_impl_jsonserializer	JsonSerializer	1	15042	0.0	FAIL	2	18743	0.5	PARTIAL	3592
+java	gson	blast	base_blast_typeadapter	TypeAdapter	1	15042	0.7857	PARTIAL	9	144123	0.8571	PASS	16306
+cpp	json	locate	base_loc_sax_parse	sax_parse	1	960	1.0	PASS	3	231462	1.0	PASS	13918
+cpp	json	callers	base_callers_get_token	get_token	1	1006	1.0	PASS	3	227555	1.0	PASS	5631
+cpp	json	callees	base_callees_sax_parse	sax_parse	1	959	1.0	PASS	4	241638	1.0	PASS	13912
+cpp	json	feature	base_feat_parse	parse	1	13567	1.0	PASS	2	80578	1.0	PASS	14605
+cpp	json	impl	base_impl_conjunction	conjunction	1	979	1.0	PASS	3	237648	1.0	PASS	1065
+cpp	json	blast	base_blast_value	value	1	468	0.1667	PARTIAL	3	335521	1.0	PASS	5472
+go	gin	locate	base_loc_routergroup	RouterGroup	1	712	1.0	PASS	2	9340	1.0	PASS	6169
+go	gin	callers	base_callers_new	New	1	1367	0.1538	PARTIAL	6	111956	1.0	PASS	3106
+go	gin	callees	base_callees_setproper	setWithProperType	1	889	1.0	PASS	5	88445	0.75	PARTIAL	6016
+go	gin	feature	base_feat_routing	RouterGroup	1	4089	1.0	PASS	3	59638	1.0	PASS	10194
+go	gin	impl	base_impl_render	Render	1	572	0.375	PARTIAL	9	70851	1.0	PASS	1779
+go	gin	blast	base_blast_context	Context	1	2107	1.0	PASS	2	105905	1.0	PASS	3408
+csharp	eShopOnWeb	locate	base_loc_basketservice	BasketService	1	1739	1.0	PASS	2	3288	1.0	PASS	7917
+csharp	eShopOnWeb	callers	base_callers_additem	AddItem	1	2177	1.0	PASS	2	3615	1.0	PASS	4932
+csharp	eShopOnWeb	callees	base_callees_getcatalog	GetCatalogItems	1	582	1.0	PASS	6	7409	0.6364	PARTIAL	6918
+csharp	eShopOnWeb	feature	base_feat_basket	BasketService	1	3498	0.6667	PARTIAL	4	8021	1.0	PASS	3056
+csharp	eShopOnWeb	impl	base_impl_aggregateroot	IAggregateRoot	1	10683	1.0	PASS	7	7976	1.0	PASS	2589
+csharp	eShopOnWeb	blast	base_blast_additem	AddItem	1	5247	1.0	PASS	2	3615	1.0	PASS	4930
+python	flask	locate	flask_loc_blueprint_ambig	Blueprint	1	1460	1.0	PASS	2	4698	1.0	PASS	10360
+python	flask	locate	flask_loc_makeresponse_dup	make_response	1	1094	1.0	PASS	3	90255	1.0	PASS	16160
+python	flask	locate	flask_loc_opensession_iface	open_session	1	1298	1.0	PASS	2	15224	1.0	PASS	6668
+python	flask	callers	flask_callers_register_bp	register_blueprint	1	1724	0.5833	PARTIAL	5	64200	0.6667	PARTIAL	15723
+python	flask	callees	flask_callees_fulldispatch	full_dispatch_request	1	543	1.0	PASS	2	65799	1.0	PASS	10139
+python	flask	callees	flask_callees_handle_exc	handle_exception	1	463	1.0	PASS	2	65816	1.0	PASS	7298
+python	flask	blast	flask_blast_ensure_sync	ensure_sync	1	12629	1.0	PASS	2	68541	1.0	PASS	13140
+python	flask	blast	flask_blast_makeresponse	make_response	1	1085	1.0	PASS	2	66636	1.0	PASS	16160
+python	flask	feature	flask_feat_ctx_lifecycle	RequestContext	1	6464	1.0	PASS	2	30211	1.0	PASS	17730
+python	flask	feature	flask_feat_blueprint_reg	register_blueprint	1	8652	0.75	PARTIAL	2	28687	1.0	PASS	18132
+python	flask	impl	flask_impl_sessioniface	SessionInterface	1	2301	1.0	PASS	2	15133	1.0	PASS	9490
+rust	ripgrep	locate	rg_loc_build_ambig	build	1	1402	0.25	PARTIAL	8	117471	1.0	PASS	12297
+rust	ripgrep	locate	rg_loc_json_printer_vs_flag	JSON	1	915	1.0	PASS	3	273257	1.0	PASS	7427
+rust	ripgrep	locate	rg_loc_regexmatcher_crate	RegexMatcher	1	998	1.0	PASS	2	18218	1.0	PASS	10309
+rust	ripgrep	callers	rg_callers_matched_sink	matched	1	169	0.1667	PARTIAL	5	227707	1.0	PASS	9007
+rust	ripgrep	callees	rg_callees_search_parallel	search_parallel	1	1378	1.0	PASS	7	279114	0.7143	PARTIAL	18531
+rust	ripgrep	callees	rg_callees_search_reader	search_reader	1	1021	1.0	PASS	8	328495	0.8	PASS	15614
+rust	ripgrep	blast	rg_blast_search_path	search_path	1	2541	1.0	PASS	2	17338	1.0	PASS	11680
+rust	ripgrep	blast	rg_blast_matcher_trait	Matcher	1	5330	0.5	PARTIAL	2	26060	1.0	PASS	18445
+rust	ripgrep	feature	rg_feat_match_pipeline	Searcher	1	3204	0.8333	PASS	4	145274	1.0	PASS	16403
+rust	ripgrep	feature	rg_feat_ignore_rules	Gitignore	1	3022	0.5	PARTIAL	3	179330	1.0	PASS	18162
+rust	ripgrep	impl	rg_impl_flag_trait	Flag	1	15042	1.0	PASS	2	243393	1.0	PASS	15103
+typescript	zod	locate	zod_loc_parse_v3v4	parse	1	1110	1.0	PASS	3	168037	0.3333	PARTIAL	6945
+typescript	zod	locate	zod_loc_parseasync_versions	parseAsync	1	752	1.0	PASS	3	186706	1.0	FAIL	5244
+typescript	zod	locate	zod_loc_object_factory	object	1	1074	1.0	PASS	2	148884	1.0	PASS	3406
+typescript	zod	callers	zod_callers_parse_hook	_parse	1	30	0.0	FAIL	2	167352	1.0	PASS	5391
+typescript	zod	callees	zod_callees_safeparse	safeParse	1	418	1.0	PASS	3	315064	0.8	PASS	4054
+typescript	zod	impl	zod_impl_zodtype_subtypes	ZodType	1	15042	0.6667	PARTIAL	2	176468	1.0	PASS	3334
+typescript	zod	blast	zod_blast_zodtype	ZodType	1	15042	0.7778	PARTIAL	2	230626	1.0	PASS	3325
+typescript	zod	blast	zod_blast_parse_hook	_parse	1	8177	0.25	PARTIAL	2	167352	1.0	PASS	5387
+typescript	zod	feature	zod_feat_composition	ZodObject	1	3039	0.6	PARTIAL	3	420247	1.0	PASS	4277
+typescript	zod	feature	zod_feat_parse_pipeline	safeParse	1	2537	0.2	PARTIAL	3	383205	1.0	PASS	10549
+javascript	express	locate	ex_loc_compilequery_dup	compileQueryParser	1	276	1.0	PASS	3	19577	1.0	PASS	1704
+javascript	express	locate	ex_loc_acceptparams	acceptParams	1	178	1.0	PASS	2	5418	1.0	PASS	2058
+javascript	express	locate	ex_loc_view_dup	View	1	800	1.0	PASS	3	18545	1.0	PASS	5008
+javascript	express	callers	ex_callers_send_sink	send	1	1316	0.0	FAIL	2	26486	1.0	PASS	5483
+javascript	express	callees	ex_callees_render_chain	render	1	537	1.0	PASS	4	43519	1.0	PASS	10363
+javascript	express	callees	ex_callees_handle	handle	1	299	1.0	PASS	2	14386	1.0	PASS	7113
+javascript	express	blast	ex_blast_send	send	1	6826	1.0	PASS	2	26486	1.0	PASS	5483
+javascript	express	blast	ex_blast_json	json	1	6689	1.0	PASS	2	27840	1.0	PASS	10136
+javascript	express	feature	ex_feat_middleware_dispatch	handle	1	3034	0.75	PARTIAL	2	20654	1.0	PASS	5960
+javascript	express	feature	ex_feat_view_render	View	1	5100	1.0	PASS	3	23638	1.0	PASS	12041
+javascript	express	impl	ex_impl_view_proto	View	1	476	1.0	PASS	3	17856	0.5	PARTIAL	5007
+csharp	eShopOnWeb	locate	x_cs_loc_basket_ambig	Basket	1	1426	1.0	PASS	2	2962	1.0	PASS	5066
+csharp	eShopOnWeb	locate	x_cs_loc_handleasync_overload	HandleAsync	1	1698	1.0	PASS	9	19690	1.0	PASS	6006
+csharp	eShopOnWeb	impl	x_cs_impl_irepository	IRepository	1	2206	1.0	PASS	2	2057	1.0	PASS	3619
+csharp	eShopOnWeb	impl	x_cs_impl_aggregateroot	IAggregateRoot	1	10683	1.0	PASS	7	7976	1.0	PASS	2510
+csharp	eShopOnWeb	impl	x_cs_impl_catalogvm	ICatalogViewModelService	1	2168	1.0	PASS	3	7106	1.0	PASS	6531
+csharp	eShopOnWeb	callers	x_cs_callers_loginformation	LogInformation	1	1730	0.7857	PARTIAL	8	48795	1.0	PASS	1673
+csharp	eShopOnWeb	callers	x_cs_callers_transfer	TransferBasketAsync	1	846	1.0	PASS	2	4521	1.0	PASS	5042
+csharp	eShopOnWeb	callees	x_cs_callees_createorder	CreateOrderAsync	1	282	1.0	PASS	3	1433	0.5	PARTIAL	8500
+csharp	eShopOnWeb	blast	x_cs_blast_handleasync	HandleAsync	1	1671	0.6	PARTIAL	9	19690	0.9	PASS	5784
+csharp	eShopOnWeb	blast	x_cs_blast_efrepo_honest	EfRepository	1	381	0.0	UNSCORABLE	1	865	0.0	UNSCORABLE	3656
+csharp	eShopOnWeb	feature	x_cs_feat_checkout	OrderService	1	3461	0.25	PARTIAL	5	43462	1.0	PASS	3362
+csharp	eShopOnWeb	feature	x_cs_feat_catalog	CatalogViewModelService	1	5623	0.0	FAIL	4	8891	1.0	PASS	2861
+java	gson	locate	x_java_loc_value_ambig	value	1	1615	0.5	PARTIAL	4	22228	0.5	PARTIAL	3914
+java	gson	impl	x_java_impl_factory	TypeAdapterFactory	1	15042	1.0	PASS	8	62840	0.8667	PASS	18322
+java	gson	impl	x_java_impl_serializer	JsonSerializer	1	15042	0.0	FAIL	2	18883	0.5	PARTIAL	3592
+java	gson	impl	x_java_impl_element	JsonElement	1	15042	1.0	PASS	5	36343	1.0	PASS	13899
+java	gson	blast	x_java_blast_fromjson	fromJson	1	15042	0.2	PARTIAL	6	73576	0.6	PARTIAL	2550
+java	gson	blast	x_java_blast_typetoken	TypeToken	1	15042	0.0	FAIL	2	47058	0.6667	PARTIAL	10686
+java	gson	callers	x_java_callers_nextstring	nextString	1	2406	0.4615	PARTIAL	7	45462	0.7692	PARTIAL	5501
+java	gson	callees	x_java_callees_nextstring	nextString	1	1653	1.0	PASS	4	94096	0.9091	PASS	5499
+java	gson	callers	x_java_callers_read	read	1	28	0.0	FAIL	7	225463	0.8571	PASS	8176
+java	gson	locate	x_java_loc_typetoken	TypeToken	1	1660	1.0	PASS	2	16937	1.0	PASS	10695
+java	gson	feature	x_java_feat_reflect	ReflectiveTypeAdapterFactory	1	4381	0.5	PARTIAL	4	195801	1.0	PASS	18492
+java	gson	feature	x_java_feat_stream	JsonReader	1	3603	0.3333	PARTIAL	4	155542	1.0	PASS	18313
+cpp	json	locate	x_cpp_loc_gettoken_dup	get_token	1	960	1.0	PASS	3	225544	1.0	PASS	5631
+cpp	json	locate	x_cpp_loc_binreader	binary_reader	1	1017	1.0	PASS	3	310831	1.0	PASS	6376
+cpp	json	impl	x_cpp_impl_exception	exception	1	15042	1.0	PASS	3	215913	1.0	PASS	12613
+cpp	json	impl	x_cpp_impl_outadapter	output_adapter_protocol	1	3008	1.0	PASS	3	210432	1.0	PASS	2006
+cpp	json	impl	x_cpp_impl_conjunction	conjunction	1	979	1.0	PASS	3	237648	1.0	PASS	1065
+cpp	json	blast	x_cpp_blast_parse	parse	1	1193	0.0	FAIL	7	545088	0.4545	PARTIAL	15137
+cpp	json	blast	x_cpp_blast_dump	dump	1	15042	1.0	PASS	3	280726	1.0	PASS	9321
+cpp	json	callees	x_cpp_callees_fromcbor	from_cbor	1	562	1.0	PASS	2	205846	1.0	PASS	9144
+cpp	json	callers	x_cpp_callers_gettoken	get_token	1	1006	1.0	PASS	3	227555	1.0	PASS	5621
+cpp	json	locate	x_cpp_loc_key_ambig	key	1	931	1.0	PASS	4	240824	0.75	PARTIAL	6127
+cpp	json	feature	x_cpp_feat_sax	json_sax	1	7546	0.25	PARTIAL	2	84630	1.0	PASS	7941
+cpp	json	feature	x_cpp_feat_binary	binary_reader	1	7151	0.5	PARTIAL	4	348549	1.0	PASS	18180
+go	gin	impl	x_go_impl_render	Render	1	572	0.375	PARTIAL	9	60474	1.0	PASS	1833
+go	gin	impl	x_go_impl_binding	Bind	1	556	0.25	PARTIAL	9	58815	1.0	PASS	1480
+go	gin	impl	x_go_impl_wct	WriteContentType	1	2317	1.0	PASS	9	15084	1.0	PASS	2316
+go	gin	locate	x_go_loc_engine	Engine	1	682	1.0	PASS	3	29569	0.6667	PARTIAL	5812
+go	gin	locate	x_go_loc_new_ambig	New	1	846	1.0	PASS	2	27879	1.0	FAIL	3106
+go	gin	callers	x_go_callers_addroute	addRoute	1	1417	1.0	PASS	2	12703	1.0	PASS	3542
+go	gin	callees	x_go_callees_addroute	addRoute	1	578	1.0	PASS	5	35641	0.75	PARTIAL	3542
+go	gin	callers	x_go_callers_use	Use	1	1431	1.0	PASS	2	46401	1.0	PASS	3449
+go	gin	blast	x_go_blast_context	Context	1	2107	1.0	PASS	2	105905	1.0	PASS	3906
+go	gin	blast	x_go_blast_servehttp	ServeHTTP	1	7568	1.0	PASS	4	62661	1.0	PASS	6330
+go	gin	feature	x_go_feat_middleware	Context	1	1808	1.0	PASS	2	161147	1.0	PASS	10877
+go	gin	feature	x_go_feat_dispatch	Engine	1	2471	0.6	PARTIAL	3	49686	1.0	PASS	7911
+go	kubernetes	locate	k8s_loc_syncpod_ambig	syncPod	1	1002	1.0	PASS	6	149096	1.0	PASS	8582
+go	kubernetes	callers	k8s_callers_newserver	NewServer	1	521	0.0769	PARTIAL	6	338292	0.5385	PARTIAL	9270
+go	kubernetes	callees	k8s_callees_syncpod	SyncPod	1	1802	0.5714	PARTIAL	7	273606	0.5714	PARTIAL	7645
+go	kubernetes	blast	k8s_blast_syncpod	SyncPod	1	1618	1.0	PASS	2	92259	1.0	PASS	10638
+go	kubernetes	impl	k8s_impl_reconciler	Reconciler	1	644	0.0	UNSCORABLE	1	0	0.0	UNSCORABLE	6344
+go	kubernetes	feature	k8s_feat_pod_sync	SyncPod	1	3172	0.0	FAIL	3	178575	1.0	PASS	11482
+typescript	TypeScript	locate	ts_loc_createprogram_dup	createProgram	1	1240	1.0	PASS	3	385860	1.0	PASS	1909
+typescript	TypeScript	callers	ts_callers_createsourcefile	createSourceFile	1	1749	0.4286	PARTIAL	7	850977	1.0	PASS	10054
+typescript	TypeScript	callees	ts_callees_createprogram	createProgram	1	1606	0.4	PARTIAL	8	840647	0.6667	PARTIAL	1909
+typescript	TypeScript	blast	ts_blast_createsourcefile	createSourceFile	1	15042	1.0	PASS	7	850977	1.0	PASS	9824
+typescript	TypeScript	locate	ts_loc_emitfiles	emitFiles	1	1188	1.0	PASS	2	273416	1.0	PASS	33343
+typescript	TypeScript	feature	ts_feat_compile_pipeline	createProgram	1	4388	0.1667	PARTIAL	4	977796	1.0	PASS	19902

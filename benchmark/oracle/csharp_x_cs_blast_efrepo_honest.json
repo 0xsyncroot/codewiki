@@ -1,0 +1,13 @@
+{
+  "case_id": "csharp_x_cs_blast_efrepo_honest",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "blast",
+  "symbol": "EfRepository",
+  "feature_query": "",
+  "required_symbols": [],
+  "required_files": [],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "0 direct dependants; froze top 0 as must-contain core",
+  "min_required": 1
+}

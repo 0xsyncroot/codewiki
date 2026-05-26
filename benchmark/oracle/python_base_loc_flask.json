@@ -1,0 +1,17 @@
+{
+  "case_id": "python_base_loc_flask",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "locate",
+  "symbol": "Flask",
+  "feature_query": "",
+  "required_symbols": [
+    "Flask"
+  ],
+  "required_files": [
+    "app.py"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "1 non-test def site(s); answer must name Flask at its source file",
+  "min_required": 2
+}

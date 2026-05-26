@@ -1,0 +1,19 @@
+{
+  "case_id": "csharp_x_cs_impl_catalogvm",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "impl",
+  "symbol": "ICatalogViewModelService",
+  "feature_query": "",
+  "required_symbols": [
+    "CachedCatalogViewModelService",
+    "CatalogViewModelService"
+  ],
+  "required_files": [
+    "CachedCatalogViewModelService.cs",
+    "CatalogViewModelService.cs"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "2 implementers; froze top 2",
+  "min_required": 4
+}

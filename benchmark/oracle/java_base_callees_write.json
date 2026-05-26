@@ -1,0 +1,27 @@
+{
+  "case_id": "java_base_callees_write",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "callees",
+  "symbol": "write",
+  "feature_query": "",
+  "required_symbols": [
+    "beginArray",
+    "beginObject",
+    "endArray",
+    "endObject",
+    "get",
+    "getType",
+    "toString",
+    "value"
+  ],
+  "required_files": [
+    "JavaTimeTypeAdapters.java",
+    "JsonReader.java",
+    "JsonWriter.java",
+    "TypeToken.java"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "57 distinct callees total; froze top 8",
+  "min_required": 12
+}

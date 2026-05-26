@@ -1,0 +1,19 @@
+{
+  "case_id": "typescript_zod_blast_parse_hook",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "blast",
+  "symbol": "_parse",
+  "feature_query": "",
+  "required_symbols": [
+    "_parseAsync",
+    "_parseSync",
+    "safeParseAsync"
+  ],
+  "required_files": [
+    "types.ts"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "3 direct dependants; froze top 3 as must-contain core",
+  "min_required": 4
+}

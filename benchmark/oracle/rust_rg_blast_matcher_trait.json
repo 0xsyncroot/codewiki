@@ -1,0 +1,17 @@
+{
+  "case_id": "rust_rg_blast_matcher_trait",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "blast",
+  "symbol": "Matcher",
+  "feature_query": "",
+  "required_symbols": [
+    "RegexMatcher"
+  ],
+  "required_files": [
+    "matcher.rs"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "2 direct dependants; froze top 2 as must-contain core",
+  "min_required": 2
+}

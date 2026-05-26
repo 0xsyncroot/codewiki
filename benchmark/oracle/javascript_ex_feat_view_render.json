@@ -1,0 +1,19 @@
+{
+  "case_id": "javascript_ex_feat_view_render",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "feature",
+  "symbol": "View",
+  "feature_query": "how does express resolve a view and render a template with an engine",
+  "required_symbols": [
+    "View",
+    "render"
+  ],
+  "required_files": [
+    "application.js",
+    "view.js"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['View', 'render']",
+  "min_required": 4
+}

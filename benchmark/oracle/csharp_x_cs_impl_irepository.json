@@ -1,0 +1,17 @@
+{
+  "case_id": "csharp_x_cs_impl_irepository",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "impl",
+  "symbol": "IRepository",
+  "feature_query": "",
+  "required_symbols": [
+    "EfRepository"
+  ],
+  "required_files": [
+    "EfRepository.cs"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "1 implementers; froze top 1",
+  "min_required": 2
+}

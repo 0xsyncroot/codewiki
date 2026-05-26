@@ -1,0 +1,17 @@
+{
+  "case_id": "python_flask_loc_blueprint_ambig",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "locate",
+  "symbol": "Blueprint",
+  "feature_query": "",
+  "required_symbols": [
+    "Blueprint"
+  ],
+  "required_files": [
+    "blueprints.py"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name Blueprint at its source file",
+  "min_required": 2
+}

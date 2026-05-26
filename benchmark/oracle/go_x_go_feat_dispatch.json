@@ -1,0 +1,20 @@
+{
+  "case_id": "go_x_go_feat_dispatch",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "feature",
+  "symbol": "Engine",
+  "feature_query": "how does the engine match a request and dispatch to handlers",
+  "required_symbols": [
+    "Engine",
+    "ServeHTTP",
+    "handleHTTPRequest"
+  ],
+  "required_files": [
+    "default_validator.go",
+    "gin.go"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['Engine', 'ServeHTTP', 'handleHTTPRequest']",
+  "min_required": 5
+}

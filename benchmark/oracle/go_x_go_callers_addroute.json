@@ -1,0 +1,17 @@
+{
+  "case_id": "go_x_go_callers_addroute",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "callers",
+  "symbol": "addRoute",
+  "feature_query": "",
+  "required_symbols": [
+    "handle"
+  ],
+  "required_files": [
+    "routergroup.go"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "1 distinct callers total; froze top 1 by degree/name order",
+  "min_required": 2
+}

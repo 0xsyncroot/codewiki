@@ -1,0 +1,24 @@
+{
+  "case_id": "csharp_x_cs_loc_handleasync_overload",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "locate",
+  "symbol": "HandleAsync",
+  "feature_query": "",
+  "required_symbols": [
+    "HandleAsync"
+  ],
+  "required_files": [
+    "AuthenticateEndpoint.cs",
+    "CatalogBrandListEndpoint.cs",
+    "CatalogItemGetByIdEndpoint.cs",
+    "CatalogItemListPagedEndpoint.cs",
+    "CatalogTypeListEndpoint.cs",
+    "CreateCatalogItemEndpoint.cs",
+    "DeleteCatalogItemEndpoint.cs",
+    "UpdateCatalogItemEndpoint.cs"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "8 non-test def site(s); answer must name HandleAsync at its source file",
+  "min_required": 9
+}

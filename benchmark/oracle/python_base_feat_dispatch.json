@@ -1,0 +1,21 @@
+{
+  "case_id": "python_base_feat_dispatch",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "feature",
+  "symbol": "dispatch_request",
+  "feature_query": "how does request dispatching and routing work",
+  "required_symbols": [
+    "dispatch_request",
+    "full_dispatch_request",
+    "add_url_rule"
+  ],
+  "required_files": [
+    "app.py",
+    "blueprints.py",
+    "views.py"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['dispatch_request', 'full_dispatch_request', 'add_url_rule']",
+  "min_required": 6
+}

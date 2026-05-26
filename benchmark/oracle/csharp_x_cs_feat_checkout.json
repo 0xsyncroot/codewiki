@@ -1,0 +1,23 @@
+{
+  "case_id": "csharp_x_cs_feat_checkout",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "feature",
+  "symbol": "OrderService",
+  "feature_query": "how does checkout create an order from the basket",
+  "required_symbols": [
+    "OrderService",
+    "CreateOrderAsync",
+    "Order",
+    "TransferBasketAsync"
+  ],
+  "required_files": [
+    "IBasketService.cs",
+    "IOrderService.cs",
+    "Order.cs",
+    "OrderService.cs"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['OrderService', 'CreateOrderAsync', 'Order', 'TransferBasketAsync']",
+  "min_required": 8
+}

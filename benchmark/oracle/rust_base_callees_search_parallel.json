@@ -1,0 +1,29 @@
+{
+  "case_id": "rust_base_callees_search_parallel",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "callees",
+  "symbol": "search_parallel",
+  "feature_query": "",
+  "required_symbols": [
+    "clear",
+    "clone",
+    "map",
+    "new",
+    "run",
+    "search",
+    "searcher",
+    "walk_builder"
+  ],
+  "required_files": [
+    "hiargs.rs",
+    "lib.rs",
+    "line_buffer.rs",
+    "main.rs",
+    "standard.rs",
+    "types.rs"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "24 distinct callees total; froze top 8",
+  "min_required": 14
+}

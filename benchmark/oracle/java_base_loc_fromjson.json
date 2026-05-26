@@ -1,0 +1,18 @@
+{
+  "case_id": "java_base_loc_fromjson",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "locate",
+  "symbol": "fromJson",
+  "feature_query": "",
+  "required_symbols": [
+    "fromJson"
+  ],
+  "required_files": [
+    "Gson.java",
+    "TypeAdapter.java"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "13 non-test def site(s); answer must name fromJson at its source file",
+  "min_required": 3
+}

@@ -1,0 +1,26 @@
+{
+  "case_id": "java_x_java_callees_nextstring",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "callees",
+  "symbol": "nextString",
+  "feature_query": "",
+  "required_symbols": [
+    "doPeek",
+    "getAsString",
+    "nextQuotedValue",
+    "nextUnquotedValue",
+    "peek",
+    "popStack",
+    "toString",
+    "unexpectedTokenError"
+  ],
+  "required_files": [
+    "JsonArray.java",
+    "JsonReader.java",
+    "JsonTreeReader.java"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "9 distinct callees total; froze top 8",
+  "min_required": 11
+}

@@ -1,0 +1,28 @@
+{
+  "case_id": "go_k8s_callers_newserver",
+  "lang": "go",
+  "repo": "kubernetes",
+  "archetype": "callers",
+  "symbol": "NewServer",
+  "feature_query": "",
+  "required_symbols": [
+    "ListenAndServe",
+    "NewDocument",
+    "NewLink",
+    "NewOperation",
+    "NewPathItem",
+    "Server",
+    "StartEtcd",
+    "runParallel"
+  ],
+  "required_files": [
+    "OpenAPIv3.go",
+    "etcd.go",
+    "grpc.go",
+    "grpc_service.go",
+    "run.go"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "19 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 13
+}

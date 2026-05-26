@@ -1,0 +1,24 @@
+{
+  "case_id": "typescript_zod_impl_zodtype_subtypes",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "impl",
+  "symbol": "ZodType",
+  "feature_query": "",
+  "required_symbols": [
+    "ZodAny",
+    "ZodArray",
+    "ZodBigInt",
+    "ZodBoolean",
+    "ZodBranded",
+    "ZodCatch",
+    "ZodDate",
+    "ZodDefault"
+  ],
+  "required_files": [
+    "types.ts"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "36 implementers; froze top 8",
+  "min_required": 9
+}

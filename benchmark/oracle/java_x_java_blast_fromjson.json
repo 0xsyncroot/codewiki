@@ -1,0 +1,25 @@
+{
+  "case_id": "java_x_java_blast_fromjson",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "blast",
+  "symbol": "fromJson",
+  "feature_query": "",
+  "required_symbols": [
+    "deserialize",
+    "parse",
+    "readByteString",
+    "timeBagOfPrimitivesDefault",
+    "timeCollectionsDefault"
+  ],
+  "required_files": [
+    "BagOfPrimitivesDeserializationBenchmark.java",
+    "CollectionsDeserializationBenchmark.java",
+    "LegacyProtoTypeAdapterFactory.java",
+    "ParseBenchmark.java",
+    "TreeTypeAdapter.java"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "5 direct dependants; froze top 5 as must-contain core",
+  "min_required": 10
+}

@@ -1,0 +1,18 @@
+{
+  "case_id": "rust_rg_blast_search_path",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "blast",
+  "symbol": "search_path",
+  "feature_query": "",
+  "required_symbols": [
+    "search",
+    "search_decompress"
+  ],
+  "required_files": [
+    "search.rs"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "2 direct dependants; froze top 2 as must-contain core",
+  "min_required": 3
+}

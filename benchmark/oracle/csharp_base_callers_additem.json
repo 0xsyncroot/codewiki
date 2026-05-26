@@ -1,0 +1,18 @@
+{
+  "case_id": "csharp_base_callers_additem",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "callers",
+  "symbol": "AddItem",
+  "feature_query": "",
+  "required_symbols": [
+    "AddItemToBasket",
+    "TransferBasketAsync"
+  ],
+  "required_files": [
+    "BasketService.cs"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "2 distinct callers total; froze top 2 by degree/name order",
+  "min_required": 3
+}

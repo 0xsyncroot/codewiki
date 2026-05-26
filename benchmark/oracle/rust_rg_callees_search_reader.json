@@ -1,0 +1,30 @@
+{
+  "case_id": "rust_rg_callees_search_reader",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "callees",
+  "symbol": "search_reader",
+  "feature_query": "",
+  "required_symbols": [
+    "build",
+    "clone",
+    "map",
+    "multi_line_with_matcher",
+    "new",
+    "run",
+    "sink_with_path",
+    "stats"
+  ],
+  "required_files": [
+    "lib.rs",
+    "line_buffer.rs",
+    "mod.rs",
+    "search.rs",
+    "standard.rs",
+    "types.rs",
+    "walk.rs"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "11 distinct callees total; froze top 8",
+  "min_required": 15
+}

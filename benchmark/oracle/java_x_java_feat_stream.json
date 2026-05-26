@@ -1,0 +1,21 @@
+{
+  "case_id": "java_x_java_feat_stream",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "feature",
+  "symbol": "JsonReader",
+  "feature_query": "how does the streaming json reader tokenize input",
+  "required_symbols": [
+    "JsonReader",
+    "peek",
+    "beginObject"
+  ],
+  "required_files": [
+    "JsonReader.java",
+    "JsonTreeReader.java",
+    "JsonTreeWriter.java"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['JsonReader', 'peek', 'beginObject']",
+  "min_required": 6
+}

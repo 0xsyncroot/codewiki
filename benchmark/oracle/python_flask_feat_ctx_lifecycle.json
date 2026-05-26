@@ -1,0 +1,18 @@
+{
+  "case_id": "python_flask_feat_ctx_lifecycle",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "feature",
+  "symbol": "RequestContext",
+  "feature_query": "how does the application and request context lifecycle push and pop",
+  "required_symbols": [
+    "push",
+    "pop"
+  ],
+  "required_files": [
+    "ctx.py"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['push', 'pop', 'RequestContext']",
+  "min_required": 3
+}

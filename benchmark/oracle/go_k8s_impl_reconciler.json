@@ -1,0 +1,13 @@
+{
+  "case_id": "go_k8s_impl_reconciler",
+  "lang": "go",
+  "repo": "kubernetes",
+  "archetype": "impl",
+  "symbol": "Reconciler",
+  "feature_query": "",
+  "required_symbols": [],
+  "required_files": [],
+  "source": "grep:impl-def-pattern (no implements edge in lang)",
+  "notes": "lang has no implements/extends edges; required = source files with a definition implementing/subtyping Reconciler (pattern: func\\s+\\([^)]*\\)\\s+Reconciler\\s*\\(); hand-verified",
+  "min_required": 1
+}

@@ -1,0 +1,17 @@
+{
+  "case_id": "python_flask_blast_makeresponse",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "blast",
+  "symbol": "make_response",
+  "feature_query": "",
+  "required_symbols": [
+    "finalize_request"
+  ],
+  "required_files": [
+    "app.py"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "1 direct dependants; froze top 1 as must-contain core",
+  "min_required": 2
+}

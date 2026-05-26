@@ -1,0 +1,21 @@
+{
+  "case_id": "typescript_ts_feat_compile_pipeline",
+  "lang": "typescript",
+  "repo": "TypeScript",
+  "archetype": "feature",
+  "symbol": "createProgram",
+  "feature_query": "how does the typescript compiler turn source files into a program and emit output",
+  "required_symbols": [
+    "createProgram",
+    "createSourceFile",
+    "emitFiles"
+  ],
+  "required_files": [
+    "emitter.ts",
+    "parser.ts",
+    "tsbuildPublic.ts"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['createProgram', 'createSourceFile', 'emitFiles']",
+  "min_required": 6
+}

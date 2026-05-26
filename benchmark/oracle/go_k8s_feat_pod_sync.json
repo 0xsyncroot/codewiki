@@ -1,0 +1,20 @@
+{
+  "case_id": "go_k8s_feat_pod_sync",
+  "lang": "go",
+  "repo": "kubernetes",
+  "archetype": "feature",
+  "symbol": "SyncPod",
+  "feature_query": "how does the kubelet sync a pod to its desired state",
+  "required_symbols": [
+    "SyncPod",
+    "NewMainKubelet",
+    "podWorkers"
+  ],
+  "required_files": [
+    "kubelet.go",
+    "pod_workers.go"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['SyncPod', 'NewMainKubelet', 'podWorkers']",
+  "min_required": 5
+}

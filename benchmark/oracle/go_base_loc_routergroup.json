@@ -1,0 +1,17 @@
+{
+  "case_id": "go_base_loc_routergroup",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "locate",
+  "symbol": "RouterGroup",
+  "feature_query": "",
+  "required_symbols": [
+    "RouterGroup"
+  ],
+  "required_files": [
+    "routergroup.go"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "1 non-test def site(s); answer must name RouterGroup at its source file",
+  "min_required": 2
+}

@@ -1,0 +1,17 @@
+{
+  "case_id": "python_flask_loc_opensession_iface",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "locate",
+  "symbol": "open_session",
+  "feature_query": "",
+  "required_symbols": [
+    "open_session"
+  ],
+  "required_files": [
+    "sessions.py"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name open_session at its source file",
+  "min_required": 2
+}

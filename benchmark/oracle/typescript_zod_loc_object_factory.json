@@ -1,0 +1,17 @@
+{
+  "case_id": "typescript_zod_loc_object_factory",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "locate",
+  "symbol": "object",
+  "feature_query": "",
+  "required_symbols": [
+    "object"
+  ],
+  "required_files": [
+    "schemas.ts"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name object at its source file",
+  "min_required": 2
+}

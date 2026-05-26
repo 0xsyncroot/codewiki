@@ -1,0 +1,27 @@
+{
+  "case_id": "go_x_go_callees_addroute",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "callees",
+  "symbol": "addRoute",
+  "feature_query": "",
+  "required_symbols": [
+    "BytesToString",
+    "addChild",
+    "assert1",
+    "countParams",
+    "countSections",
+    "debugPrintRoute",
+    "get",
+    "insertChild"
+  ],
+  "required_files": [
+    "bytesconv.go",
+    "debug.go",
+    "tree.go",
+    "utils.go"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "10 distinct callees total; froze top 8",
+  "min_required": 12
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "typescript_ts_callers_createsourcefile",
+  "lang": "typescript",
+  "repo": "TypeScript",
+  "archetype": "callers",
+  "symbol": "createSourceFile",
+  "feature_query": "",
+  "required_symbols": [
+    "createLanguageServiceSourceFile",
+    "file",
+    "getSourceFile",
+    "parseJSDocTypeExpressionForTests",
+    "parseJsonText",
+    "parseSourceFileWorker",
+    "transpileWorker",
+    "verifyProgram"
+  ],
+  "required_files": [
+    "fakesHosts.ts",
+    "harnessIO.ts",
+    "incrementalUtils.ts",
+    "parser.ts",
+    "services.ts",
+    "transpile.ts"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "12 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 14
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "go_k8s_callees_syncpod",
+  "lang": "go",
+  "repo": "kubernetes",
+  "archetype": "callees",
+  "symbol": "SyncPod",
+  "feature_query": "",
+  "required_symbols": [
+    "Error",
+    "Errorf",
+    "Info",
+    "Lock",
+    "New",
+    "String",
+    "Unlock",
+    "V"
+  ],
+  "required_files": [
+    "config.go",
+    "generated.pb.go",
+    "interface.go",
+    "logger.go",
+    "rpc_util.go",
+    "zapgrpc.go"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "85 distinct callees total; froze top 8",
+  "min_required": 14
+}

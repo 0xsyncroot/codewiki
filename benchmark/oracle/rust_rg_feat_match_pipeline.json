@@ -1,0 +1,21 @@
+{
+  "case_id": "rust_rg_feat_match_pipeline",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "feature",
+  "symbol": "Searcher",
+  "feature_query": "how does a match flow from the matcher through the searcher to the printer",
+  "required_symbols": [
+    "Searcher",
+    "Sink",
+    "Printer"
+  ],
+  "required_files": [
+    "mod.rs",
+    "search.rs",
+    "sink.rs"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['Searcher', 'Sink', 'Printer']",
+  "min_required": 6
+}

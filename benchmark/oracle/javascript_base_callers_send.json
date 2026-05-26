@@ -1,0 +1,21 @@
+{
+  "case_id": "javascript_base_callers_send",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "callers",
+  "symbol": "send",
+  "feature_query": "",
+  "required_symbols": [
+    "json",
+    "jsonp",
+    "render",
+    "sendFile",
+    "sendStatus"
+  ],
+  "required_files": [
+    "response.js"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "5 distinct callers total; froze top 5 by degree/name order",
+  "min_required": 6
+}

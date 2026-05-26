@@ -1,0 +1,19 @@
+{
+  "case_id": "javascript_ex_feat_middleware_dispatch",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "feature",
+  "symbol": "handle",
+  "feature_query": "how does express mount middleware and dispatch a request through the router",
+  "required_symbols": [
+    "use",
+    "handle",
+    "init"
+  ],
+  "required_files": [
+    "application.js"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['use', 'handle', 'init']",
+  "min_required": 4
+}

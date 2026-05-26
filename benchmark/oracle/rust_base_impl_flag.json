@@ -1,0 +1,24 @@
+{
+  "case_id": "rust_base_impl_flag",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "impl",
+  "symbol": "Flag",
+  "feature_query": "",
+  "required_symbols": [
+    "AfterContext",
+    "AutoHybridRegex",
+    "BeforeContext",
+    "Binary",
+    "BlockBuffered",
+    "ByteOffset",
+    "CaseSensitive",
+    "Color"
+  ],
+  "required_files": [
+    "defs.rs"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "104 implementers; froze top 8",
+  "min_required": 9
+}

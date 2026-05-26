@@ -1,0 +1,18 @@
+{
+  "case_id": "javascript_ex_loc_view_dup",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "locate",
+  "symbol": "View",
+  "feature_query": "",
+  "required_symbols": [
+    "View"
+  ],
+  "required_files": [
+    "application.js",
+    "view.js"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name View at its source file",
+  "min_required": 3
+}

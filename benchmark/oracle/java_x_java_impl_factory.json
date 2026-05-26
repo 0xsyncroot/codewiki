@@ -1,0 +1,30 @@
+{
+  "case_id": "java_x_java_impl_factory",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "impl",
+  "symbol": "TypeAdapterFactory",
+  "feature_query": "",
+  "required_symbols": [
+    "CollectionTypeAdapterFactory",
+    "DummyTypeAdapterFactory",
+    "Excluder",
+    "InterceptorFactory",
+    "JsonAdapterAnnotationTypeAdapterFactory",
+    "MapTypeAdapterFactory",
+    "PostConstructAdapterFactory",
+    "ReflectiveTypeAdapterFactory"
+  ],
+  "required_files": [
+    "CollectionTypeAdapterFactory.java",
+    "Excluder.java",
+    "InterceptorFactory.java",
+    "JsonAdapterAnnotationTypeAdapterFactory.java",
+    "MapTypeAdapterFactory.java",
+    "PostConstructAdapterFactory.java",
+    "ReflectiveTypeAdapterFactory.java"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "10 implementers; froze top 8",
+  "min_required": 15
+}

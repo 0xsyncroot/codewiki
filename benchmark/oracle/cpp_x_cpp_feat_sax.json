@@ -1,0 +1,19 @@
+{
+  "case_id": "cpp_x_cpp_feat_sax",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "feature",
+  "symbol": "json_sax",
+  "feature_query": "how does the sax interface drive event-based parsing",
+  "required_symbols": [
+    "sax_parse",
+    "parse",
+    "get_token"
+  ],
+  "required_files": [
+    "parser.hpp"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['sax_parse', 'parse', 'get_token']",
+  "min_required": 4
+}

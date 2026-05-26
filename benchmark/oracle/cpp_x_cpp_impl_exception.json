@@ -1,0 +1,21 @@
+{
+  "case_id": "cpp_x_cpp_impl_exception",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "impl",
+  "symbol": "exception",
+  "feature_query": "",
+  "required_symbols": [
+    "invalid_iterator",
+    "other_error",
+    "out_of_range",
+    "parse_error"
+  ],
+  "required_files": [
+    "exceptions.hpp",
+    "json.hpp"
+  ],
+  "source": "graph:implements+extends (target=symbol)",
+  "notes": "10 implementers; froze top 8",
+  "min_required": 6
+}

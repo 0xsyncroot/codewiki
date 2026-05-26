@@ -1,0 +1,29 @@
+{
+  "case_id": "typescript_ts_blast_createsourcefile",
+  "lang": "typescript",
+  "repo": "TypeScript",
+  "archetype": "blast",
+  "symbol": "createSourceFile",
+  "feature_query": "",
+  "required_symbols": [
+    "createLanguageServiceSourceFile",
+    "file",
+    "getSourceFile",
+    "parseJSDocTypeExpressionForTests",
+    "parseJsonText",
+    "parseSourceFileWorker",
+    "transpileWorker",
+    "verifyProgram"
+  ],
+  "required_files": [
+    "fakesHosts.ts",
+    "harnessIO.ts",
+    "incrementalUtils.ts",
+    "parser.ts",
+    "services.ts",
+    "transpile.ts"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "12 direct dependants; froze top 8 as must-contain core",
+  "min_required": 14
+}

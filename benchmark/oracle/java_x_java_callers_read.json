@@ -1,0 +1,29 @@
+{
+  "case_id": "java_x_java_callers_read",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "callers",
+  "symbol": "read",
+  "feature_query": "",
+  "required_symbols": [
+    "fillBuffer",
+    "fromJson",
+    "fromJsonTree",
+    "readIntoField",
+    "readMessageField",
+    "readOneofField",
+    "readSingleFieldValue",
+    "resourceToString"
+  ],
+  "required_files": [
+    "Gson.java",
+    "JsonReader.java",
+    "LegacyProtoTypeAdapterFactory.java",
+    "ParseBenchmark.java",
+    "ReflectiveTypeAdapterFactory.java",
+    "TypeAdapter.java"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "11 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 14
+}

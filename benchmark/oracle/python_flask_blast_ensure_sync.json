@@ -1,0 +1,24 @@
+{
+  "case_id": "python_flask_blast_ensure_sync",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "blast",
+  "symbol": "ensure_sync",
+  "feature_query": "",
+  "required_symbols": [
+    "dispatch_request",
+    "do_teardown_appcontext",
+    "do_teardown_request",
+    "handle_exception",
+    "handle_http_exception",
+    "handle_user_exception",
+    "process_response",
+    "update_template_context"
+  ],
+  "required_files": [
+    "app.py"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "13 direct dependants; froze top 8 as must-contain core",
+  "min_required": 9
+}

@@ -1,0 +1,28 @@
+{
+  "case_id": "go_base_callers_new",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "callers",
+  "symbol": "New",
+  "feature_query": "",
+  "required_symbols": [
+    "BindBody",
+    "CustomRecoveryWithWriter",
+    "Default",
+    "LoadHTMLFS",
+    "LoadHTMLGlob",
+    "Negotiate",
+    "mapping",
+    "setWithProperType"
+  ],
+  "required_files": [
+    "context.go",
+    "form_mapping.go",
+    "gin.go",
+    "protobuf.go",
+    "recovery.go"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "14 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 13
+}

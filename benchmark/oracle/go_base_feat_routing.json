@@ -1,0 +1,20 @@
+{
+  "case_id": "go_base_feat_routing",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "feature",
+  "symbol": "RouterGroup",
+  "feature_query": "how does route registration and grouping work",
+  "required_symbols": [
+    "RouterGroup",
+    "Group",
+    "handle"
+  ],
+  "required_files": [
+    "gins.go",
+    "routergroup.go"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['RouterGroup', 'Group', 'handle']",
+  "min_required": 5
+}

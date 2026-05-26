@@ -1,0 +1,23 @@
+{
+  "case_id": "rust_rg_loc_build_ambig",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "locate",
+  "symbol": "build",
+  "feature_query": "",
+  "required_symbols": [
+    "build"
+  ],
+  "required_files": [
+    "decompress.rs",
+    "haystack.rs",
+    "json.rs",
+    "matcher.rs",
+    "path.rs",
+    "process.rs",
+    "search.rs"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "24 non-test def site(s); answer must name build at its source file",
+  "min_required": 8
+}

@@ -1,0 +1,21 @@
+{
+  "case_id": "go_x_go_blast_servehttp",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "blast",
+  "symbol": "ServeHTTP",
+  "feature_query": "",
+  "required_symbols": [
+    "FileFromFS",
+    "WrapH",
+    "createStaticHandler"
+  ],
+  "required_files": [
+    "context.go",
+    "routergroup.go",
+    "utils.go"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "3 direct dependants; froze top 3 as must-contain core",
+  "min_required": 6
+}

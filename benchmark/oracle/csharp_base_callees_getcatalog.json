@@ -1,0 +1,26 @@
+{
+  "case_id": "csharp_base_callees_getcatalog",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "callees",
+  "symbol": "GetCatalogItems",
+  "feature_query": "",
+  "required_symbols": [
+    "ComposePicUri",
+    "GenerateCatalogItemCacheKey",
+    "GetBrands",
+    "GetTypes",
+    "LogInformation",
+    "ToString"
+  ],
+  "required_files": [
+    "CacheHelpers.cs",
+    "CatalogViewModelService.cs",
+    "ErrorDetails.cs",
+    "LoggerAdapter.cs",
+    "UriComposer.cs"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "6 distinct callees total; froze top 6",
+  "min_required": 11
+}

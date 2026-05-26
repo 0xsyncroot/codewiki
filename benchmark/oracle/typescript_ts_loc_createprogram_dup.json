@@ -1,0 +1,18 @@
+{
+  "case_id": "typescript_ts_loc_createprogram_dup",
+  "lang": "typescript",
+  "repo": "TypeScript",
+  "archetype": "locate",
+  "symbol": "createProgram",
+  "feature_query": "",
+  "required_symbols": [
+    "createProgram"
+  ],
+  "required_files": [
+    "program.ts",
+    "tsbuildPublic.ts"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name createProgram at its source file",
+  "min_required": 3
+}

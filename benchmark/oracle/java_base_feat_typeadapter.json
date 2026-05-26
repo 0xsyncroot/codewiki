@@ -1,0 +1,19 @@
+{
+  "case_id": "java_base_feat_typeadapter",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "feature",
+  "symbol": "TypeAdapter",
+  "feature_query": "how does type adaptation serialize and deserialize objects",
+  "required_symbols": [
+    "TypeAdapter",
+    "fromJson",
+    "toJson"
+  ],
+  "required_files": [
+    "TypeAdapter.java"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['TypeAdapter', 'fromJson', 'toJson']",
+  "min_required": 4
+}

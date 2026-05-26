@@ -1,0 +1,25 @@
+{
+  "case_id": "csharp_x_cs_blast_handleasync",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "blast",
+  "symbol": "HandleAsync",
+  "feature_query": "",
+  "required_symbols": [
+    "AddRoute",
+    "POST /api/authenticate"
+  ],
+  "required_files": [
+    "AuthenticateEndpoint.cs",
+    "CatalogBrandListEndpoint.cs",
+    "CatalogItemGetByIdEndpoint.cs",
+    "CatalogItemListPagedEndpoint.cs",
+    "CatalogTypeListEndpoint.cs",
+    "CreateCatalogItemEndpoint.cs",
+    "DeleteCatalogItemEndpoint.cs",
+    "UpdateCatalogItemEndpoint.cs"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "8 direct dependants; froze top 8 as must-contain core",
+  "min_required": 10
+}

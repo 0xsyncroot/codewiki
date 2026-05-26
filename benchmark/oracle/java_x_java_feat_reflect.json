@@ -1,0 +1,21 @@
+{
+  "case_id": "java_x_java_feat_reflect",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "feature",
+  "symbol": "ReflectiveTypeAdapterFactory",
+  "feature_query": "how does gson reflectively bind json fields to object members",
+  "required_symbols": [
+    "ReflectiveTypeAdapterFactory",
+    "TypeAdapter",
+    "read"
+  ],
+  "required_files": [
+    "ReflectiveTypeAdapterFactory.java",
+    "TypeAdapter.java",
+    "TypeAdapterRuntimeTypeWrapper.java"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['ReflectiveTypeAdapterFactory', 'TypeAdapter', 'read']",
+  "min_required": 6
+}

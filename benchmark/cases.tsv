@@ -1,67 +1,327 @@
-# benchmark/cases.tsv — agent-savings case matrix (Wave 0, D2 design)
-# 6 archetypes x 8 languages = 48 cases over real cold-clonable repos.
+# benchmark/cases.tsv — CodeWiki agent-savings case matrix (canonical, merged).
+#
+# ~139 cases over 8 real cold-clonable repos (one per language). This is the single
+# canonical case file: it merges the original 6-archetype-per-language base suite with
+# two waves of DEEPER cases (Python/Rust/TS/JS and C#/Java/C++/Go) that stress harder,
+# more representative tasks — ambiguous/overloaded/common names, interface->impls
+# (DI base lists + structural Go interfaces), generics/templates, deep multi-hop blast
+# radius, framework patterns, larger feature comprehension, and a handful of HONEST cases
+# where CodeWiki is EXPECTED to struggle (Go structural interfaces have no `implements`
+# edge; C++ header-only triple-duplication inflates locate/impact; C# type-usage refs to
+# classes are not resolved). Those honest cases are kept on purpose to expose real graph
+# limitations, not cherry-picked to win.
 #
 # Archetype -> CodeWiki tool / baseline shape:
-#   locate   "where is X defined"          CW: query        | BL: grep def + read 1 file
+#   locate   "where is X defined"          CW: search       | BL: grep def + read 1 file
 #   callers  "what calls X"                CW: callers      | BL: grep usages + read N files
 #   callees  "what does X call"            CW: callees      | BL: read X's body + grep
 #   feature  "how does <feature> work"     CW: context (x3) | BL: grep feature regex + read N files
 #   impl     "implementers/subtypes of X"  CW: impact       | BL: grep interface + read N impl files
 #   blast    "what breaks if X changes"    CW: impact       | BL: grep symbol + read N dependant files
 #
-# Columns (TAB-separated):
-#   lang  repo  archetype  symbol  feature_query  baseline_regex  oracle_anchors
+# Columns (TAB-separated, 8 columns):
+#   lang  repo  archetype  symbol  feature_query  baseline_regex  oracle_anchors  case_id
 # - symbol         : the named symbol the CW tool is invoked with (and grep baseline targets)
 # - feature_query  : NL task for the `feature` archetype's `context` call (empty otherwise)
 # - baseline_regex : the grep -E pattern the baseline agent would run for this task
 # - oracle_anchors : '|'-joined anchor symbol names for the `feature` archetype oracle
 #                    (empty for other archetypes; their oracle is derived from the graph)
-lang	repo	archetype	symbol	feature_query	baseline_regex	oracle_anchors
-python	flask	locate	Flask		\bclass Flask\b
-python	flask	callers	add_url_rule		\badd_url_rule\b
-python	flask	callees	save_session		\bsave_session\b
-python	flask	feature	dispatch_request	how does request dispatching and routing work	dispatch_request|full_dispatch_request|add_url_rule|url_for	dispatch_request|full_dispatch_request|add_url_rule
-python	flask	impl	SessionInterface		class .*SessionInterface
-python	flask	blast	Flask		\bFlask\b
-rust	ripgrep	locate	search_parallel		fn search_parallel
-rust	ripgrep	callers	write_line_term		\bwrite_line_term\b
-rust	ripgrep	callees	search_parallel		\bsearch_parallel\b
-rust	ripgrep	feature	Searcher	how does parallel searching across files work	search_parallel|Searcher|SearchWorker|search_path	search_parallel|Searcher|SearchWorker
-rust	ripgrep	impl	Flag		impl Flag for
-rust	ripgrep	blast	build		\bbuild\b
-javascript	express	locate	init		exports.init
-javascript	express	callers	send		\bsend\b
-javascript	express	callees	init		\binit\b
-javascript	express	feature	handle	how does the router match and dispatch requests	Router|handle|match|dispatch	Router|handle|match
-javascript	express	impl	View		new View
-javascript	express	blast	send		\bsend\b
-typescript	zod	locate	safeParse		safeParse
-typescript	zod	callers	_parseSync		\b_parseSync\b
-typescript	zod	callees	convertBaseSchema		convertBaseSchema
-typescript	zod	feature	ZodType	how does schema parsing and validation work	ZodType|parse|safeParse|_parse	ZodType|parse|safeParse
-typescript	zod	impl	ZodType		extends ZodType
-typescript	zod	blast	safeParse		\bsafeParse\b
-java	gson	locate	fromJson		public .* fromJson
-java	gson	callers	fillBuffer		\bfillBuffer\b
-java	gson	callees	write		\bwrite\b
-java	gson	feature	TypeAdapter	how does type adaptation serialize and deserialize objects	TypeAdapter|fromJson|toJson|read	TypeAdapter|fromJson|toJson
-java	gson	impl	JsonSerializer		implements JsonSerializer
-java	gson	blast	TypeAdapter		\bTypeAdapter\b
-cpp	json	locate	sax_parse		sax_parse
-cpp	json	callers	get_token		\bget_token\b
-cpp	json	callees	sax_parse		\bsax_parse\b
-cpp	json	feature	parse	how does JSON parsing produce values	parse|sax_parse|parse_internal|json_value	parse|sax_parse
-cpp	json	impl	conjunction		struct conjunction
-cpp	json	blast	value		\bvalue\b
-go	gin	locate	RouterGroup		type RouterGroup
-go	gin	callers	New		\bNew\b
-go	gin	callees	setWithProperType		setWithProperType
-go	gin	feature	RouterGroup	how does route registration and grouping work	RouterGroup|Group|handle|addRoute	RouterGroup|Group|handle
-go	gin	impl	Render		\bRender\b
-go	gin	blast	Context		\bContext\b
-csharp	eShopOnWeb	locate	BasketService		class BasketService
-csharp	eShopOnWeb	callers	AddItem		\bAddItem\b
-csharp	eShopOnWeb	callees	GetCatalogItems		GetCatalogItems
-csharp	eShopOnWeb	feature	BasketService	how does the basket service add and manage items	BasketService|AddItem|IBasketService|SetQuantities	BasketService|AddItem|IBasketService
-csharp	eShopOnWeb	impl	IAggregateRoot		IAggregateRoot
-csharp	eShopOnWeb	blast	AddItem		\bAddItem\b
+# - case_id        : globally-unique id; oracle is oracle/<lang>_<case_id>.json
+#
+# Build oracles + run:  benchmark/lib/build_oracle_extra.py --cases benchmark/cases.tsv --out benchmark/oracle
+#                       benchmark/run-savings.sh
+lang	repo	archetype	symbol	feature_query	baseline_regex	oracle_anchors	case_id
+# ============================ BASE SUITE — 6 archetypes x 8 languages ============================
+# ---- Python / flask ----
+python	flask	locate	Flask		\bclass Flask\b		base_loc_flask
+python	flask	callers	add_url_rule		\badd_url_rule\b		base_callers_add_url_rule
+python	flask	callees	save_session		\bsave_session\b		base_callees_save_session
+python	flask	feature	dispatch_request	how does request dispatching and routing work	dispatch_request|full_dispatch_request|add_url_rule|url_for	dispatch_request|full_dispatch_request|add_url_rule	base_feat_dispatch
+python	flask	impl	SessionInterface		class .*SessionInterface		base_impl_sessioniface
+python	flask	blast	Flask		\bFlask\b		base_blast_flask
+# ---- Rust / ripgrep ----
+rust	ripgrep	locate	search_parallel		fn search_parallel		base_loc_search_parallel
+rust	ripgrep	callers	write_line_term		\bwrite_line_term\b		base_callers_write_line_term
+rust	ripgrep	callees	search_parallel		\bsearch_parallel\b		base_callees_search_parallel
+rust	ripgrep	feature	Searcher	how does parallel searching across files work	search_parallel|Searcher|SearchWorker|search_path	search_parallel|Searcher|SearchWorker	base_feat_parallel
+rust	ripgrep	impl	Flag		impl Flag for		base_impl_flag
+rust	ripgrep	blast	build		\bbuild\b		base_blast_build
+# ---- JavaScript / express ----
+javascript	express	locate	init		exports.init		base_loc_init
+javascript	express	callers	send		\bsend\b		base_callers_send
+javascript	express	callees	init		\binit\b		base_callees_init
+javascript	express	feature	handle	how does the router match and dispatch requests	Router|handle|match|dispatch	Router|handle|match	base_feat_router
+javascript	express	impl	View		new View		base_impl_view
+javascript	express	blast	send		\bsend\b		base_blast_send
+# ---- TypeScript / zod ----
+typescript	zod	locate	safeParse		safeParse		base_loc_safeparse
+typescript	zod	callers	_parseSync		\b_parseSync\b		base_callers_parsesync
+typescript	zod	callees	convertBaseSchema		convertBaseSchema		base_callees_convertbase
+typescript	zod	feature	ZodType	how does schema parsing and validation work	ZodType|parse|safeParse|_parse	ZodType|parse|safeParse	base_feat_parsing
+typescript	zod	impl	ZodType		extends ZodType		base_impl_zodtype
+typescript	zod	blast	safeParse		\bsafeParse\b		base_blast_safeparse
+# ---- Java / gson ----
+java	gson	locate	fromJson		public .* fromJson		base_loc_fromjson
+java	gson	callers	fillBuffer		\bfillBuffer\b		base_callers_fillbuffer
+java	gson	callees	write		\bwrite\b		base_callees_write
+java	gson	feature	TypeAdapter	how does type adaptation serialize and deserialize objects	TypeAdapter|fromJson|toJson|read	TypeAdapter|fromJson|toJson	base_feat_typeadapter
+java	gson	impl	JsonSerializer		implements JsonSerializer		base_impl_jsonserializer
+java	gson	blast	TypeAdapter		\bTypeAdapter\b		base_blast_typeadapter
+# ---- C++ / nlohmann-json ----
+cpp	json	locate	sax_parse		sax_parse		base_loc_sax_parse
+cpp	json	callers	get_token		\bget_token\b		base_callers_get_token
+cpp	json	callees	sax_parse		\bsax_parse\b		base_callees_sax_parse
+cpp	json	feature	parse	how does JSON parsing produce values	parse|sax_parse|parse_internal|json_value	parse|sax_parse	base_feat_parse
+cpp	json	impl	conjunction		struct conjunction		base_impl_conjunction
+cpp	json	blast	value		\bvalue\b		base_blast_value
+# ---- Go / gin ----
+go	gin	locate	RouterGroup		type RouterGroup		base_loc_routergroup
+go	gin	callers	New		\bNew\b		base_callers_new
+go	gin	callees	setWithProperType		setWithProperType		base_callees_setproper
+go	gin	feature	RouterGroup	how does route registration and grouping work	RouterGroup|Group|handle|addRoute	RouterGroup|Group|handle	base_feat_routing
+go	gin	impl	Render		\bRender\b		base_impl_render
+go	gin	blast	Context		\bContext\b		base_blast_context
+# ---- C# / eShopOnWeb ----
+csharp	eShopOnWeb	locate	BasketService		class BasketService		base_loc_basketservice
+csharp	eShopOnWeb	callers	AddItem		\bAddItem\b		base_callers_additem
+csharp	eShopOnWeb	callees	GetCatalogItems		GetCatalogItems		base_callees_getcatalog
+csharp	eShopOnWeb	feature	BasketService	how does the basket service add and manage items	BasketService|AddItem|IBasketService|SetQuantities	BasketService|AddItem|IBasketService	base_feat_basket
+csharp	eShopOnWeb	impl	IAggregateRoot		IAggregateRoot		base_impl_aggregateroot
+csharp	eShopOnWeb	blast	AddItem		\bAddItem\b		base_blast_additem
+# ============================ DEEPER CASES — Python / flask ============================
+# locate ambiguity: Blueprint defined in BOTH blueprints.py and sansio/blueprints.py.
+python	flask	locate	Blueprint		\bclass Blueprint\b		flask_loc_blueprint_ambig
+# locate ambiguity: make_response is a free function (helpers.py) AND a method (app.py).
+python	flask	locate	make_response		\bdef make_response\b		flask_loc_makeresponse_dup
+# locate ambiguity: open_session has 4 defs (2 test, 2 src) — must pick the src interface.
+python	flask	locate	open_session		\bdef open_session\b		flask_loc_opensession_iface
+# callers: register_blueprint — public API only called from tests; baseline greps src and misses them.
+python	flask	callers	register_blueprint		\bregister_blueprint\b		flask_callers_register_bp
+# callees: full_dispatch_request — the dispatch pipeline (preprocess/dispatch/finalize/handle).
+python	flask	callees	full_dispatch_request		\bfull_dispatch_request\b		flask_callees_fulldispatch
+# callees: handle_exception — error-handling fan-out across app.py.
+python	flask	callees	handle_exception		\bhandle_exception\b		flask_callees_handle_exc
+# blast: ensure_sync — the sync/async bridge; touched by the whole dispatch pipeline.
+python	flask	blast	ensure_sync		\bensure_sync\b		flask_blast_ensure_sync
+# blast: make_response — wide blast radius (response construction used everywhere).
+python	flask	blast	make_response		\bmake_response\b		flask_blast_makeresponse
+# feature: app/request context lifecycle — multi-file comprehension task.
+python	flask	feature	RequestContext	how does the application and request context lifecycle push and pop	push|pop|RequestContext|AppContext|full_dispatch_request	push|pop|RequestContext	flask_feat_ctx_lifecycle
+# feature: blueprint registration + nesting — Flask framework pattern across files.
+python	flask	feature	register_blueprint	how do blueprints register routes and nest under url prefixes	register_blueprint|add_url_rule|Blueprint|register	register_blueprint|add_url_rule|Blueprint	flask_feat_blueprint_reg
+# impl: SessionInterface implementers (subtypes of the session contract).
+python	flask	impl	SessionInterface		class .*SessionInterface		flask_impl_sessioniface
+# ============================ DEEPER CASES — Rust / ripgrep ============================
+# locate EXPECTED-POOR: `build` has 24 defs across 20 files (builder pattern everywhere).
+rust	ripgrep	locate	build		\bfn build\b		rg_loc_build_ambig
+# locate ambiguity: JSON — printer struct (json.rs) vs a flag def (flags/defs.rs).
+rust	ripgrep	locate	JSON		\bstruct JSON\b		rg_loc_json_printer_vs_flag
+# locate ambiguity: RegexMatcher exists in regex/ and pcre2/ crates (+ test utils).
+rust	ripgrep	locate	RegexMatcher		\bstruct RegexMatcher\b		rg_loc_regexmatcher_crate
+# callers: matched — hot Sink callback referenced across searcher/printer/ignore.
+rust	ripgrep	callers	matched		\bfn matched\b		rg_callers_matched_sink
+# callees: search_parallel — the parallel-search pipeline (searcher/printer/worker/run).
+rust	ripgrep	callees	search_parallel		\bsearch_parallel\b		rg_callees_search_parallel
+# callees: search_reader — single-reader search path; cross-file matcher/printer calls.
+rust	ripgrep	callees	search_reader		\bsearch_reader\b		rg_callees_search_reader
+# blast: search_path — the per-file search entry; its dependants span core/search.
+rust	ripgrep	blast	search_path		\bsearch_path\b		rg_blast_search_path
+# blast EXPECTED-POOR: Matcher trait is implemented widely; 1-hop dependants are huge/noisy.
+rust	ripgrep	blast	Matcher		\bMatcher\b		rg_blast_matcher_trait
+# feature: the matcher -> searcher -> printer pipeline (cross-crate comprehension).
+rust	ripgrep	feature	Searcher	how does a match flow from the matcher through the searcher to the printer	Searcher|Sink|Printer|search_path|matched	Searcher|Sink|Printer	rg_feat_match_pipeline
+# feature: gitignore / ignore-rules resolution (the ignore crate, multi-file).
+rust	ripgrep	feature	Gitignore	how does ripgrep decide which files to ignore using gitignore rules	Gitignore|matched|Walk|GitignoreBuilder	Gitignore|Walk	rg_feat_ignore_rules
+# impl EXPECTED-MIXED: Flag trait implementers (huge flag registry, defs.rs).
+rust	ripgrep	impl	Flag		impl Flag for		rg_impl_flag_trait
+# ============================ DEEPER CASES — TypeScript / zod ============================
+# locate ambiguity: parse is defined in v3 types.ts, v4 core/parse.ts, v4 classic/parse.ts.
+typescript	zod	locate	parse		\bfunction parse\b		zod_loc_parse_v3v4
+# locate ambiguity: parseAsync — v3 types.ts method vs v4 core vs v4 classic.
+typescript	zod	locate	parseAsync		\bparseAsync\b		zod_loc_parseasync_versions
+# locate EXPECTED-POOR: `object` has 15 defs (schema factory + many tests). Very ambiguous.
+typescript	zod	locate	object		\bfunction object\b		zod_loc_object_factory
+# callers EXPECTED-POOR: _parse has 37 same-name defs (one per schema); the callers tool
+# resolves to a single node and returns nothing, while the graph aggregate expects the
+# sync/async wrappers. Overloaded-name resolution is a real CodeWiki weakness here.
+typescript	zod	callers	_parse		\b_parse\b		zod_callers_parse_hook
+# callees: safeParse — what the public safe-parse entry calls internally.
+typescript	zod	callees	safeParse		\bsafeParse\b		zod_callees_safeparse
+# impl: ZodType base class — every primitive schema extends it (generics/inheritance heavy).
+typescript	zod	impl	ZodType		extends ZodType		zod_impl_zodtype_subtypes
+# blast: ZodType — change the base schema and the whole type hierarchy is impacted.
+typescript	zod	blast	ZodType		\bZodType\b		zod_blast_zodtype
+# blast: _parse — internal hook; wide blast across parse machinery.
+typescript	zod	blast	_parse		\b_parse\b		zod_blast_parse_hook
+# feature: schema composition (object/union/refine/transform/pipe) — large comprehension.
+typescript	zod	feature	ZodObject	how do schemas compose via object union refine and transform	ZodObject|ZodUnion|refine|transform|pipe	ZodObject|ZodUnion|refine	zod_feat_composition
+# feature: coercion + the parse/refinement validation pipeline.
+typescript	zod	feature	safeParse	how does parsing run refinements and produce issues	safeParse|_parse|refine|addIssue|ParseStatus	safeParse|_parse|refine	zod_feat_parse_pipeline
+# ============================ DEEPER CASES — JavaScript / express ============================
+# locate ambiguity: compileQueryParser is a function in utils.js AND a variable in
+# application.js (the query-parser factory vs its cached binding) — genuine cross-file dup.
+javascript	express	locate	compileQueryParser		\bcompileQueryParser\b		ex_loc_compilequery_dup
+# locate: acceptParams — a single util definition; tests CW finding the right helper file.
+javascript	express	locate	acceptParams		\bacceptParams\b		ex_loc_acceptparams
+# locate ambiguity: View — 7 nodes (lib/view.js def + app uses + test).
+javascript	express	locate	View		\bView\b		ex_loc_view_dup
+# callers EXPECTED-POOR: send is a common name; the callers tool surfaces example/test
+# FILE nodes first and doesn't rank the real response.js method callers (json/jsonp/
+# sendFile/render/sendStatus) within the limit. Honest ranking weakness on common names.
+javascript	express	callers	send		\bsend\b		ex_callers_send_sink
+# callees: render — Response#render's engine/tryRender/send chain (cross-file).
+javascript	express	callees	render		\brender\b		ex_callees_render_chain
+# callees: handle — Application#handle delegates to finalhandler and router.
+javascript	express	callees	handle		\bhandle\b		ex_callees_handle
+# blast: send — change Response.send and every response helper is impacted.
+javascript	express	blast	send		\bsend\b		ex_blast_send
+# blast: json — Response#json; serialization sink with wide downstream impact.
+javascript	express	blast	json		\bjson\b		ex_blast_json
+# feature: middleware mounting + the request-dispatch pipeline (router patterns).
+javascript	express	feature	handle	how does express mount middleware and dispatch a request through the router	use|handle|init|createApplication|render	use|handle|init	ex_feat_middleware_dispatch
+# feature: view resolution + template rendering (Application#render -> View -> engine).
+javascript	express	feature	View	how does express resolve a view and render a template with an engine	View|render|tryRender|lookup|engine	View|render	ex_feat_view_render
+# impl: View constructor pattern (no class-extends edges in JS prototypes).
+javascript	express	impl	View		new View		ex_impl_view_proto
+# ============================ DEEPER CASES — C# / eShopOnWeb ============================
+# Ambiguous locate: `Basket` is BOTH a domain aggregate AND a Blazor view component.
+csharp	eShopOnWeb	locate	Basket		class Basket		x_cs_loc_basket_ambig
+# Overloaded endpoint handler: HandleAsync is defined on ~8 PublicApi endpoints.
+csharp	eShopOnWeb	locate	HandleAsync		HandleAsync		x_cs_loc_handleasync_overload
+# Generic repo interface -> concrete impl via DI base list (EfRepository : IRepository).
+csharp	eShopOnWeb	impl	IRepository		(class|interface).*IRepository		x_cs_impl_irepository
+# Marker interface across the whole DDD domain model (aggregate root).
+csharp	eShopOnWeb	impl	IAggregateRoot		IAggregateRoot		x_cs_impl_aggregateroot
+# View-model service interface: cached + plain decorator implementations.
+csharp	eShopOnWeb	impl	ICatalogViewModelService		ICatalogViewModelService		x_cs_impl_catalogvm
+# Common framework method (ILogger.LogInformation), 36 call sites, ambiguous name.
+csharp	eShopOnWeb	callers	LogInformation		\bLogInformation\b		x_cs_callers_loginformation
+# Cross-file call chain: who triggers the basket->buyer transfer on checkout.
+csharp	eShopOnWeb	callers	TransferBasketAsync		\bTransferBasketAsync\b		x_cs_callers_transfer
+# Callees of the order-creation use case (spec + repo + uri composer fan-out).
+csharp	eShopOnWeb	callees	CreateOrderAsync		\bCreateOrderAsync\b		x_cs_callees_createorder
+# Deep blast radius from the overloaded endpoint handler contract (8 dependants).
+csharp	eShopOnWeb	blast	HandleAsync		\bHandleAsync\b		x_cs_blast_handleasync
+# HONEST FAILURE (expected UNSCORABLE): blast radius of a domain ENTITY. eShopOnWeb's
+# C# graph resolves method-call edges but NOT type-usage references to classes, so an
+# aggregate root like Order/EfRepository has ~0 symbol-level inbound edges. CodeWiki's
+# `impact` therefore reports a near-empty radius even though the entity is used widely
+# (via generic IRepository<T>/specifications). The oracle is empty -> UNSCORABLE; this
+# is kept on purpose to expose a real graph limitation, not cherry-picked to win.
+csharp	eShopOnWeb	blast	EfRepository		\bEfRepository\b		x_cs_blast_efrepo_honest
+# Larger feature comprehension: end-to-end checkout / order placement.
+csharp	eShopOnWeb	feature	OrderService	how does checkout create an order from the basket	OrderService|CreateOrderAsync|Order|TransferBasketAsync	OrderService|CreateOrderAsync|Order|TransferBasketAsync	x_cs_feat_checkout
+# Feature comprehension: catalog browsing/paging via view-model service + spec.
+csharp	eShopOnWeb	feature	CatalogViewModelService	how does the catalog list page filter and paginate items	CatalogViewModelService|GetCatalogItems|CatalogFilterPaginatedSpecification|ICatalogViewModelService	CatalogViewModelService|GetCatalogItems|CatalogFilterPaginatedSpecification	x_cs_feat_catalog
+# ============================ DEEPER CASES — Java / gson ============================
+# Ambiguous locate: `value` is a JsonWriter method defined across many writer files.
+java	gson	locate	value		public .*value\(		x_java_loc_value_ambig
+# High-fanout SPI interface: TypeAdapterFactory has 26 implementers.
+java	gson	impl	TypeAdapterFactory		implements .*TypeAdapterFactory		x_java_impl_factory
+# JsonSerializer SPI — user + builtin serializers (interface -> impls).
+java	gson	impl	JsonSerializer		implements .*JsonSerializer		x_java_impl_serializer
+# Polymorphic abstract base: JsonElement subtypes (Object/Array/Null/Primitive).
+java	gson	impl	JsonElement		extends JsonElement		x_java_impl_element
+# Huge blast radius: fromJson is gson's main entry point (~761 references).
+java	gson	blast	fromJson		\bfromJson\b		x_java_blast_fromjson
+# Blast radius of the generics carrier TypeToken (used pervasively).
+java	gson	blast	TypeToken		\bTypeToken\b		x_java_blast_typetoken
+# Callers of the streaming reader primitive nextString (cross-file in bind/).
+java	gson	callers	nextString		\bnextString\b		x_java_callers_nextstring
+# Callees of the reader primitive (state-machine fan-out within JsonReader).
+java	gson	callees	nextString		\bnextString\b		x_java_callees_nextstring
+# Ambiguous/overloaded: `read` is the TypeAdapter deserialize hook (~98 defs).
+java	gson	callers	read		\bread\b		x_java_callers_read
+# Locate the generics carrier type itself.
+java	gson	locate	TypeToken		class TypeToken		x_java_loc_typetoken
+# Feature comprehension: reflective field binding for arbitrary POJOs.
+java	gson	feature	ReflectiveTypeAdapterFactory	how does gson reflectively bind json fields to object members	ReflectiveTypeAdapterFactory|TypeAdapter|read	ReflectiveTypeAdapterFactory|TypeAdapter|read	x_java_feat_reflect
+# Feature comprehension: streaming tokenizer / pull parser.
+java	gson	feature	JsonReader	how does the streaming json reader tokenize input	JsonReader|peek|nextString|beginObject	JsonReader|peek|beginObject	x_java_feat_stream
+# ============================ DEEPER CASES — C++ / nlohmann-json ============================
+# Ambiguous locate across 3 copies (include/ canonical + single_include/ amalgam +
+# ABI test header). HONEST: header-only duplication makes "where defined" noisy.
+cpp	json	locate	get_token		Token get_token		x_cpp_loc_gettoken_dup
+# Locate a template class buried deep in detail/ (binary decode machinery).
+cpp	json	locate	binary_reader		class binary_reader		x_cpp_loc_binreader
+# Inheritance: nlohmann exception hierarchy (type_error/out_of_range/... : exception).
+cpp	json	impl	exception		: public exception		x_cpp_impl_exception
+# Inheritance: output_adapter_protocol -> stream/string/vector adapters.
+cpp	json	impl	output_adapter_protocol		output_adapter_protocol		x_cpp_impl_outadapter
+# Template-metaprogramming base (conjunction). HONEST: SFINAE/type-trait depth —
+# implements/extends edges are thin for std-like traits.
+cpp	json	impl	conjunction		struct conjunction		x_cpp_impl_conjunction
+# Deep multi-hop blast radius from the core `parse` entry point.
+cpp	json	blast	parse		\bparse\b		x_cpp_blast_parse
+# Blast radius of the hot `dump` serializer (header-only triple-duplication inflates
+# this across include/ + single_include/ + ABI header — stresses impact precision).
+cpp	json	blast	dump		\bdump\b		x_cpp_blast_dump
+# Callees of binary CBOR ingestion (binary_reader fan-out).
+cpp	json	callees	from_cbor		\bfrom_cbor\b		x_cpp_callees_fromcbor
+# Callers of the SAX token scanner.
+cpp	json	callers	get_token		\bget_token\b		x_cpp_callers_gettoken
+# Ambiguous common name: `key` defined on many iterators / sax handlers.
+cpp	json	locate	key		const .*key\(		x_cpp_loc_key_ambig
+# Feature comprehension: SAX event-driven parsing pipeline.
+cpp	json	feature	json_sax	how does the sax interface drive event-based parsing	sax_parse|json_sax|parse|get_token	sax_parse|parse|get_token	x_cpp_feat_sax
+# Feature comprehension: binary format (CBOR/MessagePack) decoding.
+cpp	json	feature	binary_reader	how are binary formats like cbor and messagepack decoded	binary_reader|from_cbor|from_msgpack|get_token	binary_reader|from_cbor|get_token	x_cpp_feat_binary
+# ============================ DEEPER CASES — Go / gin ============================
+# Structural interface impl: Render is satisfied by ~15 render/*.go structs with NO
+# `implements` edge in Go. HONEST: CodeWiki impact cannot see structural satisfaction.
+go	gin	impl	Render		func \([^)]*\) Render\(		x_go_impl_render
+# Structural interface impl: Binding satisfied by 13 binding/*.go via Bind(). HONEST.
+go	gin	impl	Bind		func \([^)]*\) Bind\(		x_go_impl_binding
+# Structural interface impl: WriteContentType (render contract). HONEST.
+go	gin	impl	WriteContentType		func \([^)]*\) WriteContentType\(		x_go_impl_wct
+# Locate the engine struct (core router/server type).
+go	gin	locate	Engine		type Engine struct		x_go_loc_engine
+# Ambiguous/common: `New` is gin's constructor but a very common Go name.
+go	gin	locate	New		func New\(		x_go_loc_new_ambig
+# Callers of the core route registration primitive (cross-file).
+go	gin	callers	addRoute		\baddRoute\b		x_go_callers_addroute
+# Callees of route registration (radix tree fan-out).
+go	gin	callees	addRoute		\baddRoute\b		x_go_callees_addroute
+# Middleware: who registers middleware via Use (~53 call sites).
+go	gin	callers	Use		\bUse\b		x_go_callers_use
+# Deep multi-hop blast radius from the central Context struct.
+go	gin	blast	Context		\bContext\b		x_go_blast_context
+# Blast radius of the request entry point handler.
+go	gin	blast	ServeHTTP		\bServeHTTP\b		x_go_blast_servehttp
+# Feature comprehension: middleware handler chain (Next/Abort stack).
+go	gin	feature	Context	how does the middleware handler chain execute with next and abort	Context|Next|Abort|HandlerFunc	Context|Next|Abort	x_go_feat_middleware
+# Feature comprehension: request->handler dispatch through the engine.
+go	gin	feature	Engine	how does the engine match a request and dispatch to handlers	Engine|ServeHTTP|handleHTTPRequest|addRoute	Engine|ServeHTTP|handleHTTPRequest	x_go_feat_dispatch
+# ============================ ENTERPRISE TIER — Go / kubernetes (~17k files, ~3.0M LOC) ============================
+# These cases probe the LARGE/ENTERPRISE size tier. The point: grep+read byte cost
+# explodes on a 17k-file repo (a single grep over pkg/ returns hundreds of KB; each
+# required file read is many KB more), while CodeWiki's structured answer stays bounded.
+# So the per-query token saving GROWS with repo size. Same frozen+hand-verified oracle
+# scheme (graph-derived + grep cross-check); same baseline scored on the identical oracle.
+# locate ambiguity: syncPod has 5 production defs across kubelet + controllers.
+go	kubernetes	locate	syncPod		\bfunc .*syncPod\b		k8s_loc_syncpod_ambig
+# callers: NewServer — a constructor referenced 300+ times across the tree.
+go	kubernetes	callers	NewServer		\bNewServer\b		k8s_callers_newserver
+# callees: SyncPod — the kubelet pod sync entry point's fan-out (100+ callees).
+go	kubernetes	callees	SyncPod		\bSyncPod\b		k8s_callees_syncpod
+# blast: SyncPod — what depends on the pod-sync contract (1-hop dependant core).
+go	kubernetes	blast	SyncPod		\bSyncPod\b		k8s_blast_syncpod
+# impl HONEST (Go structural typing, no implements edge): Reconciler is satisfied
+# structurally by many controllers; CodeWiki impact cannot see structural satisfaction.
+go	kubernetes	impl	Reconciler		func \([^)]*\) Reconcile\(		k8s_impl_reconciler
+# feature comprehension: the kubelet pod-sync lifecycle across manager + workers.
+go	kubernetes	feature	SyncPod	how does the kubelet sync a pod to its desired state	SyncPod|syncPod|NewMainKubelet|podWorkers	SyncPod|NewMainKubelet|podWorkers	k8s_feat_pod_sync
+# ============================ ENTERPRISE TIER — TypeScript / microsoft-TypeScript (~39k files, ~3.4M LOC) ============================
+# The TypeScript compiler — the canonical huge TS corpus (indexes cleanly in ~62s now).
+# locate ambiguity: createProgram defined in compiler/program.ts + tsbuildPublic.ts (+ test/baseline copies).
+typescript	TypeScript	locate	createProgram		\bfunction createProgram\b		ts_loc_createprogram_dup
+# callers: createSourceFile — the parser entry point, referenced across compiler/services.
+typescript	TypeScript	callers	createSourceFile		\bcreateSourceFile\b		ts_callers_createsourcefile
+# callees: createProgram — the program-construction fan-out (host/resolver/checker wiring).
+typescript	TypeScript	callees	createProgram		\bcreateProgram\b		ts_callees_createprogram
+# blast: createSourceFile — change the parser entry and the impact spans compiler/services.
+typescript	TypeScript	blast	createSourceFile		\bcreateSourceFile\b		ts_blast_createsourcefile
+# locate: emitFiles — the single emit entry point in compiler/emitter.ts.
+typescript	TypeScript	locate	emitFiles		\bfunction emitFiles\b		ts_loc_emitfiles
+# feature comprehension: source -> program -> emit pipeline across the compiler.
+typescript	TypeScript	feature	createProgram	how does the typescript compiler turn source files into a program and emit output	createProgram|createSourceFile|emitFiles|Parser	createProgram|createSourceFile|emitFiles	ts_feat_compile_pipeline

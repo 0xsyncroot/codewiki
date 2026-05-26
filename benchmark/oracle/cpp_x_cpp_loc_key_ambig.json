@@ -1,0 +1,19 @@
+{
+  "case_id": "cpp_x_cpp_loc_key_ambig",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "locate",
+  "symbol": "key",
+  "feature_query": "",
+  "required_symbols": [
+    "key"
+  ],
+  "required_files": [
+    "json.hpp",
+    "json_reverse_iterator.hpp",
+    "json_sax.hpp"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "8 non-test def site(s); answer must name key at its source file",
+  "min_required": 4
+}

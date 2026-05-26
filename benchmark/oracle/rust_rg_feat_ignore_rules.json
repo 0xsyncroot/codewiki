@@ -1,0 +1,19 @@
+{
+  "case_id": "rust_rg_feat_ignore_rules",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "feature",
+  "symbol": "Gitignore",
+  "feature_query": "how does ripgrep decide which files to ignore using gitignore rules",
+  "required_symbols": [
+    "Gitignore",
+    "Walk"
+  ],
+  "required_files": [
+    "gitignore.rs",
+    "walk.rs"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['Gitignore', 'Walk']",
+  "min_required": 4
+}

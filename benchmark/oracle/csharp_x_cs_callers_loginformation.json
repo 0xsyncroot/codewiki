@@ -1,0 +1,29 @@
+{
+  "case_id": "csharp_x_cs_callers_loginformation",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "callers",
+  "symbol": "LogInformation",
+  "feature_query": "",
+  "required_symbols": [
+    "ChangePassword",
+    "EnableAuthenticator",
+    "FetchUser",
+    "GetCatalogItems",
+    "List",
+    "Open",
+    "SetQuantities"
+  ],
+  "required_files": [
+    "BasketService.cs",
+    "CachedCatalogItemServiceDecorator.cs",
+    "CatalogItemService.cs",
+    "CatalogViewModelService.cs",
+    "Create.razor",
+    "CustomAuthStateProvider.cs",
+    "ManageController.cs"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "24 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 14
+}

@@ -1,0 +1,21 @@
+{
+  "case_id": "csharp_x_cs_feat_catalog",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "feature",
+  "symbol": "CatalogViewModelService",
+  "feature_query": "how does the catalog list page filter and paginate items",
+  "required_symbols": [
+    "CatalogViewModelService",
+    "GetCatalogItems",
+    "CatalogFilterPaginatedSpecification"
+  ],
+  "required_files": [
+    "CatalogFilterPaginatedSpecification.cs",
+    "CatalogViewModelService.cs",
+    "ICatalogViewModelService.cs"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['CatalogViewModelService', 'GetCatalogItems', 'CatalogFilterPaginatedSpecification']",
+  "min_required": 6
+}

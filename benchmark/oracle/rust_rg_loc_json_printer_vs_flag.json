@@ -1,0 +1,18 @@
+{
+  "case_id": "rust_rg_loc_json_printer_vs_flag",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "locate",
+  "symbol": "JSON",
+  "feature_query": "",
+  "required_symbols": [
+    "JSON"
+  ],
+  "required_files": [
+    "defs.rs",
+    "json.rs"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name JSON at its source file",
+  "min_required": 3
+}

@@ -1,0 +1,26 @@
+{
+  "case_id": "javascript_ex_callees_render_chain",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "callees",
+  "symbol": "render",
+  "feature_query": "",
+  "required_symbols": [
+    "debug",
+    "enabled",
+    "engine",
+    "join",
+    "next",
+    "send",
+    "slice",
+    "tryRender"
+  ],
+  "required_files": [
+    "application.js",
+    "response.js",
+    "view.js"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "8 distinct callees total; froze top 8",
+  "min_required": 11
+}

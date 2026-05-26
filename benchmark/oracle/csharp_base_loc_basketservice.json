@@ -1,0 +1,17 @@
+{
+  "case_id": "csharp_base_loc_basketservice",
+  "lang": "csharp",
+  "repo": "eShopOnWeb",
+  "archetype": "locate",
+  "symbol": "BasketService",
+  "feature_query": "",
+  "required_symbols": [
+    "BasketService"
+  ],
+  "required_files": [
+    "BasketService.cs"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name BasketService at its source file",
+  "min_required": 2
+}

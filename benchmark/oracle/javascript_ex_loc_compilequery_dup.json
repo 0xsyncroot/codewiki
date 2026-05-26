@@ -1,0 +1,18 @@
+{
+  "case_id": "javascript_ex_loc_compilequery_dup",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "locate",
+  "symbol": "compileQueryParser",
+  "feature_query": "",
+  "required_symbols": [
+    "compileQueryParser"
+  ],
+  "required_files": [
+    "application.js",
+    "utils.js"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name compileQueryParser at its source file",
+  "min_required": 3
+}

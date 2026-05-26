@@ -1,0 +1,21 @@
+{
+  "case_id": "cpp_base_callers_get_token",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "callers",
+  "symbol": "get_token",
+  "feature_query": "",
+  "required_symbols": [
+    "parse",
+    "parser",
+    "sax_parse",
+    "sax_parse_internal"
+  ],
+  "required_files": [
+    "json.hpp",
+    "parser.hpp"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "8 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 6
+}

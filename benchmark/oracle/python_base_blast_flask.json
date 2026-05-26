@@ -1,0 +1,30 @@
+{
+  "case_id": "python_base_blast_flask",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "blast",
+  "symbol": "Flask",
+  "feature_query": "",
+  "required_symbols": [
+    "_async_app",
+    "create_app",
+    "test_appgroup_app_context",
+    "test_async_before_after_request",
+    "test_config_from_mapping",
+    "test_default_error_handler",
+    "test_request_signals",
+    "test_response_type_errors"
+  ],
+  "required_files": [
+    "__init__.py",
+    "test_async.py",
+    "test_basic.py",
+    "test_cli.py",
+    "test_config.py",
+    "test_signals.py",
+    "test_user_error_handler.py"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "76 direct dependants; froze top 8 as must-contain core",
+  "min_required": 15
+}

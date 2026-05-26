@@ -1,0 +1,27 @@
+{
+  "case_id": "python_flask_callers_register_bp",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "callers",
+  "symbol": "register_blueprint",
+  "feature_query": "",
+  "required_symbols": [
+    "_async_app",
+    "test_async_before_after_request",
+    "test_blueprint_specific_error_handling",
+    "test_cli_blueprints",
+    "test_default_error_handler",
+    "test_nested_blueprint",
+    "test_nested_callback_order",
+    "test_template_global"
+  ],
+  "required_files": [
+    "test_async.py",
+    "test_blueprints.py",
+    "test_cli.py",
+    "test_user_error_handler.py"
+  ],
+  "source": "graph:calls+references (target=symbol)",
+  "notes": "52 distinct callers total; froze top 8 by degree/name order",
+  "min_required": 12
+}

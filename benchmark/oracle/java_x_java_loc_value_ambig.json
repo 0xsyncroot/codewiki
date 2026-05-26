@@ -1,0 +1,19 @@
+{
+  "case_id": "java_x_java_loc_value_ambig",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "locate",
+  "symbol": "value",
+  "feature_query": "",
+  "required_symbols": [
+    "value"
+  ],
+  "required_files": [
+    "JsonPrimitive.java",
+    "JsonTreeWriter.java",
+    "LazilyParsedNumber.java"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "17 non-test def site(s); answer must name value at its source file",
+  "min_required": 4
+}

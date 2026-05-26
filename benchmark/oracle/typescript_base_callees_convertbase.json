@@ -1,0 +1,27 @@
+{
+  "case_id": "typescript_base_callees_convertbase",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "callees",
+  "symbol": "convertBaseSchema",
+  "feature_query": "",
+  "required_symbols": [
+    "add",
+    "has",
+    "literal",
+    "map",
+    "min",
+    "number",
+    "object",
+    "string"
+  ],
+  "required_files": [
+    "registries.ts",
+    "schemas.ts",
+    "types.ts",
+    "util.ts"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "60 distinct callees total; froze top 8",
+  "min_required": 12
+}

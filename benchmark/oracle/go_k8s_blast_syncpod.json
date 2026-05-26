@@ -1,0 +1,17 @@
+{
+  "case_id": "go_k8s_blast_syncpod",
+  "lang": "go",
+  "repo": "kubernetes",
+  "archetype": "blast",
+  "symbol": "SyncPod",
+  "feature_query": "",
+  "required_symbols": [
+    "podWorkerLoop"
+  ],
+  "required_files": [
+    "pod_workers.go"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "1 direct dependants; froze top 1 as must-contain core",
+  "min_required": 2
+}

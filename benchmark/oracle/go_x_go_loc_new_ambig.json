@@ -1,0 +1,17 @@
+{
+  "case_id": "go_x_go_loc_new_ambig",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "locate",
+  "symbol": "New",
+  "feature_query": "",
+  "required_symbols": [
+    "New"
+  ],
+  "required_files": [
+    "gin.go"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "1 non-test def site(s); answer must name New at its source file",
+  "min_required": 2
+}

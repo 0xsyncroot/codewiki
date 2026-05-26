@@ -1,0 +1,18 @@
+{
+  "case_id": "go_x_go_loc_engine",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "locate",
+  "symbol": "Engine",
+  "feature_query": "",
+  "required_symbols": [
+    "Engine"
+  ],
+  "required_files": [
+    "default_validator.go",
+    "gin.go"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name Engine at its source file",
+  "min_required": 3
+}

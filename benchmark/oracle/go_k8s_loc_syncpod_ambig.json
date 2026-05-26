@@ -1,0 +1,21 @@
+{
+  "case_id": "go_k8s_loc_syncpod_ambig",
+  "lang": "go",
+  "repo": "kubernetes",
+  "archetype": "locate",
+  "symbol": "syncPod",
+  "feature_query": "",
+  "required_symbols": [
+    "syncPod"
+  ],
+  "required_files": [
+    "controller.go",
+    "endpoints_controller.go",
+    "endpointslice_controller.go",
+    "selinux_warning_controller.go",
+    "status_manager.go"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "5 non-test def site(s); answer must name syncPod at its source file",
+  "min_required": 6
+}

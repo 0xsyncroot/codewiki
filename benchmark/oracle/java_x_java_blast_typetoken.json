@@ -1,0 +1,18 @@
+{
+  "case_id": "java_x_java_blast_typetoken",
+  "lang": "java",
+  "repo": "gson",
+  "archetype": "blast",
+  "symbol": "TypeToken",
+  "feature_query": "",
+  "required_symbols": [
+    "CustomTypeToken",
+    "SubTypeToken"
+  ],
+  "required_files": [
+    "TypeTokenTest.java"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "2 direct dependants; froze top 2 as must-contain core",
+  "min_required": 3
+}

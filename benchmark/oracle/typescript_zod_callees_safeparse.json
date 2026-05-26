@@ -1,0 +1,20 @@
+{
+  "case_id": "typescript_zod_callees_safeparse",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "callees",
+  "symbol": "safeParse",
+  "feature_query": "",
+  "required_symbols": [
+    "_parseSync",
+    "getParsedType",
+    "handleResult"
+  ],
+  "required_files": [
+    "types.ts",
+    "util.ts"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "3 distinct callees total; froze top 3",
+  "min_required": 5
+}

@@ -1,0 +1,18 @@
+{
+  "case_id": "python_flask_loc_makeresponse_dup",
+  "lang": "python",
+  "repo": "flask",
+  "archetype": "locate",
+  "symbol": "make_response",
+  "feature_query": "",
+  "required_symbols": [
+    "make_response"
+  ],
+  "required_files": [
+    "app.py",
+    "helpers.py"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name make_response at its source file",
+  "min_required": 3
+}

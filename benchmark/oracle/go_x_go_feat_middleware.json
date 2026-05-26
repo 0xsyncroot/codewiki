@@ -1,0 +1,19 @@
+{
+  "case_id": "go_x_go_feat_middleware",
+  "lang": "go",
+  "repo": "gin",
+  "archetype": "feature",
+  "symbol": "Context",
+  "feature_query": "how does the middleware handler chain execute with next and abort",
+  "required_symbols": [
+    "Context",
+    "Next",
+    "Abort"
+  ],
+  "required_files": [
+    "context.go"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['Context', 'Next', 'Abort']",
+  "min_required": 4
+}

@@ -1,0 +1,20 @@
+{
+  "case_id": "typescript_zod_feat_composition",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "feature",
+  "symbol": "ZodObject",
+  "feature_query": "how do schemas compose via object union refine and transform",
+  "required_symbols": [
+    "ZodObject",
+    "ZodUnion",
+    "refine"
+  ],
+  "required_files": [
+    "schemas.ts",
+    "types.ts"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['ZodObject', 'ZodUnion', 'refine']",
+  "min_required": 5
+}

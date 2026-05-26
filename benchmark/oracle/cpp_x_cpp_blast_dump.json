@@ -1,0 +1,20 @@
+{
+  "case_id": "cpp_x_cpp_blast_dump",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "blast",
+  "symbol": "dump",
+  "feature_query": "",
+  "required_symbols": [
+    "patch_inplace",
+    "to_string",
+    "write_number_with_ubjson_prefix"
+  ],
+  "required_files": [
+    "binary_writer.hpp",
+    "json.hpp"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "10 direct dependants; froze top 8 as must-contain core",
+  "min_required": 5
+}

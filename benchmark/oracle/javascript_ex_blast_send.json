@@ -1,0 +1,21 @@
+{
+  "case_id": "javascript_ex_blast_send",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "blast",
+  "symbol": "send",
+  "feature_query": "",
+  "required_symbols": [
+    "json",
+    "jsonp",
+    "render",
+    "sendFile",
+    "sendStatus"
+  ],
+  "required_files": [
+    "response.js"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "5 direct dependants; froze top 5 as must-contain core",
+  "min_required": 6
+}

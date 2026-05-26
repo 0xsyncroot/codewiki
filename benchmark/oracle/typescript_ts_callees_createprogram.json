@@ -1,0 +1,30 @@
+{
+  "case_id": "typescript_ts_callees_createprogram",
+  "lang": "typescript",
+  "repo": "TypeScript",
+  "archetype": "callees",
+  "symbol": "createProgram",
+  "feature_query": "",
+  "required_symbols": [
+    "add",
+    "assert",
+    "forEach",
+    "getDirectoryPath",
+    "getTypeChecker",
+    "has",
+    "push",
+    "set"
+  ],
+  "required_files": [
+    "core.ts",
+    "debug.ts",
+    "nodeFactory.ts",
+    "path.ts",
+    "program.ts",
+    "tracing.ts",
+    "watchUtils.ts"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "76 distinct callees total; froze top 8",
+  "min_required": 15
+}

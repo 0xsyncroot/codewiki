@@ -1,0 +1,20 @@
+{
+  "case_id": "cpp_x_cpp_callees_fromcbor",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "callees",
+  "symbol": "from_cbor",
+  "feature_query": "",
+  "required_symbols": [
+    "basic_json",
+    "get",
+    "input_adapter",
+    "sax_parse"
+  ],
+  "required_files": [
+    "json.hpp"
+  ],
+  "source": "graph:calls (source=symbol)",
+  "notes": "7 distinct callees total; froze top 7",
+  "min_required": 5
+}

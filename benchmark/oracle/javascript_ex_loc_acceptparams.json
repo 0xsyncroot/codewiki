@@ -1,0 +1,17 @@
+{
+  "case_id": "javascript_ex_loc_acceptparams",
+  "lang": "javascript",
+  "repo": "express",
+  "archetype": "locate",
+  "symbol": "acceptParams",
+  "feature_query": "",
+  "required_symbols": [
+    "acceptParams"
+  ],
+  "required_files": [
+    "utils.js"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "1 non-test def site(s); answer must name acceptParams at its source file",
+  "min_required": 2
+}

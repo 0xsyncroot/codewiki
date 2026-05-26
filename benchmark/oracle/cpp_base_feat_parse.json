@@ -1,0 +1,18 @@
+{
+  "case_id": "cpp_base_feat_parse",
+  "lang": "cpp",
+  "repo": "json",
+  "archetype": "feature",
+  "symbol": "parse",
+  "feature_query": "how does JSON parsing produce values",
+  "required_symbols": [
+    "parse",
+    "sax_parse"
+  ],
+  "required_files": [
+    "parser.hpp"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['parse', 'sax_parse']",
+  "min_required": 3
+}

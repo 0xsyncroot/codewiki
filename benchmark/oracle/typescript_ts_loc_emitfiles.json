@@ -1,0 +1,17 @@
+{
+  "case_id": "typescript_ts_loc_emitfiles",
+  "lang": "typescript",
+  "repo": "TypeScript",
+  "archetype": "locate",
+  "symbol": "emitFiles",
+  "feature_query": "",
+  "required_symbols": [
+    "emitFiles"
+  ],
+  "required_files": [
+    "emitter.ts"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "1 non-test def site(s); answer must name emitFiles at its source file",
+  "min_required": 2
+}

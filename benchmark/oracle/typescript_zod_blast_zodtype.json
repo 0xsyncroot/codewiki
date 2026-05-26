@@ -1,0 +1,24 @@
+{
+  "case_id": "typescript_zod_blast_zodtype",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "blast",
+  "symbol": "ZodType",
+  "feature_query": "",
+  "required_symbols": [
+    "ZodArray",
+    "ZodBigInt",
+    "ZodDate",
+    "ZodEnum",
+    "ZodFunction",
+    "ZodNumber",
+    "ZodObject",
+    "ZodString"
+  ],
+  "required_files": [
+    "types.ts"
+  ],
+  "source": "graph:calls+references+implements+extends (1-hop dependants)",
+  "notes": "36 direct dependants; froze top 8 as must-contain core",
+  "min_required": 9
+}

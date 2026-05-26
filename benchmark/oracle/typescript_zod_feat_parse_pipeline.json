@@ -1,0 +1,20 @@
+{
+  "case_id": "typescript_zod_feat_parse_pipeline",
+  "lang": "typescript",
+  "repo": "zod",
+  "archetype": "feature",
+  "symbol": "safeParse",
+  "feature_query": "how does parsing run refinements and produce issues",
+  "required_symbols": [
+    "safeParse",
+    "_parse",
+    "refine"
+  ],
+  "required_files": [
+    "parse.ts",
+    "types.ts"
+  ],
+  "source": "graph:anchor symbols (hand-picked) resolved to def files",
+  "notes": "feature anchors: ['safeParse', '_parse', 'refine']",
+  "min_required": 5
+}

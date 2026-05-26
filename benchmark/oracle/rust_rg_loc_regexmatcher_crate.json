@@ -1,0 +1,17 @@
+{
+  "case_id": "rust_rg_loc_regexmatcher_crate",
+  "lang": "rust",
+  "repo": "ripgrep",
+  "archetype": "locate",
+  "symbol": "RegexMatcher",
+  "feature_query": "",
+  "required_symbols": [
+    "RegexMatcher"
+  ],
+  "required_files": [
+    "matcher.rs"
+  ],
+  "source": "graph:nodes(name)",
+  "notes": "2 non-test def site(s); answer must name RegexMatcher at its source file",
+  "min_required": 2
+}
