@@ -21,6 +21,7 @@ pub mod name_matcher;
 pub mod path_aliases;
 pub mod resolver;
 pub mod strip_comments;
+pub mod structural_interface;
 
 // Re-exports
 pub use batch::{ResolutionBatchRunner, BATCH_SIZE_FULL_INDEX, BATCH_SIZE_INCREMENTAL};
@@ -33,3 +34,6 @@ pub use name_matcher::NameMatcher;
 pub use path_aliases::PathAliasMap;
 pub use resolver::ReferenceResolver;
 pub use strip_comments::{strip_comments, CommentLang};
+pub use structural_interface::{
+    synthesize_from_nodes, StructuralInterfaceIndex, STRUCTURAL_GO_PROVENANCE,
+};

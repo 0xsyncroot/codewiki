@@ -199,6 +199,53 @@ static_set!(
     "atomic"
 );
 static_set!(
+    csharp_builtin_types,
+    // Predefined value/reference types & keyword-types.
+    "bool",
+    "byte",
+    "sbyte",
+    "char",
+    "decimal",
+    "double",
+    "float",
+    "int",
+    "uint",
+    "long",
+    "ulong",
+    "short",
+    "ushort",
+    "nint",
+    "nuint",
+    "string",
+    "object",
+    "void",
+    "var",
+    "dynamic",
+    "unmanaged",
+    "delegate",
+    // Universal BCL primitives / wrappers — no useful blast signal.
+    "Boolean",
+    "Byte",
+    "SByte",
+    "Char",
+    "Decimal",
+    "Double",
+    "Single",
+    "Int16",
+    "Int32",
+    "Int64",
+    "UInt16",
+    "UInt32",
+    "UInt64",
+    "IntPtr",
+    "UIntPtr",
+    "String",
+    "Object",
+    "Task",
+    "ValueTask",
+    "Void"
+);
+static_set!(
     go_builtins,
     "make",
     "new",
@@ -437,6 +484,63 @@ impl ReferenceResolver {
     /// Return a clone of the file index Arc.
     pub fn file_index(&self) -> Option<NameIndex> {
         self.file_index.clone()
+    }
+
+    /// ADDITIVE strategy — Go structural-interface `Implements` synthesis.
+    ///
+    /// Go satisfies interfaces structurally (no `implements` keyword), so the
+    /// per-ref cascade in [`resolve_one`](Self::resolve_one) never produces an
+    /// `Implements` edge for Go: there is no originating unresolved ref. This
+    /// pass closes that gap as a SEPARATE, run-once-per-full-index step that
+    /// scans the whole node inventory and synthesises `Implements` edges from a
+    /// concrete Go type to every interface its EXPORTED method set covers
+    /// (matched by method name + parameter arity).
+    ///
+    /// It is intentionally additive: it neither reads nor mutates the edges the
+    /// framework / import / name-matcher cascade produced, so existing edges are
+    /// undisturbed. Call AFTER the cascade has drained `unresolved_refs`, then
+    /// commit the returned edges through the same `commit_resolved_batch` path.
+    ///
+    /// Returns an empty vec for non-Go projects (no Go interfaces in the
+    /// inventory), so it is cheap and safe to call unconditionally. Each Go
+    /// source file is read at most once.
+    pub fn synthesize_structural_implements(&self) -> Vec<ResolvedEdge> {
+        // Prefer the warmed in-memory inventory; fall back to a DB scan if
+        // caches were not warmed (rare; only some test paths).
+        let node_refs = self.db.get_all_node_refs();
+        if node_refs.is_empty() {
+            return Vec::new();
+        }
+        // Quick bail-out: if there are no Go nodes at all, skip the source reads.
+        if !node_refs
+            .iter()
+            .any(|n| n.language == codewiki_core::Language::Go)
+        {
+            return Vec::new();
+        }
+
+        let project_root = self.project_root.clone();
+        let mut file_cache: HashMap<String, Option<String>> = HashMap::new();
+        crate::structural_interface::synthesize_from_nodes(&node_refs, |file_path| {
+            if let Some(cached) = file_cache.get(file_path) {
+                return cached.clone();
+            }
+            // Resolve relative paths against the project root; absolute paths are
+            // read as-is. This mirrors how framework resolvers read sources.
+            let candidate = {
+                let p = std::path::Path::new(file_path);
+                if p.is_absolute() {
+                    p.to_path_buf()
+                } else {
+                    project_root.join(p)
+                }
+            };
+            let contents = std::fs::read_to_string(&candidate)
+                .ok()
+                .or_else(|| std::fs::read_to_string(file_path).ok());
+            file_cache.insert(file_path.to_string(), contents.clone());
+            contents
+        })
     }
 
     /// Resolve a single reference using the 3-strategy cascade.
@@ -700,6 +804,15 @@ impl ReferenceResolver {
                     return true;
                 }
             }
+        }
+
+        // C# type-usage `references` refs (recall fix) must not resolve to
+        // primitives / ubiquitous BCL wrappers — they carry no blast signal and
+        // would otherwise add millions of `int`/`string`/`Task` edges.
+        if language_from_file_path(&uref.file_path) == Language::CSharp
+            && csharp_builtin_types().contains(name.as_str())
+        {
+            return true;
         }
 
         false
