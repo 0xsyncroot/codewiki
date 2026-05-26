@@ -5,12 +5,20 @@
 #
 # Downloads the correct pre-built Rust binary from GitHub Releases,
 # verifies the SHA-256 checksum, and places it in ~/.local/bin/.
+#
+# RE-RUN / UPGRADE: running this again detects the installed version, compares
+# it against the target (latest release, or a pinned --version), and:
+#   * exits as a no-op when already on the target version,
+#   * upgrades (or downgrades, with a notice) otherwise,
+# backing up the current binary and rolling back if the new one fails to run.
 
 set -euo pipefail
 
 REPO="0xsyncroot/codewiki"
 INSTALL_DIR="${CODEWIKI_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${CODEWIKI_VERSION:-latest}"
+# Override for tests: a URL/path `curl` can fetch returning the releases/latest JSON.
+RELEASE_API="${CODEWIKI_RELEASE_API:-https://api.github.com/repos/${REPO}/releases/latest}"
 UNINSTALL=0
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
@@ -28,6 +36,8 @@ OPTIONS:
 ENVIRONMENT:
   CODEWIKI_INSTALL_DIR   Override install directory
   CODEWIKI_VERSION       Override version tag
+  CODEWIKI_RELEASE_API   Override the releases/latest API URL (testing)
+  CODEWIKI_DOWNLOAD_BASE Override the release-asset download base URL (testing)
 
 EOF
   exit 0
@@ -56,6 +66,54 @@ if [[ $UNINSTALL -eq 1 ]]; then
   exit 0
 fi
 
+# ── Version helpers ───────────────────────────────────────────────────────────
+
+# Strip a leading `v`, drop any -prerelease/+build suffix, echo MAJOR.MINOR.PATCH
+# (missing components default to 0). Echoes nothing if unparseable.
+normalize_version() {
+  local raw="${1:-}"
+  raw="${raw#v}"; raw="${raw#V}"
+  # Drop everything from the first '-' or '+'.
+  raw="${raw%%-*}"; raw="${raw%%+*}"
+  [[ -z "$raw" ]] && return 0
+  local IFS='.'
+  # shellcheck disable=SC2206
+  local parts=($raw)
+  local major="${parts[0]:-0}" minor="${parts[1]:-0}" patch="${parts[2]:-0}"
+  # All three must be pure integers, and there must be no 4th component.
+  if [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ \
+        && -z "${parts[3]:-}" ]]; then
+    echo "${major}.${minor}.${patch}"
+  fi
+}
+
+# Numeric semver compare. Echoes -1 (a<b), 0 (a==b), or 1 (a>b).
+# Inputs must already be normalized MAJOR.MINOR.PATCH.
+compare_versions() {
+  local a="$1" b="$2"
+  local IFS='.'
+  # shellcheck disable=SC2206
+  local av=($a) bv=($b)
+  local i
+  for i in 0 1 2; do
+    if (( ${av[i]} > ${bv[i]} )); then printf '%s\n' 1; return; fi
+    if (( ${av[i]} < ${bv[i]} )); then printf '%s\n' -1; return; fi
+  done
+  printf '%s\n' 0
+}
+
+# Echo the installed version token (raw tag) by running the binary, or nothing.
+detect_installed_version() {
+  local bin="$1"
+  [[ -x "$bin" ]] || return 0
+  local out token
+  # `codewiki --version` prints e.g. "codewiki 0.1.1"; grab the last whitespace
+  # token. Tolerate any failure → echo nothing (treated as force install).
+  out="$("$bin" --version 2>/dev/null)" || return 0
+  token="$(printf '%s\n' "$out" | head -1 | awk '{print $NF}')"
+  echo "$token"
+}
+
 # ── OS / arch detection ───────────────────────────────────────────────────────
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -75,11 +133,11 @@ esac
 
 TARGET_TRIPLE="${ARCH_NORM}-${OSFAM}"
 
-# ── Version resolution ────────────────────────────────────────────────────────
+# ── Target version resolution ─────────────────────────────────────────────────
 
 if [[ "$VERSION" == "latest" ]]; then
   echo "Resolving latest version…"
-  VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+  VERSION=$(curl -fsSL "$RELEASE_API" \
     | grep '"tag_name"' \
     | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
   if [[ -z "$VERSION" ]]; then
@@ -88,11 +146,40 @@ if [[ "$VERSION" == "latest" ]]; then
   fi
 fi
 
-echo "Installing codewiki ${VERSION} for ${TARGET_TRIPLE}…"
+DEST="$INSTALL_DIR/codewiki"
 
-# ��─ Download ──────────────────────────────────────────────────────────────────
+# ── Re-run / upgrade decision ─────────────────────────────────────────────────
 
-BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+INSTALLED_RAW="$(detect_installed_version "$DEST")"
+INSTALLED_NORM="$(normalize_version "$INSTALLED_RAW")"
+TARGET_NORM="$(normalize_version "$VERSION")"
+
+if [[ -n "$INSTALLED_NORM" && -n "$TARGET_NORM" ]]; then
+  cmp="$(compare_versions "$INSTALLED_NORM" "$TARGET_NORM")"
+  case "$cmp" in
+    0)
+      echo "codewiki is already on ${VERSION} (installed: ${INSTALLED_RAW})."
+      exit 0
+      ;;
+    1)
+      echo "Notice: downgrading ${INSTALLED_RAW} -> ${VERSION}."
+      ;;
+    -1)
+      echo "Upgrading ${INSTALLED_RAW} -> ${VERSION}…"
+      ;;
+  esac
+elif [[ -n "$INSTALLED_RAW" ]]; then
+  # Binary exists but its version is unparseable → force (re)install.
+  echo "Reinstalling codewiki (installed version '${INSTALLED_RAW}' unparseable) -> ${VERSION}…"
+else
+  echo "Installing codewiki ${VERSION} for ${TARGET_TRIPLE}…"
+fi
+
+# ── Download ──────────────────────────────────────────────────────────────────
+
+# Override for tests: a base URL/path `curl` can fetch the release assets from.
+# Defaults to the public GitHub releases download URL for the resolved tag.
+BASE_URL="${CODEWIKI_DOWNLOAD_BASE:-https://github.com/${REPO}/releases/download/${VERSION}}"
 ARCHIVE="codewiki-${TARGET_TRIPLE}.tar.gz"
 CHECKSUM_FILE="${ARCHIVE}.sha256"
 
@@ -115,7 +202,7 @@ else
 fi
 cd - >/dev/null
 
-# ── Extract and install ───────────────────────────────────────────────────────
+# ── Extract ───────────────────────────────────────────────────────────────────
 
 tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "$TMP_DIR"
 mkdir -p "$INSTALL_DIR"
@@ -124,7 +211,39 @@ if [[ -z "$BINARY" ]]; then
   echo "Could not find codewiki binary in archive." >&2
   exit 1
 fi
-install -m 755 "$BINARY" "$INSTALL_DIR/codewiki"
+
+# ── Install / atomic replace with backup + smoke test + rollback ──────────────
+
+BACKUP=""
+if [[ -f "$DEST" ]]; then
+  # Back up the current binary so we can roll back if the new one is broken.
+  BACKUP="${DEST}.bak.$$"
+  cp -p "$DEST" "$BACKUP"
+fi
+
+# Stage into the install dir, then atomically rename over the destination so a
+# reader never observes a half-written file.
+STAGED="${DEST}.new.$$"
+install -m 755 "$BINARY" "$STAGED"
+mv -f "$STAGED" "$DEST"
+
+# Smoke test: the freshly-installed binary must run `--version`.
+if ! "$DEST" --version >/dev/null 2>&1; then
+  echo "ERROR: the new codewiki binary failed its smoke test." >&2
+  if [[ -n "$BACKUP" ]]; then
+    echo "Rolling back to the previous version…" >&2
+    mv -f "$BACKUP" "$DEST"
+    BACKUP=""
+  else
+    rm -f "$DEST"
+  fi
+  exit 1
+fi
+
+# Success → drop the backup.
+if [[ -n "$BACKUP" ]]; then
+  rm -f "$BACKUP"
+fi
 
 # ── PATH hint ─────────────────────────────────────────────────────────────────
 
@@ -137,5 +256,9 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
   echo ""
 fi
 
-echo "codewiki ${VERSION} installed to ${INSTALL_DIR}/codewiki"
-"${INSTALL_DIR}/codewiki" --version 2>/dev/null || true
+if [[ -n "$INSTALLED_NORM" && -n "$TARGET_NORM" && "$INSTALLED_NORM" != "$TARGET_NORM" ]]; then
+  echo "Upgraded ${INSTALLED_RAW} -> ${VERSION} (${INSTALL_DIR}/codewiki)"
+else
+  echo "codewiki ${VERSION} installed to ${INSTALL_DIR}/codewiki"
+fi
+"${DEST}" --version 2>/dev/null || true

@@ -7,6 +7,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Installer upgrade path.** Re-running `install.sh` / `install.ps1` now detects
+  the installed version, resolves the target (latest release or a pinned
+  `--version`/`-Version`), and compares them numerically (`v0.10.0 > v0.9.0`).
+  Same version is a no-op; a newer target upgrades; an older target downgrades
+  with a notice. Upgrades back up the current binary, atomically replace it,
+  smoke-test the new binary's `--version`, and roll back on failure. On Windows
+  a locked (running) `codewiki.exe` is detected and reported clearly with the
+  original install left intact.
+- **`codewiki upgrade [--check]`** subcommand: checks GitHub for a newer release
+  and self-updates by re-invoking the platform installer. Offline-safe (network
+  failures print a friendly note and exit 0); `--check` reports without
+  installing.
+
+---
+
 ## [0.1.1] - 2026-05-25
 
 First functional public release with cross-platform binaries. Hardens the

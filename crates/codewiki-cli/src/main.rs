@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand};
 mod commands;
 mod installer;
 mod ui;
+mod version;
 
 /// CodeWiki — tree-sitter knowledge graph for AI coding agents
 #[derive(Debug, Parser)]
@@ -243,6 +244,14 @@ enum Commands {
         location: Option<String>,
     },
 
+    /// Upgrade codewiki to the latest release
+    #[command(next_help_heading = "Management")]
+    Upgrade {
+        /// Only check for an update; do not install
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Remove the .codewiki/ index from this project
     #[command(next_help_heading = "Management")]
     Uninit {
@@ -357,6 +366,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             };
             installer::run_uninstaller(opts)
         }
+        Commands::Upgrade { check } => commands::upgrade::run(check),
         Commands::Init { path, no_index, .. } => commands::init::run(path, no_index),
         Commands::Uninit { force, path } => commands::uninit::run(force, path),
         Commands::Index { path } => commands::index::run(path),

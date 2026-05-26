@@ -21,5 +21,8 @@ pub mod util;
 pub mod doctor;
 pub mod setup;
 
+// Self-update: `codewiki upgrade [--check]`.
+pub mod upgrade;
+
 // Graph web UI (feature-gated `web` for HTTP deps; stub always present)
 pub mod graph;

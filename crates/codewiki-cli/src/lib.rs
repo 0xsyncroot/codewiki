@@ -3,3 +3,4 @@
 pub mod commands;
 pub mod installer;
 pub mod ui;
+pub mod version;
