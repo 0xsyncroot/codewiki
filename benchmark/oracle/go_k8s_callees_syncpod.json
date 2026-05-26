@@ -7,7 +7,7 @@
   "feature_query": "",
   "required_symbols": [
     "Error",
-    "Get",
+    "Errorf",
     "Info",
     "Lock",
     "New",
@@ -16,15 +16,14 @@
     "V"
   ],
   "required_files": [
+    "config.go",
     "generated.pb.go",
-    "labels.go",
+    "interface.go",
     "logger.go",
-    "negotiate.go",
     "rpc_util.go",
-    "scheme.go",
-    "version.go"
+    "zapgrpc.go"
   ],
   "source": "graph:calls (source=symbol)",
-  "notes": "83 distinct callees total; froze top 8",
-  "min_required": 15
+  "notes": "85 distinct callees total; froze top 8",
+  "min_required": 14
 }

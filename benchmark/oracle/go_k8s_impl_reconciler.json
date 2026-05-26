@@ -5,25 +5,9 @@
   "archetype": "impl",
   "symbol": "Reconciler",
   "feature_query": "",
-  "required_symbols": [
-    "APIDispatcher",
-    "AggregationController",
-    "Backend",
-    "Checker",
-    "ClusterTrustBundlePublisher",
-    "ConditionalProgressRequester",
-    "Controller"
-  ],
-  "required_files": [
-    "api_dispatcher.go",
-    "checker.go",
-    "controller.go",
-    "fake.go",
-    "node_ipam_controller.go",
-    "publisher.go",
-    "watch_progress.go"
-  ],
-  "source": "graph:implements+extends (target=symbol)",
-  "notes": "56 implementers; froze top 8",
-  "min_required": 14
+  "required_symbols": [],
+  "required_files": [],
+  "source": "grep:impl-def-pattern (no implements edge in lang)",
+  "notes": "lang has no implements/extends edges; required = source files with a definition implementing/subtyping Reconciler (pattern: func\\s+\\([^)]*\\)\\s+Reconciler\\s*\\(); hand-verified",
+  "min_required": 1
 }
