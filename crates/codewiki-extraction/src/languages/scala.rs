@@ -9,8 +9,8 @@
 //! - `extension_definition` → traverse body inline, no container node.
 
 use crate::ast_walker::{
-    generate_node_id, is_in_function_scope, walk_node, DocCommentStyle, ExtractCtx, LanguageConfig,
-    LanguageExtractor,
+    generate_node_id, is_identifier_shaped, is_in_value_scope, walk_node, DocCommentStyle,
+    ExtractCtx, LanguageConfig, LanguageExtractor,
 };
 use codewiki_core::{Edge, EdgeKind, Node, NodeKind};
 
@@ -232,8 +232,16 @@ impl LanguageExtractor for ScalaExtractor {
                 if pattern.is_empty() {
                     return false;
                 }
+                // The initialiser (`value` field) carries real calls whether or
+                // not the binding itself is emitted. Returning `true` without
+                // walking it dropped every `val x = f()` call — top-level and
+                // function-local alike.
+                let value = node.child_by_field_name("value");
                 // Skip function-local val/var definitions (TS parity: only top-level variables).
-                if is_in_function_scope(ctx) {
+                if is_in_value_scope(ctx) {
+                    if let Some(v) = value {
+                        walk_node(&v, ctx, self);
+                    }
                     return true; // consumed but not emitted
                 }
                 // Inside a class scope → Field; at top level: val → Constant, var → Variable.
@@ -244,7 +252,22 @@ impl LanguageExtractor for ScalaExtractor {
                 } else {
                     NodeKind::Variable
                 };
-                emit_node_direct(ctx, kind, &pattern, node, false);
+                let id = emit_node_direct(ctx, kind, &pattern, node, false);
+                if let Some(v) = value {
+                    // Attribute the initialiser's calls to the binding when it
+                    // names a single identifier (`val (a, b) = …` does not).
+                    let scoped = match id {
+                        Some(id) if is_identifier_shaped(&pattern) => {
+                            ctx.scope.push(id);
+                            true
+                        }
+                        _ => false,
+                    };
+                    walk_node(&v, ctx, self);
+                    if scoped {
+                        ctx.scope.pop();
+                    }
+                }
                 true
             }
 
@@ -478,5 +501,45 @@ def topLevel(x: Int): Int = x * 2
                 .any(|n| n.name == "counter" && n.kind == NodeKind::Variable),
             "expected Variable 'counter'; nodes: {names:?}"
         );
+    }
+
+    /// Regression: initialiser calls were dropped outright — the hook emitted
+    /// the binding and returned `true`, so `walk_node` skipped the subtree.
+    /// Top-level and function-local alike.
+    /// Also covers expression-bodied methods (`def f() = g()`), whose body
+    /// node was iterated for children instead of being walked itself.
+    #[test]
+    fn initialiser_calls_are_extracted() {
+        let source = r#"
+object Lib { def target(): Int = 1 }
+object Main {
+  val topVal = Lib.target()
+  def inFn(): Int = { val local = Lib.target(); local }
+  def exprBody(): Int = Lib.target()
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".scala").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_wasm(source, f.path(), WasmGrammar::Scala)
+            .expect("WASM extraction should succeed");
+        let callers: Vec<String> = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_name == "target")
+            .map(|r| {
+                batch
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == r.from_node_id)
+                    .map(|n| n.name.clone())
+                    .unwrap_or_else(|| "?".to_string())
+            })
+            .collect();
+        for expected in ["topVal", "inFn", "exprBody"] {
+            assert!(
+                callers.iter().any(|c| c == expected),
+                "missing caller {expected}; callers of target: {callers:?}"
+            );
+        }
     }
 }

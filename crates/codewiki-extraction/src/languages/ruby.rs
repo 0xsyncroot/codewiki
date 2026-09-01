@@ -46,6 +46,7 @@ impl LanguageExtractor for RubyExtractor {
 
             let from_id = ctx.scope.last().cloned().unwrap_or_default();
             let line = node.start_position().row as u32 + 1;
+            let col = node.start_position().column as u32;
 
             // require / require_relative → import edge
             if method_name == "require" || method_name == "require_relative" {
@@ -84,7 +85,7 @@ impl LanguageExtractor for RubyExtractor {
 
             // Regular call → call edge
             if !method_name.is_empty() && method_name != "new" {
-                ctx.emit_call(&from_id, &method_name, line);
+                ctx.emit_call(&from_id, &method_name, line, col);
             }
             return false; // don't suppress recursion
         }

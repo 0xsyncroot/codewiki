@@ -19,8 +19,8 @@
 //! | `anon_fn` in local | Function node named after the binding variable      |
 
 use crate::ast_walker::{
-    generate_node_id, is_in_function_scope, DocCommentStyle, ExtractCtx, LanguageConfig,
-    LanguageExtractor,
+    generate_node_id, is_identifier_shaped, is_in_value_scope, walk_node, DocCommentStyle,
+    ExtractCtx, LanguageConfig, LanguageExtractor,
 };
 use codewiki_core::{Edge, EdgeKind, Node, NodeKind};
 
@@ -387,13 +387,6 @@ impl LanguageExtractor for LuauExtractor {
                 // Scan for any require() calls nested inside this statement.
                 scan_for_require_luau(node, ctx);
 
-                // Skip variable emission for function-local declarations (TS parity).
-                // Anonymous-function bindings inside function bodies are also suppressed
-                // (they are local helpers, not top-level callables).
-                if is_in_function_scope(ctx) {
-                    return true; // consumed — prevent double-emit
-                }
-
                 // Find bindinglist and explist children.
                 let mut bindinglist: Option<tree_sitter::Node> = None;
                 let mut explist: Option<tree_sitter::Node> = None;
@@ -406,6 +399,19 @@ impl LanguageExtractor for LuauExtractor {
                     }
                 }
 
+                // Skip variable emission for function-local declarations (TS parity).
+                // Anonymous-function bindings inside function bodies are also suppressed
+                // (they are local helpers, not top-level callables). The initialiser
+                // (`explist`) still carries real calls, so it is walked under the
+                // enclosing scope rather than dropped with the statement.
+                if is_in_value_scope(ctx) {
+                    if let Some(el) = explist {
+                        walk_node(&el, ctx, self);
+                    }
+                    return true; // consumed — prevent double-emit
+                }
+
+                let mut emitted: Vec<(String, Option<String>)> = Vec::new();
                 if let Some(bl) = bindinglist {
                     let bindings = extract_bindings(&bl, explist.as_ref(), src);
                     for (name, is_anon_fn) in bindings {
@@ -414,7 +420,25 @@ impl LanguageExtractor for LuauExtractor {
                         } else {
                             NodeKind::Variable
                         };
-                        ctx.emit_node(kind, &name, node, false, None, None);
+                        let id = ctx.emit_node(kind, &name, node, false, None, None);
+                        emitted.push((name, id));
+                    }
+                }
+
+                if let Some(el) = explist {
+                    // Attribute the initialiser's calls to the binding when there is
+                    // exactly one identifier-shaped name — including an anonymous
+                    // function bound to it, whose body then gets a real caller.
+                    let scoped = match emitted.as_slice() {
+                        [(name, Some(id))] if is_identifier_shaped(name) => {
+                            ctx.scope.push(id.clone());
+                            true
+                        }
+                        _ => false,
+                    };
+                    walk_node(&el, ctx, self);
+                    if scoped {
+                        ctx.scope.pop();
                     }
                 }
                 true // consumed — prevent double-emit from variable_types
@@ -444,7 +468,8 @@ impl LanguageExtractor for LuauExtractor {
                     if !callee.is_empty() {
                         let from_id = ctx.scope.last().cloned().unwrap_or_default();
                         let line = node.start_position().row as u32 + 1;
-                        ctx.emit_call(&from_id, &callee, line);
+                        let col = node.start_position().column as u32;
+                        ctx.emit_call(&from_id, &callee, line, col);
                     }
                 }
                 true // always consumed — we handle everything above
@@ -679,5 +704,44 @@ greet("world")
             non_file >= 10,
             "expected >= 10 non-file nodes, got {non_file}; nodes: {names:?}"
         );
+    }
+
+    /// Regression: initialiser calls were dropped outright — the hook emitted
+    /// the binding and returned `true`, so `walk_node` skipped the subtree.
+    /// Top-level and function-local alike.
+    #[test]
+    fn initialiser_calls_are_extracted() {
+        let source = r#"
+local function target() return 1 end
+local top = target()
+local function inFn()
+  local r = target()
+  return r
+end
+local lam = function() return target() end
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".luau").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_wasm(source, f.path(), WasmGrammar::Luau)
+            .expect("WASM extraction should succeed");
+        let callers: Vec<String> = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_name == "target")
+            .map(|r| {
+                batch
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == r.from_node_id)
+                    .map(|n| n.name.clone())
+                    .unwrap_or_else(|| "?".to_string())
+            })
+            .collect();
+        for expected in ["top", "inFn", "lam"] {
+            assert!(
+                callers.iter().any(|c| c == expected),
+                "missing caller {expected}; callers of target: {callers:?}"
+            );
+        }
     }
 }

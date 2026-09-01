@@ -178,14 +178,18 @@ impl<'a> ExtractCtx<'a> {
         Some(id)
     }
 
-    pub fn emit_call(&mut self, from_id: &str, callee: &str, line: u32) {
+    /// Record a call reference at its exact position. `col` matters: two calls
+    /// to the same callee on one line (`local x, y = f(), f()`) are distinct
+    /// call sites, and the edge identity index keys on (line, col) — without a
+    /// real column they collapse into one edge.
+    pub fn emit_call(&mut self, from_id: &str, callee: &str, line: u32, col: u32) {
         if callee.is_empty() {
             return;
         }
         let ref_id = generate_node_id(
             self.file_path,
             &NodeKind::Function,
-            &format!("call:{callee}@{line}"),
+            &format!("call:{callee}@{line}:{col}"),
             line,
         );
         self.unresolved.push(UnresolvedRef {
@@ -195,7 +199,7 @@ impl<'a> ExtractCtx<'a> {
             reference_kind: "calls".to_string(),
             file_path: self.file_path.to_string(),
             line: Some(line),
-            col: None,
+            col: Some(col),
             metadata: None,
         });
     }
@@ -832,13 +836,22 @@ fn is_in_class_scope(ctx: &ExtractCtx) -> bool {
 /// silently reverse the deliberate "suppress function-local variable nodes"
 /// parity decision.
 ///
-/// Deliberately private and separate from the `pub` [`is_in_function_scope`],
-/// which `lua.rs`, `luau.rs` and `scala.rs` consume for a different decision.
-fn is_in_value_scope(ctx: &ExtractCtx) -> bool {
+/// Separate from [`is_in_function_scope`], whose narrower semantics other
+/// callers still rely on.
+pub fn is_in_value_scope(ctx: &ExtractCtx) -> bool {
     for id in ctx.scope.iter().rev() {
         if let Some(n) = ctx.nodes.iter().find(|n| &n.id == id) {
             match n.kind {
-                NodeKind::Function | NodeKind::Method | NodeKind::Variable => return true,
+                // Every kind a binding can be emitted as must count, or a
+                // declaration nested in that binding's initialiser (a `val`
+                // inside a lambda assigned to a top-level `val`, which Scala
+                // emits as Constant) reads as top-level and gets emitted.
+                NodeKind::Function
+                | NodeKind::Method
+                | NodeKind::Variable
+                | NodeKind::Constant
+                | NodeKind::Field
+                | NodeKind::Property => return true,
                 NodeKind::File => return false,
                 _ => {}
             }
@@ -1021,10 +1034,12 @@ fn extract_function(
     if let Some(id) = ctx.emit_node(NodeKind::Function, &name, node, exported, None, docstring) {
         ctx.scope.push(id);
         if let Some(body) = node.child_by_field_name(ctx.config.body_field) {
-            let mut cursor = body.walk();
-            for child in body.named_children(&mut cursor) {
-                walk_node(&child, ctx, extractor);
-            }
+            // Walk the body NODE, not just its children: when the body is the
+            // expression itself (`def f() = g()`), the call node IS the body
+            // and iterating its children would never visit it. For a block
+            // body this is equivalent — no grammar lists a block kind in any
+            // type list, so `walk_node` falls through to walking its children.
+            walk_node(&body, ctx, extractor);
         }
         ctx.scope.pop();
     }
@@ -1074,10 +1089,9 @@ fn extract_method(
         }
         ctx.scope.push(id);
         if let Some(body) = node.child_by_field_name(ctx.config.body_field) {
-            let mut cursor = body.walk();
-            for child in body.named_children(&mut cursor) {
-                walk_node(&child, ctx, extractor);
-            }
+            // See extract_function: walk the body node itself so an
+            // expression body (`def f() = g()`) is visited, not skipped.
+            walk_node(&body, ctx, extractor);
         } else {
             // No `body` field. TypeScript's `public_field_definition` keeps its
             // initialiser in `value`, so `readonly f = () => call()` would
@@ -1329,7 +1343,7 @@ fn extract_variable(node: &tree_sitter::Node, ctx: &mut ExtractCtx) -> Option<St
 /// Whether `name` is usable as a scope segment: a bare identifier, not a
 /// destructuring pattern (`{ deps, log }`), a multi-line binding, or an
 /// assignment expression captured verbatim (C renders `x = foo(1)` as the name).
-fn is_identifier_shaped(name: &str) -> bool {
+pub fn is_identifier_shaped(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
         && name
@@ -1404,7 +1418,8 @@ fn extract_call(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
         if !name.is_empty() && name != "new" {
             let from_id = ctx.scope.last().cloned().unwrap_or_default();
             let line = node.start_position().row as u32 + 1;
-            ctx.emit_call(&from_id, &name, line);
+            let col = node.start_position().column as u32;
+            ctx.emit_call(&from_id, &name, line, col);
         }
     }
 }
