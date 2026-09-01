@@ -27,6 +27,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (as the MCP tools already did) while keeping per-call-site lines and hop
   labelling, and say `(aggregated across N definitions with this name)` when
   the name is not unique. A qualified name still resolves to exactly one node.
+- **CI green on current stable.** Clippy 1.98 rejects two patterns that passed
+  when written (`question_mark` in the name matcher, `useless_format` in the
+  Hermes installer target); with `-D warnings` they were hard CI failures on a
+  clean checkout. Lint hygiene only, no behavior change.
 
 ### Changed
 

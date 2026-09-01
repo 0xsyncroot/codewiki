@@ -35,14 +35,14 @@ fn config_path() -> PathBuf {
 
 fn render_codewiki_mcp_child() -> Vec<String> {
     vec![
-        format!("  codewiki:"),
+        "  codewiki:".to_string(),
         format!("    command: {}", MCP_BINARY_NAME),
-        format!("    args:"),
-        format!("      - serve"),
-        format!("      - --mcp"),
-        format!("    timeout: 120"),
-        format!("    connect_timeout: 60"),
-        format!("    enabled: true"),
+        "    args:".to_string(),
+        "      - serve".to_string(),
+        "      - --mcp".to_string(),
+        "    timeout: 120".to_string(),
+        "    connect_timeout: 60".to_string(),
+        "    enabled: true".to_string(),
     ]
 }
 
