@@ -1,6 +1,6 @@
 /// Concrete SQLite implementation of ExtractionStore, QueryHandle, ResolutionStore, SyncStore.
 use crate::cache::{build_node_cache, NodeCache};
-use crate::graph::traversal::{GraphTraverser, TraversalOptions};
+use crate::graph::traversal::{CallRows, GraphTraverser, TraversalOptions};
 use crate::queries::{edges as eq, files as fq, meta as mq, nodes as nq, unresolved as uq};
 use crate::search::{
     extract_search_terms, extract_symbols_from_query, get_stem_variants, is_test_file,
@@ -37,6 +37,36 @@ pub struct StorageImpl {
 }
 
 impl StorageImpl {
+    /// Callers of `node_id`, each tagged with the hop distance at which the
+    /// edge was found (1 == direct). Returns `(rows, truncated)`.
+    ///
+    /// Inherent rather than part of [`QueryHandle`] so the trait — and every
+    /// implementor of it, including the MCP test double — stays untouched.
+    pub fn get_callers_with_depth(
+        &self,
+        node_id: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<CallRows, CodeWikiError> {
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            traverser.get_callers_with_depth(node_id, depth, limit)
+        })
+    }
+
+    /// Callees of `node_id`. Mirror of [`Self::get_callers_with_depth`].
+    pub fn get_callees_with_depth(
+        &self,
+        node_id: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<CallRows, CodeWikiError> {
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            traverser.get_callees_with_depth(node_id, depth, limit)
+        })
+    }
+
     pub fn new(conn: Connection, cache_capacity: u64) -> Self {
         Self {
             conn: Mutex::new(conn),

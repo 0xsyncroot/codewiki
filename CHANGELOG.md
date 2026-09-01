@@ -7,6 +7,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **`codewiki callers` / `codewiki callees` answer their own question.**
+  `--depth` now defaults to 1; transitive rows are labelled `←…← (depth N)`
+  instead of sharing the direct-call arrow; rows carry the real call-site line;
+  a caller with N call sites shows `xN call sites` instead of N identical rows;
+  file-scope and self-recursive callers are labelled; truncation is explicit.
+  The traversal no longer drops direct edges first reached on a deeper path,
+  and self-recursive functions now list themselves.
+
+### Changed
+
+- `callers`/`callees` CLI output format (see above) — scripts parsing the old
+  format need updating. Call-site lines require a reindex to appear.
+
+---
+
 ## [0.2.1] - 2026-05-26
 
 Small UX release: the `init`/`index` indexing display is now a determinate,
