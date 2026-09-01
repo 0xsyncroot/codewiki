@@ -144,6 +144,40 @@ mod tests {
     use crate::ast_walker::extract_file;
     use std::io::Write;
 
+    /// Regression: `.tsx` must parse with the TSX grammar. Under the plain
+    /// TypeScript grammar JSX breaks the parse and top-level declarations after
+    /// the first JSX expression are dropped or mangled (report-viewer.tsx kept
+    /// 2 of 8 functions).
+    #[test]
+    fn tsx_files_parse_with_the_tsx_grammar() {
+        // The `.map(i => <jsx/>)` shape is a verified minimal breaker: under
+        // LANGUAGE_TYPESCRIPT this file yields only `helper`.
+        let source = r#"
+export function Header() {
+    return <ul>{[1, 2].map(i => <li key={i}>{i}</li>)}</ul>
+}
+export function Footer({ ok }: { ok: boolean }) {
+    return ok ? <footer>y</footer> : <span>n</span>
+}
+function helper(): number { return 1 }
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".tsx").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let fn_names: Vec<_> = batch
+            .nodes
+            .iter()
+            .filter(|n| matches!(n.kind, codewiki_core::NodeKind::Function))
+            .map(|n| n.name.as_str())
+            .collect();
+        for expected in ["Header", "Footer", "helper"] {
+            assert!(
+                fn_names.contains(&expected),
+                "missing {expected}; fn nodes: {fn_names:?}"
+            );
+        }
+    }
+
     /// Regression: anonymous arrows must never borrow a name from their
     /// `parameter` or `body` fields. Before the field-aware name fallback,
     /// `xs.find(a => a.ok)` emitted a Function named `a`, and `() => counter`
