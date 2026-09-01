@@ -79,6 +79,46 @@ pub fn delete_unresolved_refs_for_file(
     Ok(())
 }
 
+/// Harvest the incoming cross-file edges of `stale_ids` back into
+/// `unresolved_refs`, so a caller's already-proven relationship degrades to a
+/// *pending reference* instead of vanishing when its target node is deleted.
+///
+/// The harvested row is keyed to the surviving caller node (`from_node_id` =
+/// edge source) and carries the target's name as `reference_name`, so the next
+/// resolution cycle re-resolves it the moment a same-named symbol exists again
+/// — and correctly leaves it pending while none does. Intra-file edges are
+/// excluded (`sn.file_path <> ?1`): the re-stored file re-emits its own refs.
+pub fn harvest_incoming_edges(
+    conn: &Connection,
+    stale_ids: &[&str],
+    file_path: &str,
+) -> Result<usize, CodeWikiError> {
+    let mut harvested = 0usize;
+    for chunk in stale_ids.chunks(500) {
+        let placeholders = vec!["?"; chunk.len()].join(",");
+        let sql = format!(
+            "INSERT INTO unresolved_refs
+                (from_node_id, reference_name, reference_kind, line, col,
+                 candidates, file_path, language)
+             SELECT e.source, tn.name, e.kind,
+                    COALESCE(e.line, 0), COALESCE(e.col, 0),
+                    json_object('harvested_from', tn.file_path,
+                                'qualified', tn.qualified_name),
+                    sn.file_path, sn.language
+               FROM edges e
+               JOIN nodes tn ON tn.id = e.target
+               JOIN nodes sn ON sn.id = e.source
+              WHERE e.target IN ({placeholders})
+                AND sn.file_path <> ?{n}",
+            n = chunk.len() + 1,
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let params_iter = chunk.iter().copied().chain(std::iter::once(file_path));
+        harvested += stmt.execute(rusqlite::params_from_iter(params_iter))?;
+    }
+    Ok(harvested)
+}
+
 pub fn clear_unresolved_refs(conn: &Connection) -> Result<(), CodeWikiError> {
     conn.execute_batch("DELETE FROM unresolved_refs")?;
     Ok(())
