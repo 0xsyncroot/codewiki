@@ -24,6 +24,8 @@ name = "codewiki_cli"
 path = "src/lib.rs"
 
 [dependencies]
+sha2               = "0.10"
+hex                = "0.4"
 codewiki-core       = { path = "../codewiki-core" }
 codewiki-mcp        = { path = "../codewiki-mcp" }
 codewiki-storage    = { path = "../codewiki-storage" }
