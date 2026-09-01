@@ -1552,7 +1552,7 @@ pub fn extract_file(path: &Path, source: &str) -> ExtractionBatch {
             // Parse with the per-thread pool.
             let tree = THREAD_PARSERS.with(|pool| {
                 let mut pool = pool.borrow_mut();
-                pool.parser_for_language(&language)
+                pool.parser_for_file(&language, path)
                     .and_then(|p| p.parse(source, None))
             });
 
