@@ -1,45 +1,46 @@
 // T-430 — `callers` subcommand: find all callers of a symbol.
 
 use anyhow::Result;
-use codewiki_storage::{QueryHandle, SearchOptions};
 use std::path::PathBuf;
 
-use crate::commands::render::{render_call_rows, CALL_ROW_LIMIT};
+use crate::commands::render::{render_call_rows, resolve_family, CALL_ROW_LIMIT};
 use crate::commands::util::{open_storage, resolve_root};
 
 pub fn run(name: String, depth: usize, path: Option<PathBuf>) -> Result<()> {
     let root = resolve_root(path);
     let storage = open_storage(&root)?;
 
-    // Step 1: resolve name → node_id via search.
-    let results = storage
-        .search_nodes(
-            &name,
-            SearchOptions {
-                limit: 1,
-                ..Default::default()
-            },
-        )
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-
-    let node = match results.into_iter().next() {
-        Some(r) => r.node,
+    // Step 1: resolve the name to every definition that carries it. A bare name
+    // is usually a family — resolving to a single node would report one
+    // definition's callers and silently omit the rest.
+    let family = match resolve_family(&storage, &name)? {
+        Some(f) => f,
         None => {
             println!("No symbol matching '{}' found.", name);
             return Ok(());
         }
     };
 
-    println!(
-        "Callers of `{}` ({}:{}):",
-        node.name, node.file_path, node.start_line
-    );
+    println!("Callers of `{}`:", family.resolved_name);
+    if family.size > 1 {
+        println!(
+            "  (aggregated across {} definitions with this name)",
+            family.size
+        );
+    }
 
-    // Step 2: level-order walk; each row is tagged with the hop it was found at.
-    let (callers, truncated) = storage
-        .get_callers_with_depth(&node.id, depth, CALL_ROW_LIMIT)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    // Step 2: level-order walk per definition; each row is tagged with the hop
+    // it was found at, then merged across the family.
+    let mut rows = Vec::new();
+    let mut truncated = false;
+    for id in &family.ids {
+        let (mut part, cut) = storage
+            .get_callers_with_depth(id, depth, CALL_ROW_LIMIT)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        rows.append(&mut part);
+        truncated |= cut;
+    }
 
-    render_call_rows(&callers, truncated, &node.id, true);
+    render_call_rows(&rows, truncated, &family.ids, true);
     Ok(())
 }

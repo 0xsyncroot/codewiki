@@ -4,7 +4,9 @@
 //! call") but traverse a graph that can also reach further. Rendering them
 //! through one function is what keeps the two commands from drifting apart.
 
+use anyhow::Result;
 use codewiki_core::{Edge, Node, NodeKind};
+use codewiki_storage::StorageImpl;
 use std::collections::HashSet;
 
 /// Maximum rows a single `callers`/`callees` query renders before truncating.
@@ -12,6 +14,31 @@ use std::collections::HashSet;
 /// Traversal itself is uncapped for library consumers; this bound exists so a
 /// deep `--depth` cannot dump thousands of unlabelled lines at a terminal.
 pub const CALL_ROW_LIMIT: usize = 2_000;
+
+/// Every definition that carries a given bare name.
+///
+/// A bare identifier usually names a family — 14 `create_app`s in one corpus,
+/// 53 `makeFinding`s in another. Resolving it to a single node makes
+/// `callers`/`callees` report one definition's neighbours and stay silent about
+/// the rest, which reads as a confident `(none)` for a symbol with hundreds of
+/// call sites. A qualified name (`Foo::bar`) still resolves to exactly one node.
+pub struct SymbolFamily {
+    pub ids: Vec<String>,
+    pub resolved_name: String,
+    pub size: usize,
+}
+
+/// Resolve `name` to its family of same-named definitions.
+pub fn resolve_family(storage: &StorageImpl, name: &str) -> Result<Option<SymbolFamily>> {
+    let resolved = storage
+        .resolve_symbol_family(name)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(resolved.map(|(ids, resolved_name, size)| SymbolFamily {
+        ids,
+        resolved_name,
+        size,
+    }))
+}
 
 /// Render rows produced by `get_callers_with_depth` / `get_callees_with_depth`.
 ///
@@ -25,7 +52,7 @@ pub const CALL_ROW_LIMIT: usize = 2_000;
 pub fn render_call_rows(
     rows: &[(Node, Edge, usize)],
     truncated: bool,
-    focal_id: &str,
+    focal_ids: &[String],
     incoming: bool,
 ) {
     let noun = if incoming { "caller" } else { "callee" };
@@ -34,6 +61,16 @@ pub fn render_call_rows(
         println!("  (none)");
         return;
     }
+
+    // Rows arrive level-ordered per family member; merging several members can
+    // interleave duplicates, so sort before collapsing runs.
+    let mut rows: Vec<(Node, Edge, usize)> = rows.to_vec();
+    rows.sort_by(|a, b| {
+        a.2.cmp(&b.2)
+            .then_with(|| a.0.file_path.cmp(&b.0.file_path))
+            .then_with(|| a.1.line.cmp(&b.1.line))
+            .then_with(|| a.0.id.cmp(&b.0.id))
+    });
 
     // Collapse runs describing the same relationship at the same position.
     let mut groups: Vec<(usize, usize)> = Vec::new();
@@ -83,7 +120,7 @@ pub fn render_call_rows(
             // Top-level or anonymous-callback call: no enclosing named symbol.
             tags.push_str(" (file scope)");
         }
-        if node.id == focal_id {
+        if focal_ids.iter().any(|f| f == &node.id) {
             tags.push_str(" (self)");
         }
         if !direct {
