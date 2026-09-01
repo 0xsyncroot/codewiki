@@ -8,6 +8,14 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// A single step in a path: the node and optionally the edge that led to it.
 type PathStep = (Node, Option<Edge>);
 
+/// One caller/callee row: the neighbouring node, the edge connecting it, and
+/// the hop distance at which that edge was found (1 == a direct edge).
+pub type CallRow = (Node, Edge, usize);
+
+/// Result of a depth-tagged call-graph walk: the rows, plus whether the row
+/// limit truncated them.
+pub type CallRows = (Vec<CallRow>, bool);
+
 pub struct GraphTraverser<'a> {
     conn: &'a Connection,
 }
@@ -256,118 +264,154 @@ impl<'a> GraphTraverser<'a> {
         Ok(())
     }
 
+    /// Get all callers of a node up to `max_depth` hops, each tagged with the
+    /// hop distance at which the **edge** was found (1 == a direct call edge).
+    ///
+    /// Every incoming edge is reported. The `expanded` set gates only whether a
+    /// node's own incoming edges are walked (cycle-breaking); it never
+    /// suppresses an edge. That is what keeps a direct caller from being lost to
+    /// a deeper discovery, preserves every distinct call site, and lets a
+    /// self-recursive function report itself.
+    ///
+    /// Returns `(rows, truncated)`; `truncated` is true when `limit` was hit.
+    pub fn get_callers_with_depth(
+        &self,
+        node_id: &str,
+        max_depth: usize,
+        limit: usize,
+    ) -> Result<CallRows, CodeWikiError> {
+        let mut result: Vec<CallRow> = Vec::new();
+        let mut expanded: HashSet<String> = HashSet::new();
+        expanded.insert(node_id.to_string());
+        let mut frontier: Vec<String> = vec![node_id.to_string()];
+
+        for depth in 1..=max_depth {
+            let mut next: Vec<String> = Vec::new();
+            for cur in &frontier {
+                let incoming = eq::get_incoming_edges(
+                    self.conn,
+                    cur,
+                    Some(&[EdgeKind::Calls, EdgeKind::References, EdgeKind::Imports]),
+                )?;
+                if incoming.is_empty() {
+                    continue;
+                }
+
+                let source_ids: Vec<String> =
+                    incoming.iter().map(|e| e.source_id.clone()).collect();
+                let caller_map: HashMap<String, Node> =
+                    nq::get_nodes_by_ids(self.conn, &source_ids)?
+                        .into_iter()
+                        .map(|n| (n.id.clone(), n))
+                        .collect();
+
+                for edge in incoming {
+                    let caller = match caller_map.get(&edge.source_id) {
+                        Some(n) => n,
+                        None => continue,
+                    };
+                    if result.len() >= limit {
+                        return Ok((result, true));
+                    }
+                    let caller_id = caller.id.clone();
+                    result.push((caller.clone(), edge, depth));
+                    if expanded.insert(caller_id.clone()) {
+                        next.push(caller_id);
+                    }
+                }
+            }
+            if next.is_empty() {
+                break;
+            }
+            frontier = next;
+        }
+        Ok((result, false))
+    }
+
     /// Get all callers of a node up to `max_depth` hops.
+    ///
+    /// Back-compat shape for existing consumers. Deliberately **uncapped**:
+    /// `codewiki-graph`'s `/api/callers` derives its `total` from this `Vec`, so
+    /// a hidden cap here would silently under-report the true count.
     pub fn get_callers(
         &self,
         node_id: &str,
         max_depth: usize,
     ) -> Result<Vec<(Node, Edge)>, CodeWikiError> {
-        let mut result = Vec::new();
-        let mut visited: HashSet<String> = HashSet::new();
-        self.get_callers_recursive(node_id, max_depth, 0, &mut result, &mut visited)?;
-        Ok(result)
+        let (rows, _) = self.get_callers_with_depth(node_id, max_depth, usize::MAX)?;
+        Ok(rows.into_iter().map(|(n, e, _)| (n, e)).collect())
     }
 
-    fn get_callers_recursive(
+    /// Get all callees of a node up to `max_depth` hops, each tagged with the
+    /// hop distance at which the **edge** was found (1 == a direct call edge).
+    ///
+    /// Mirror of [`Self::get_callers_with_depth`]; see it for the semantics of
+    /// `expanded` and `truncated`.
+    pub fn get_callees_with_depth(
         &self,
         node_id: &str,
         max_depth: usize,
-        depth: usize,
-        result: &mut Vec<(Node, Edge)>,
-        visited: &mut HashSet<String>,
-    ) -> Result<(), CodeWikiError> {
-        if depth >= max_depth || visited.contains(node_id) {
-            return Ok(());
-        }
-        visited.insert(node_id.to_string());
+        limit: usize,
+    ) -> Result<CallRows, CodeWikiError> {
+        let mut result: Vec<CallRow> = Vec::new();
+        let mut expanded: HashSet<String> = HashSet::new();
+        expanded.insert(node_id.to_string());
+        let mut frontier: Vec<String> = vec![node_id.to_string()];
 
-        let incoming = eq::get_incoming_edges(
-            self.conn,
-            node_id,
-            Some(&[EdgeKind::Calls, EdgeKind::References, EdgeKind::Imports]),
-        )?;
-        if incoming.is_empty() {
-            return Ok(());
-        }
+        for depth in 1..=max_depth {
+            let mut next: Vec<String> = Vec::new();
+            for cur in &frontier {
+                let outgoing = eq::get_outgoing_edges(
+                    self.conn,
+                    cur,
+                    Some(&[EdgeKind::Calls, EdgeKind::References, EdgeKind::Imports]),
+                )?;
+                if outgoing.is_empty() {
+                    continue;
+                }
 
-        let source_ids: Vec<String> = incoming.iter().map(|e| e.source_id.clone()).collect();
-        let caller_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &source_ids)?
-            .into_iter()
-            .map(|n| (n.id.clone(), n))
-            .collect();
+                let target_ids: Vec<String> =
+                    outgoing.iter().map(|e| e.target_id.clone()).collect();
+                let callee_map: HashMap<String, Node> =
+                    nq::get_nodes_by_ids(self.conn, &target_ids)?
+                        .into_iter()
+                        .map(|n| (n.id.clone(), n))
+                        .collect();
 
-        for edge in incoming {
-            if let Some(caller) = caller_map.get(&edge.source_id) {
-                if !visited.contains(&caller.id) {
-                    result.push((caller.clone(), edge));
-                    self.get_callers_recursive(
-                        &caller.id.clone(),
-                        max_depth,
-                        depth + 1,
-                        result,
-                        visited,
-                    )?;
+                for edge in outgoing {
+                    let callee = match callee_map.get(&edge.target_id) {
+                        Some(n) => n,
+                        None => continue,
+                    };
+                    if result.len() >= limit {
+                        return Ok((result, true));
+                    }
+                    let callee_id = callee.id.clone();
+                    result.push((callee.clone(), edge, depth));
+                    if expanded.insert(callee_id.clone()) {
+                        next.push(callee_id);
+                    }
                 }
             }
+            if next.is_empty() {
+                break;
+            }
+            frontier = next;
         }
-        Ok(())
+        Ok((result, false))
     }
 
     /// Get all callees of a node up to `max_depth` hops.
+    ///
+    /// Back-compat shape for existing consumers; see [`Self::get_callers`] for
+    /// why this is uncapped.
     pub fn get_callees(
         &self,
         node_id: &str,
         max_depth: usize,
     ) -> Result<Vec<(Node, Edge)>, CodeWikiError> {
-        let mut result = Vec::new();
-        let mut visited: HashSet<String> = HashSet::new();
-        self.get_callees_recursive(node_id, max_depth, 0, &mut result, &mut visited)?;
-        Ok(result)
-    }
-
-    fn get_callees_recursive(
-        &self,
-        node_id: &str,
-        max_depth: usize,
-        depth: usize,
-        result: &mut Vec<(Node, Edge)>,
-        visited: &mut HashSet<String>,
-    ) -> Result<(), CodeWikiError> {
-        if depth >= max_depth || visited.contains(node_id) {
-            return Ok(());
-        }
-        visited.insert(node_id.to_string());
-
-        let outgoing = eq::get_outgoing_edges(
-            self.conn,
-            node_id,
-            Some(&[EdgeKind::Calls, EdgeKind::References, EdgeKind::Imports]),
-        )?;
-        if outgoing.is_empty() {
-            return Ok(());
-        }
-
-        let target_ids: Vec<String> = outgoing.iter().map(|e| e.target_id.clone()).collect();
-        let callee_map: HashMap<String, Node> = nq::get_nodes_by_ids(self.conn, &target_ids)?
-            .into_iter()
-            .map(|n| (n.id.clone(), n))
-            .collect();
-
-        for edge in outgoing {
-            if let Some(callee) = callee_map.get(&edge.target_id) {
-                if !visited.contains(&callee.id) {
-                    result.push((callee.clone(), edge));
-                    self.get_callees_recursive(
-                        &callee.id.clone(),
-                        max_depth,
-                        depth + 1,
-                        result,
-                        visited,
-                    )?;
-                }
-            }
-        }
-        Ok(())
+        let (rows, _) = self.get_callees_with_depth(node_id, max_depth, usize::MAX)?;
+        Ok(rows.into_iter().map(|(n, e, _)| (n, e)).collect())
     }
 
     /// Impact radius: reverse-reach subgraph.
@@ -942,6 +986,176 @@ mod tests {
             .traverse_bfs("A", &TraversalOptions::default())
             .unwrap();
         assert_eq!(subgraph.nodes.len(), 3);
+    }
+
+    fn make_edge_at(from: &str, to: &str, kind: EdgeKind, line: u32) -> Edge {
+        Edge {
+            line: Some(line),
+            ..make_edge(from, to, kind)
+        }
+    }
+
+    /// A function that calls itself must appear in its own caller list. The old
+    /// DFS seeded `visited` with the root and gated *emission* on that set, so
+    /// self-edges were invisible at every depth.
+    #[test]
+    fn self_recursive_function_reports_itself() {
+        let conn = open_in_memory().unwrap();
+        insert_node(&conn, &make_node("recurse")).unwrap();
+        insert_edge(&conn, &make_edge("recurse", "recurse", EdgeKind::Calls)).unwrap();
+
+        let traverser = GraphTraverser::new(&conn);
+        let (rows, _) = traverser
+            .get_callers_with_depth("recurse", 1, usize::MAX)
+            .unwrap();
+        assert_eq!(rows.len(), 1, "self-call must be reported");
+        assert_eq!(rows[0].0.id, "recurse");
+        assert_eq!(rows[0].2, 1, "a self-call is a direct call");
+    }
+
+    /// Two call sites from the same caller are two edges and must stay two rows
+    /// even when the traversal also expands that caller. The old DFS marked the
+    /// caller `visited` on first expansion and dropped its remaining edges.
+    #[test]
+    fn every_call_site_survives_expansion() {
+        let conn = open_in_memory().unwrap();
+        for id in &["target", "caller", "outer"] {
+            insert_node(&conn, &make_node(id)).unwrap();
+        }
+        insert_edge(
+            &conn,
+            &make_edge_at("caller", "target", EdgeKind::Calls, 10),
+        )
+        .unwrap();
+        insert_edge(
+            &conn,
+            &make_edge_at("caller", "target", EdgeKind::Calls, 20),
+        )
+        .unwrap();
+        insert_edge(&conn, &make_edge("outer", "caller", EdgeKind::Calls)).unwrap();
+
+        let traverser = GraphTraverser::new(&conn);
+        let (rows, _) = traverser
+            .get_callers_with_depth("target", 2, usize::MAX)
+            .unwrap();
+        let sites: Vec<Option<u32>> = rows
+            .iter()
+            .filter(|(n, _, d)| n.id == "caller" && *d == 1)
+            .map(|(_, e, _)| e.line)
+            .collect();
+        assert_eq!(
+            sites.len(),
+            2,
+            "both call sites must survive, got {sites:?}"
+        );
+        assert!(sites.contains(&Some(10)) && sites.contains(&Some(20)));
+    }
+
+    /// Raising `--depth` must never *remove* a direct answer. Edge insertion
+    /// order is pinned so the transitive discovery of `a` happens before the
+    /// direct `a -> target` edge is examined — the exact order that made the
+    /// old DFS suppress the direct edge.
+    #[test]
+    fn direct_caller_survives_deeper_traversal() {
+        let conn = open_in_memory().unwrap();
+        for id in &["target", "a", "b"] {
+            insert_node(&conn, &make_node(id)).unwrap();
+        }
+        insert_edge(&conn, &make_edge("b", "target", EdgeKind::Calls)).unwrap();
+        insert_edge(&conn, &make_edge("a", "target", EdgeKind::Calls)).unwrap();
+        insert_edge(&conn, &make_edge("a", "b", EdgeKind::Calls)).unwrap();
+
+        let traverser = GraphTraverser::new(&conn);
+        for depth in 1..=3 {
+            let (rows, _) = traverser
+                .get_callers_with_depth("target", depth, usize::MAX)
+                .unwrap();
+            let direct: Vec<&str> = rows
+                .iter()
+                .filter(|(_, e, d)| *d == 1 && e.target_id == "target")
+                .map(|(n, _, _)| n.id.as_str())
+                .collect();
+            assert!(
+                direct.contains(&"a") && direct.contains(&"b"),
+                "depth {depth} lost a direct caller: {direct:?}"
+            );
+        }
+    }
+
+    /// Hop distance must be reported, so a direct call and a caller-of-a-caller
+    /// can be told apart.
+    #[test]
+    fn hop_distance_is_tagged() {
+        let conn = open_in_memory().unwrap();
+        for id in &["target", "mid", "far"] {
+            insert_node(&conn, &make_node(id)).unwrap();
+        }
+        insert_edge(&conn, &make_edge("mid", "target", EdgeKind::Calls)).unwrap();
+        insert_edge(&conn, &make_edge("far", "mid", EdgeKind::Calls)).unwrap();
+
+        let traverser = GraphTraverser::new(&conn);
+        let (rows, _) = traverser
+            .get_callers_with_depth("target", 2, usize::MAX)
+            .unwrap();
+        let by_id: HashMap<&str, usize> =
+            rows.iter().map(|(n, _, d)| (n.id.as_str(), *d)).collect();
+        assert_eq!(by_id.get("mid"), Some(&1), "mid calls target directly");
+        assert_eq!(
+            by_id.get("far"),
+            Some(&2),
+            "far only reaches target via mid"
+        );
+    }
+
+    /// `limit` must report truncation rather than silently dropping rows.
+    #[test]
+    fn truncation_is_reported() {
+        let conn = open_in_memory().unwrap();
+        insert_node(&conn, &make_node("target")).unwrap();
+        for i in 0..5 {
+            let id = format!("c{i}");
+            insert_node(&conn, &make_node(&id)).unwrap();
+            insert_edge(&conn, &make_edge(&id, "target", EdgeKind::Calls)).unwrap();
+        }
+
+        let traverser = GraphTraverser::new(&conn);
+        let (rows, truncated) = traverser.get_callers_with_depth("target", 1, 3).unwrap();
+        assert_eq!(rows.len(), 3);
+        assert!(truncated, "hitting the limit must set the truncated flag");
+
+        let (all, truncated) = traverser
+            .get_callers_with_depth("target", 1, usize::MAX)
+            .unwrap();
+        assert_eq!(all.len(), 5);
+        assert!(!truncated);
+    }
+
+    /// The callee mirror must behave identically.
+    #[test]
+    fn callees_tag_hop_distance_and_keep_every_edge() {
+        let conn = open_in_memory().unwrap();
+        for id in &["root", "mid", "leaf"] {
+            insert_node(&conn, &make_node(id)).unwrap();
+        }
+        insert_edge(&conn, &make_edge_at("root", "mid", EdgeKind::Calls, 1)).unwrap();
+        insert_edge(&conn, &make_edge_at("root", "mid", EdgeKind::Calls, 2)).unwrap();
+        insert_edge(&conn, &make_edge("mid", "leaf", EdgeKind::Calls)).unwrap();
+
+        let traverser = GraphTraverser::new(&conn);
+        let (rows, _) = traverser
+            .get_callees_with_depth("root", 2, usize::MAX)
+            .unwrap();
+        assert_eq!(
+            rows.iter()
+                .filter(|(n, _, d)| n.id == "mid" && *d == 1)
+                .count(),
+            2,
+            "both call sites to `mid` must be reported"
+        );
+        assert!(
+            rows.iter().any(|(n, _, d)| n.id == "leaf" && *d == 2),
+            "`leaf` is two hops from `root`"
+        );
     }
 
     #[test]

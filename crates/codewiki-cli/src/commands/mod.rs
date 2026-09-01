@@ -12,6 +12,7 @@ pub mod impact;
 pub mod index;
 pub mod init;
 pub mod query;
+pub mod render;
 pub mod status;
 pub mod sync;
 pub mod uninit;

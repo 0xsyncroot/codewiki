@@ -4,13 +4,14 @@ use anyhow::Result;
 use codewiki_storage::{QueryHandle, SearchOptions};
 use std::path::PathBuf;
 
+use crate::commands::render::{render_call_rows, CALL_ROW_LIMIT};
 use crate::commands::util::{open_storage, resolve_root};
 
 pub fn run(name: String, depth: usize, path: Option<PathBuf>) -> Result<()> {
     let root = resolve_root(path);
     let storage = open_storage(&root)?;
 
-    // Step 1: resolve name → node_id via search.
+    // Step 1: resolve name -> node_id via search.
     let results = storage
         .search_nodes(
             &name,
@@ -34,22 +35,11 @@ pub fn run(name: String, depth: usize, path: Option<PathBuf>) -> Result<()> {
         node.name, node.file_path, node.start_line
     );
 
-    // Step 2: BFS callees up to depth.
-    let callees = storage
-        .get_callees(&node.id, depth)
+    // Step 2: level-order walk; each row is tagged with the hop it was found at.
+    let (callees, truncated) = storage
+        .get_callees_with_depth(&node.id, depth, CALL_ROW_LIMIT)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    if callees.is_empty() {
-        println!("  (none)");
-        return Ok(());
-    }
-
-    for (callee, edge) in &callees {
-        let edge_kind = format!("{:?}", edge.kind).to_lowercase();
-        println!(
-            "  \u{2192} `{}` ({}:{}) --[{}]-->",
-            callee.name, callee.file_path, callee.start_line, edge_kind
-        );
-    }
+    render_call_rows(&callees, truncated, &node.id, false);
     Ok(())
 }
