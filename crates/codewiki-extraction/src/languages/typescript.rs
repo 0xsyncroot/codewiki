@@ -144,6 +144,75 @@ mod tests {
     use crate::ast_walker::extract_file;
     use std::io::Write;
 
+    /// Regression: anonymous arrows must never borrow a name from their
+    /// `parameter` or `body` fields. Before the field-aware name fallback,
+    /// `xs.find(a => a.ok)` emitted a Function named `a`, and `() => counter`
+    /// one named `counter` — junk nodes that also captured every call resolved
+    /// by bare name (12,000 `it(...)` edges in one indexed repo).
+    #[test]
+    fn anonymous_arrows_stay_anonymous() {
+        let source = r#"
+export function realFn(xs: {ok: boolean}[]): boolean {
+    const hit = xs.find(a => a.ok)
+    return hit !== undefined
+}
+let counter = 0
+export const readCounter = () => counter
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".ts").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let fn_names: Vec<_> = batch
+            .nodes
+            .iter()
+            .filter(|n| matches!(n.kind, codewiki_core::NodeKind::Function))
+            .map(|n| n.name.as_str())
+            .collect();
+        assert!(fn_names.contains(&"realFn"), "fn nodes: {fn_names:?}");
+        assert!(
+            !fn_names.contains(&"a") && !fn_names.contains(&"counter"),
+            "arrow params/bodies leaked as function names: {fn_names:?}"
+        );
+    }
+
+    /// Regression: module-scope `const` initialisers are walked, and their
+    /// calls attribute to the binding (F6 — previously the whole subtree was
+    /// skipped and these calls did not exist anywhere in the graph).
+    #[test]
+    fn module_scope_initialisers_produce_calls() {
+        let source = r#"
+export function targetFn(): number { return 1 }
+export const arrowCaller = (): number => {
+    return targetFn()
+}
+export const eagerValue = targetFn()
+export class Holder {
+    readonly fieldCaller = (): number => targetFn()
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".ts").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let callers: Vec<_> = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_name == "targetFn")
+            .filter_map(|r| {
+                batch
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == r.from_node_id)
+                    .map(|n| n.name.as_str())
+            })
+            .collect();
+        for expected in ["arrowCaller", "eagerValue", "fieldCaller"] {
+            assert!(
+                callers.contains(&expected),
+                "missing caller {expected}; callers: {callers:?}"
+            );
+        }
+    }
+
     #[test]
     fn extract_function_and_class() {
         let source = r#"
