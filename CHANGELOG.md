@@ -31,6 +31,29 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   when written (`question_mark` in the name matcher, `useless_format` in the
   Hermes installer target); with `-D warnings` they were hard CI failures on a
   clean checkout. Lint hygiene only, no behavior change.
+- **Module-scope initialisers are indexed.** The body of
+  `export const handler = async () => {…}` and every `const x = call()` —
+  including inside anonymous `it()`/`describe()` callbacks — previously
+  produced no call edges at all; the initialiser subtree was skipped outright.
+  Calls now attribute to the binding when it names a single identifier.
+  Class-field initialisers (`readonly f = () => call()`) are walked too.
+- **Anonymous arrows no longer borrow a name.** `a => …` produced a Function
+  named `a` (from its `parameter` field) and `() => counter` one named
+  `counter` (from its bare-identifier body); because resolution matches by
+  name, these junk nodes captured false edges — 12,000 `it(...)` calls
+  resolved onto one junk node in a measured corpus. The name fallback is now
+  grammar-field-aware, while still accepting assignment-LHS (`left`) names so
+  Python/Ruby module variables keep their nodes.
+- **`.tsx` parses with the TSX grammar.** JSX broke the plain-TypeScript
+  parse and silently dropped declarations (one file kept 2 of 6 top-level
+  functions). `LANGUAGE_TSX` is now used for `.tsx`; `.ts` is unchanged and
+  `.jsx` was never affected.
+
+### Changed
+
+- Call-graph shape improves after a reindex: measured on a 2,085-file
+  TypeScript corpus, calls edges 49,670 → 61,877 with false short-named-target
+  edges 12,430 → 515.
 
 ### Changed
 

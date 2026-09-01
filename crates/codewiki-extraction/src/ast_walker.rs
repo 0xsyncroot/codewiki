@@ -867,15 +867,19 @@ fn extract_name_from_node(node: &tree_sitter::Node, source: &[u8], name_field: &
             .unwrap_or("<invalid>")
             .to_string();
     }
-    // Fallback: the first identifier-shaped child that is not bound to some
-    // OTHER grammar field. Without the field check, anonymous nodes borrow a
-    // name from whatever identifier comes first — an arrow function's
-    // `parameter` field made `a => …` a Function named `a`.
+    // Fallback: the first identifier-shaped child that is either unfielded or
+    // bound to the assignment-LHS field `left` (Python/Ruby `a = …` bind the
+    // name there and have no `name` field at all). Any OTHER field is not a
+    // name: without this check, anonymous nodes borrowed a name from whatever
+    // identifier came first — an arrow function's `parameter` field made
+    // `a => …` a Function named `a`, and its bare-identifier `body` made
+    // `() => counter` a Function named `counter`.
     let mut cursor = node.walk();
     if cursor.goto_first_child() {
         loop {
             let child = cursor.node();
-            if child.is_named() && cursor.field_name().is_none() {
+            let field = cursor.field_name();
+            if child.is_named() && (field.is_none() || field == Some("left")) {
                 let kind = child.kind();
                 if matches!(
                     kind,
