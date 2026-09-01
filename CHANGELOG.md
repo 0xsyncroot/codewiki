@@ -7,6 +7,37 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Incremental indexing no longer destroys edges (data loss).** Re-storing a
+  changed file deleted its nodes wholesale, and the `ON DELETE CASCADE`
+  silently removed every edge touching them — including incoming edges from
+  untouched files, whose consumed unresolved refs could never re-create them.
+  Measured: a one-line edit permanently killed 1,926 incoming edges; a file
+  delete + restore (branch checkout, stash, revert via the installed git
+  hooks) killed 1,862. Re-stores now retarget incoming edges of moved symbols
+  in place and degrade edges of genuinely-removed symbols to pending
+  unresolved refs, which re-resolve when the symbol returns.
+- **Framework nodes survive source edits.** Components/hooks/routes were wiped
+  by any edit to their source file and never re-created (stale virtual-manifest
+  hash gate; no framework extract on the incremental path). The extract pass
+  now runs scoped to changed files, manifests carry an honest source hash, and
+  stale manifests are cleared.
+- A resolved reference is consumed only when its edge is actually inserted;
+  `delete_unresolved_by_node` no longer silently no-ops on a file path.
+
+### Changed
+
+- **Migration v7** adds a unique edge-identity index (deduping existing rows)
+  and schedules a one-time full re-store on the next `index`/`sync`: databases
+  written before this fix have silently lost edges that cannot be recovered
+  from the database alone, so they are rebuilt from source through the safe
+  path.
+
+---
+
 ## [0.2.1] - 2026-05-26
 
 Small UX release: the `init`/`index` indexing display is now a determinate,

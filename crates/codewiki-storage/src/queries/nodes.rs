@@ -37,7 +37,7 @@ pub fn row_to_node(row: &rusqlite::Row<'_>) -> Result<Node, rusqlite::Error> {
 // Node → params helpers
 // ---------------------------------------------------------------------------
 
-fn node_kind_str(node: &Node) -> String {
+pub(crate) fn node_kind_str(node: &Node) -> String {
     serde_json::to_value(&node.kind)
         .ok()
         .and_then(|v| v.as_str().map(String::from))
@@ -77,15 +77,32 @@ pub fn insert_node(conn: &Connection, node: &Node) -> Result<(), CodeWikiError> 
         })
         .unwrap_or(0);
 
+    // Upsert rather than `INSERT OR REPLACE`: REPLACE is DELETE+INSERT under
+    // the hood, and with `PRAGMA foreign_keys = ON` the delete half fires the
+    // `ON DELETE CASCADE` on edges/unresolved_refs — silently destroying every
+    // edge touching a node that is merely being refreshed in place. The FTS
+    // sync is handled by the `nodes_au` UPDATE trigger.
     let mut stmt = conn.prepare_cached(
-        r#"INSERT OR REPLACE INTO nodes
+        r#"INSERT INTO nodes
             (id, kind, name, qualified_name, file_path, language,
              start_line, end_line, start_column, end_column,
              docstring, signature, visibility,
              is_exported, is_async, is_static, is_abstract,
              decorators, type_parameters, updated_at)
            VALUES
-            (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,NULL,?13,?15,0,0,?16,NULL,?14)"#,
+            (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,NULL,?13,?15,0,0,?16,NULL,?14)
+           ON CONFLICT(id) DO UPDATE SET
+            kind=excluded.kind, name=excluded.name,
+            qualified_name=excluded.qualified_name, file_path=excluded.file_path,
+            language=excluded.language, start_line=excluded.start_line,
+            end_line=excluded.end_line, start_column=excluded.start_column,
+            end_column=excluded.end_column, docstring=excluded.docstring,
+            signature=excluded.signature, visibility=excluded.visibility,
+            is_exported=excluded.is_exported, is_async=excluded.is_async,
+            is_static=excluded.is_static, is_abstract=excluded.is_abstract,
+            decorators=excluded.decorators,
+            type_parameters=excluded.type_parameters,
+            updated_at=excluded.updated_at"#,
     )?;
     // Store RAW names/qualified_names/docstrings in the canonical `nodes`
     // columns. Diacritic-insensitive search is handled entirely by the
@@ -128,6 +145,52 @@ pub fn delete_node(conn: &Connection, id: &str) -> Result<(), CodeWikiError> {
 
 pub fn delete_nodes_by_file(conn: &Connection, file_path: &str) -> Result<(), CodeWikiError> {
     conn.execute("DELETE FROM nodes WHERE file_path = ?1", params![file_path])?;
+    Ok(())
+}
+
+/// The minimal identity of a stored node, used to reconcile a file's old node
+/// set against a freshly-extracted batch without loading full `Node` rows.
+pub struct NodeIdentity {
+    pub id: String,
+    pub kind: String,
+    pub name: String,
+    pub qualified_name: String,
+    pub start_line: u32,
+}
+
+/// Fetch the identities of every node currently stored for `file_path`.
+pub fn get_node_identities_by_file(
+    conn: &Connection,
+    file_path: &str,
+) -> Result<Vec<NodeIdentity>, CodeWikiError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT id, kind, name, qualified_name, start_line
+           FROM nodes WHERE file_path = ?1",
+    )?;
+    let rows = stmt.query_map(params![file_path], |row| {
+        Ok(NodeIdentity {
+            id: row.get(0)?,
+            kind: row.get(1)?,
+            name: row.get(2)?,
+            qualified_name: row.get(3)?,
+            start_line: row.get::<_, i64>(4)? as u32,
+        })
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Delete the given node ids, chunked to stay under SQLite's bind limit.
+pub fn delete_nodes_by_ids(conn: &Connection, ids: &[&str]) -> Result<(), CodeWikiError> {
+    for chunk in ids.chunks(500) {
+        let placeholders = vec!["?"; chunk.len()].join(",");
+        let sql = format!("DELETE FROM nodes WHERE id IN ({placeholders})");
+        let mut stmt = conn.prepare(&sql)?;
+        stmt.execute(rusqlite::params_from_iter(chunk.iter()))?;
+    }
     Ok(())
 }
 

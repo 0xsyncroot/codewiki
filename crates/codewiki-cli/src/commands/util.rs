@@ -167,6 +167,192 @@ fn discover_config_files(root: &Path) -> Vec<String> {
     result
 }
 
+/// Decide which files the framework extract pass should visit.
+///
+/// `None` = every known file (full run, or a config/route change that can flip
+/// whole resolvers on or off). `Some(set)` = just the changed files.
+fn framework_extract_scope(
+    project_root: &Path,
+    changed_paths: Option<&[PathBuf]>,
+) -> Option<HashSet<String>> {
+    let paths = changed_paths?;
+    let routes_prefix = project_root.join(".codewiki").join("routes");
+    let config_or_route = paths.iter().any(|p| {
+        let is_config = p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| FRAMEWORK_CONFIG_FILENAMES.contains(&n))
+            .unwrap_or(false);
+        is_config || p.starts_with(&routes_prefix)
+    });
+    if config_or_route {
+        None
+    } else {
+        Some(
+            paths
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect(),
+        )
+    }
+}
+
+/// Run the framework resolvers' `extract()` pass over the known files
+/// (optionally scoped to a changed subset) and store the results.
+///
+/// Results are stored under a synthetic manifest path
+/// `.codewiki/routes/<resolver>/<rel_path>` whose `content_hash` is the hash
+/// of the REAL source content — an honest hash, so an edited source file makes
+/// its manifest re-store instead of hash-gating into a permanent skip. A file
+/// that stops producing framework results has its manifest row deleted, so a
+/// later revert cannot hash-gate against a stale tombstone.
+fn run_framework_extract_pass(
+    storage: &Arc<StorageImpl>,
+    project_root: &Path,
+    scope: Option<&HashSet<String>>,
+) -> Result<()> {
+    use sha2::{Digest, Sha256};
+
+    // OPT-1: raised capacity from 1_000 to NODE_CACHE_CAPACITY (50_000).
+    let caches = ResolverCaches::new(NODE_CACHE_CAPACITY);
+    let path_aliases = codewiki_resolution::PathAliasMap::load(project_root).unwrap_or_default();
+    let all_files = storage.get_files(None).unwrap_or_default();
+
+    // Existing virtual manifest rows — consulted to clear tombstones.
+    let existing_manifests: HashSet<PathBuf> = all_files
+        .iter()
+        .filter(|f| f.path.to_string_lossy().contains("/.codewiki/routes/"))
+        .map(|f| f.path.clone())
+        .collect();
+
+    let known_files: Vec<String> = all_files
+        .into_iter()
+        .map(|f| f.path.to_string_lossy().to_string())
+        // Exclude synthetic framework-manifest entries from previous runs.
+        .filter(|p| !p.contains("/.codewiki/routes/"))
+        .collect();
+
+    // Extend the iteration set with config files that are not AST-indexed
+    // (e.g. Cargo.toml, package.json). They are appended AFTER
+    // `source_file_count` so resolution-context lookups stay source-file only.
+    let config_files = discover_config_files(project_root);
+    let mut framework_files = known_files;
+    let source_file_count = framework_files.len();
+    for cf in &config_files {
+        if !framework_files.contains(cf) {
+            framework_files.push(cf.clone());
+        }
+    }
+
+    let ctx = codewiki_resolution::ResolutionContext {
+        project_root,
+        project_languages: &[],
+        caches: &caches,
+        path_aliases: &path_aliases,
+        known_files: &framework_files[..source_file_count],
+    };
+
+    let registry = FrameworkResolverRegistry::default_registry();
+    let active = registry.active_resolvers(&ctx);
+    if active.is_empty() {
+        return Ok(());
+    }
+
+    for resolver in &active {
+        tracing::debug!(resolver = resolver.name(), "running framework extract()");
+        for file_path_str in &framework_files {
+            if let Some(scope) = scope {
+                if !scope.contains(file_path_str) {
+                    continue;
+                }
+            }
+            let file_path = std::path::Path::new(file_path_str);
+            let content = match std::fs::read_to_string(file_path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            // Synthetic manifest path: `.codewiki/routes/<resolver>/<rel_path>`
+            // Use the path relative to project_root so that two different files
+            // with the same filename (e.g. multiple Cargo.toml) get distinct
+            // virtual paths, preventing the hash-check skip from clobbering one
+            // over the other.
+            let rel_path = file_path
+                .strip_prefix(project_root)
+                .unwrap_or(file_path)
+                .to_string_lossy()
+                .replace(std::path::MAIN_SEPARATOR, "/");
+            let virtual_path = project_root
+                .join(".codewiki")
+                .join("routes")
+                .join(resolver.name())
+                .join(&rel_path);
+            let result = match resolver.extract(file_path, &content, &ctx) {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::debug!(
+                        resolver = resolver.name(),
+                        file = %file_path.display(),
+                        error = %e,
+                        "framework extract() error (skipped)"
+                    );
+                    continue;
+                }
+            };
+            if result.nodes.is_empty() && result.unresolved_refs.is_empty() {
+                // Clear a stale manifest: without this, "remove the components,
+                // then revert the file" leaves a tombstone whose (hash, count)
+                // matches the reverted content, and the hash gate skips the
+                // re-store forever.
+                if existing_manifests.contains(&virtual_path) {
+                    if let Err(e) = ExtractionStore::delete_file(storage.as_ref(), &virtual_path) {
+                        tracing::warn!(
+                            resolver = resolver.name(),
+                            file = %file_path.display(),
+                            error = %e,
+                            "failed to clear stale framework manifest"
+                        );
+                    }
+                }
+                continue;
+            }
+            tracing::debug!(
+                resolver = resolver.name(),
+                file = %file_path.display(),
+                nodes = result.nodes.len(),
+                edges = result.edges.len(),
+                virtual_path = %virtual_path.display(),
+                "framework extract produced results — storing batch"
+            );
+            let batch = codewiki_core::ExtractionBatch {
+                file: codewiki_core::FileRecord {
+                    path: virtual_path,
+                    // Honest hash: the REAL source content's hash, so editing
+                    // the source invalidates the manifest's hash gate.
+                    content_hash: hex::encode(Sha256::digest(content.as_bytes())),
+                    language: String::new(),
+                    size: 0,
+                    modified_at: 0,
+                    indexed_at: 0,
+                    node_count: 0,
+                    errors: Vec::new(),
+                },
+                nodes: result.nodes,
+                edges: result.edges,
+                unresolved_refs: result.unresolved_refs,
+            };
+            if let Err(e) = ExtractionStore::store_extraction_batch(storage.as_ref(), batch) {
+                tracing::warn!(
+                    resolver = resolver.name(),
+                    file = %file_path.display(),
+                    error = %e,
+                    "framework extract store failed"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Run the full resolution pipeline: framework `extract()` + `ResolutionBatchRunner`.
 ///
 /// Called after every extraction pass (init / index / sync) to promote
@@ -198,155 +384,16 @@ pub fn run_resolution(
 ) -> Result<usize> {
     let db_path = project_root.join(".codewiki").join("codewiki.db");
 
-    // Build the resolver caches and a minimal context for framework detect().
-    // OPT-1: raised capacity from 1_000 to NODE_CACHE_CAPACITY (50_000).
-    let caches = ResolverCaches::new(NODE_CACHE_CAPACITY);
-    let path_aliases = codewiki_resolution::PathAliasMap::load(project_root).unwrap_or_default();
-    let known_files: Vec<String> = storage
-        .get_files(None)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|f| f.path.to_string_lossy().to_string())
-        // Exclude synthetic framework-manifest entries from previous runs.
-        .filter(|p| !p.contains("/.codewiki/routes/"))
-        .collect();
-
-    // OPT-10: Determine whether the framework-extract pass is needed.
-    //
-    // On an incremental sync (`changed_paths = Some(paths)`) we skip the
-    // extract pass entirely when no changed file is a config file or a route
-    // manifest.  The ResolutionBatchRunner still runs so that reference
-    // resolution for any new/modified source files proceeds normally.
-    //
-    // On a full run (`changed_paths = None`, used by init/index) we always
-    // run extract.
-    let routes_prefix = project_root.join(".codewiki").join("routes");
-    let run_framework_extract = match changed_paths {
-        None => true,
-        Some(paths) => paths.iter().any(|p| {
-            // Config file check: matches any FRAMEWORK_CONFIG_FILENAMES entry.
-            let is_config = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| FRAMEWORK_CONFIG_FILENAMES.contains(&n))
-                .unwrap_or(false);
-            // Route manifest check: path under `.codewiki/routes/`.
-            let is_route = p.starts_with(&routes_prefix);
-            is_config || is_route
-        }),
-    };
-
-    if !run_framework_extract {
-        tracing::debug!("OPT-10: skipping framework extract() — no config/route files changed");
-    }
-
-    // Extend the iteration set for framework extract() with config files that
-    // are not AST-indexed (e.g. Cargo.toml, package.json).  These are only
-    // used for the extract() loop below; they are NOT added to known_files so
-    // that resolution-context lookups remain source-file only.
-    //
-    // OPT-3: Move `known_files` into `framework_files` (no clone); extend in
-    // place with config entries.  `known_files` must not be used after this
-    // point — `ctx.known_files` now borrows `framework_files` instead.
-    let config_files = discover_config_files(project_root);
-    let mut framework_files = known_files; // OPT-3: move, not clone
-                                           // Record how many source files are in the vec before appending config-only
-                                           // entries; `ctx.known_files` borrows only this prefix so resolution context
-                                           // stays source-file only.
-    let source_file_count = framework_files.len();
-    for cf in &config_files {
-        if !framework_files.contains(cf) {
-            framework_files.push(cf.clone());
-        }
-    }
-
-    let ctx = codewiki_resolution::ResolutionContext {
-        project_root,
-        project_languages: &[],
-        caches: &caches,
-        path_aliases: &path_aliases,
-        known_files: &framework_files[..source_file_count],
-    };
-
-    // Option B: call framework extract() on each source + config file the
-    // resolver understands.  Route nodes and unresolved_refs are stored in a
-    // synthetic manifest file so the delete step does NOT touch AST-extracted
-    // nodes for the real source file.
-    let registry = FrameworkResolverRegistry::default_registry();
-    let active = registry.active_resolvers(&ctx);
-    if run_framework_extract && !active.is_empty() {
-        for resolver in &active {
-            tracing::debug!(resolver = resolver.name(), "running framework extract()");
-            for file_path_str in &framework_files {
-                let file_path = std::path::Path::new(file_path_str);
-                let content = match std::fs::read_to_string(file_path) {
-                    Ok(c) => c,
-                    Err(_) => continue,
-                };
-                let result = match resolver.extract(file_path, &content, &ctx) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::debug!(
-                            resolver = resolver.name(),
-                            file = %file_path.display(),
-                            error = %e,
-                            "framework extract() error (skipped)"
-                        );
-                        continue;
-                    }
-                };
-                if result.nodes.is_empty() && result.unresolved_refs.is_empty() {
-                    continue;
-                }
-                // Synthetic manifest path: `.codewiki/routes/<resolver>/<rel_path>`
-                // Use the path relative to project_root so that two different files
-                // with the same filename (e.g. multiple Cargo.toml) get distinct
-                // virtual paths, preventing the hash-check skip from clobbering one
-                // over the other.
-                let rel_path = file_path
-                    .strip_prefix(project_root)
-                    .unwrap_or(file_path)
-                    .to_string_lossy()
-                    .replace(std::path::MAIN_SEPARATOR, "/");
-                let virtual_path = project_root
-                    .join(".codewiki")
-                    .join("routes")
-                    .join(resolver.name())
-                    .join(&rel_path);
-                tracing::debug!(
-                    resolver = resolver.name(),
-                    file = %file_path.display(),
-                    nodes = result.nodes.len(),
-                    edges = result.edges.len(),
-                    virtual_path = %virtual_path.display(),
-                    "framework extract produced results — storing batch"
-                );
-                let batch = codewiki_core::ExtractionBatch {
-                    file: codewiki_core::FileRecord {
-                        path: virtual_path,
-                        content_hash: String::new(),
-                        language: String::new(),
-                        size: 0,
-                        modified_at: 0,
-                        indexed_at: 0,
-                        node_count: 0,
-                        errors: Vec::new(),
-                    },
-                    nodes: result.nodes,
-                    edges: result.edges,
-                    unresolved_refs: result.unresolved_refs,
-                };
-                if let Err(e) = ExtractionStore::store_extraction_batch(storage.as_ref(), batch) {
-                    tracing::warn!(
-                        resolver = resolver.name(),
-                        file = %file_path.display(),
-                        error = %e,
-                        "framework extract store failed"
-                    );
-                }
-            }
-        }
-    }
+    // OPT-10 (amended): the framework extract pass always runs, but SCOPED.
+    // - full run (changed_paths = None): every file;
+    // - incremental where a config file or route manifest changed: every file
+    //   (a config change can activate or deactivate whole resolvers);
+    // - incremental otherwise: only the changed files. The pass used to be
+    //   skipped entirely in that case, which made any ordinary source edit
+    //   permanently lose the file's framework nodes (components/hooks/routes):
+    //   the real-file re-store deleted them and nothing ever re-inserted them.
+    let extract_scope = framework_extract_scope(project_root, changed_paths);
+    run_framework_extract_pass(storage, project_root, extract_scope.as_ref())?;
 
     // Build the reference resolver and drain unresolved_refs → real edges.
     let storage_arc: Arc<dyn ResolutionStore> = Arc::clone(storage) as Arc<dyn ResolutionStore>;
@@ -448,6 +495,15 @@ pub fn run_resolution_incremental(
         );
         return run_resolution(storage, project_root, Some(changed_paths));
     }
+
+    // Framework extract for the changed files FIRST, so freshly-stored
+    // framework unresolved_refs are already in the DB when the ref-scoping
+    // queries below run — they carry the real file_path, so Query 1 picks
+    // them up in this same cycle. Previously the incremental path had no
+    // extract pass at all, so components/hooks/routes deleted by the
+    // real-file re-store were never re-created.
+    let extract_scope = framework_extract_scope(project_root, Some(changed_paths));
+    run_framework_extract_pass(storage, project_root, extract_scope.as_ref())?;
 
     // -----------------------------------------------------------------------
     // Convert changed PathBufs to Strings for SQL IN-lists.

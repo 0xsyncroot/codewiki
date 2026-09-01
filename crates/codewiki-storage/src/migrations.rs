@@ -6,7 +6,7 @@
 use codewiki_core::CodeWikiError;
 use rusqlite::Connection;
 
-pub const CURRENT_SCHEMA_VERSION: u32 = 6;
+pub const CURRENT_SCHEMA_VERSION: u32 = 7;
 
 /// A single migration definition.
 pub struct Migration {
@@ -110,6 +110,35 @@ CREATE TRIGGER nodes_au AFTER UPDATE ON nodes BEGIN
     VALUES (NEW.rowid, NEW.id, NEW.name, NEW.qualified_name, NEW.docstring, NEW.signature);
 END;
 "#,
+        },
+        Migration {
+            version: 7,
+            description: "Edge-identity unique index + one-time full re-store after the cascade fix",
+            // 1. Dedupe edges (keep the oldest row per identity) so the unique
+            //    index can be created; duplicates existed because edges never
+            //    had a uniqueness constraint and `INSERT OR IGNORE` ignored
+            //    nothing.
+            // 2. Unique identity index — makes INSERT OR IGNORE and
+            //    UPDATE OR IGNORE genuinely idempotent.
+            // 3. Force a one-time full re-store: databases written before the
+            //    cascade fix have silently lost incoming edges, and their
+            //    consumed unresolved refs are unrecoverable from the DB alone.
+            //    Clearing content_hash defeats the store-time hash gate and
+            //    zeroing modified_at/size defeats the sync stat-walk, so the
+            //    next `codewiki index` or `codewiki sync` rebuilds every file
+            //    from source through the safe reconcile path. Virtual
+            //    framework-manifest rows are left untouched (no disk file).
+            sql: r#"
+DELETE FROM edges WHERE id NOT IN (
+    SELECT MIN(id) FROM edges
+    GROUP BY source, target, kind, ifnull(line, -1), ifnull(col, -1)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_identity
+    ON edges(source, target, kind, ifnull(line, -1), ifnull(col, -1));
+UPDATE files SET content_hash = '', modified_at = 0, size = -1
+    WHERE path NOT LIKE '%/.codewiki/routes/%';
+"#,
+            batch: false,
         },
     ]
 }
@@ -284,9 +313,12 @@ mod tests {
         };
         insert_node(&conn, &node).unwrap();
 
-        // Verify version 6 was applied
+        // Verify the latest version was applied
         let v = get_current_version(&conn).unwrap();
-        assert_eq!(v, 6, "schema should be at version 6 after migrations");
+        assert_eq!(
+            v, CURRENT_SCHEMA_VERSION,
+            "schema should be at the current version after migrations"
+        );
 
         // Verify nodes_fts table exists via a query
         let count: i64 = conn
@@ -302,9 +334,9 @@ mod tests {
         let conn = Connection::open(&db_path).unwrap();
         apply_schema(&conn).unwrap();
         run_migrations(&conn).unwrap();
-        // Running again should not error and version must remain 6
+        // Running again should not error and the version must not move
         run_migrations(&conn).unwrap();
         let v = get_current_version(&conn).unwrap();
-        assert_eq!(v, 6);
+        assert_eq!(v, CURRENT_SCHEMA_VERSION);
     }
 }
