@@ -185,10 +185,9 @@ fn try_method_call_match(
     // Parse `receiver.method` or `Receiver::method`
     let (receiver, method) = if let Some(pos) = name.find("::") {
         (&name[..pos], &name[pos + 2..])
-    } else if let Some(pos) = name.rfind('.') {
-        (&name[..pos], &name[pos + 1..])
     } else {
-        return None;
+        let pos = name.rfind('.')?;
+        (&name[..pos], &name[pos + 1..])
     };
 
     if receiver.is_empty() || method.is_empty() {

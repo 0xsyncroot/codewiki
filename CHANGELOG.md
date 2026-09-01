@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **CI green on current stable.** Clippy 1.98 rejects two patterns that passed
+  when written (`question_mark` in the name matcher, `useless_format` in the
+  Hermes installer target); with `-D warnings` they were hard CI failures on a
+  clean checkout. Lint hygiene only, no behavior change.
+
+---
+
 ## [0.2.1] - 2026-05-26
 
 Small UX release: the `init`/`index` indexing display is now a determinate,
