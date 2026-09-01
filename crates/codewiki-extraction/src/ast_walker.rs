@@ -879,7 +879,12 @@ fn extract_name_from_node(node: &tree_sitter::Node, source: &[u8], name_field: &
         loop {
             let child = cursor.node();
             let field = cursor.field_name();
-            if child.is_named() && (field.is_none() || field == Some("left")) {
+            // `name`: a language config may point `name_field` at the wrong
+            // field (Kotlin did, for a grammar swap); a child bound to a
+            // field literally called `name` is a name regardless.
+            if child.is_named()
+                && (field.is_none() || field == Some("left") || field == Some("name"))
+            {
                 let kind = child.kind();
                 if matches!(
                     kind,
