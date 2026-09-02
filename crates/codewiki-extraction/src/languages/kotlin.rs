@@ -20,7 +20,10 @@ static CONFIG: LanguageConfig = LanguageConfig {
     field_types: &[],
     extra_class_types: &[],
     namespace_types: &[],
-    name_field: "simple_identifier",
+    // kotlin-ng binds the declaration name as `identifier [field=name]`;
+    // "simple_identifier" was a node KIND from the older fwcd grammar and never
+    // matched a field, so naming silently relied on the walker's fallback.
+    name_field: "name",
     body_field: "body",
     methods_are_top_level: false,
     doc_comment_style: DocCommentStyle::PrecedingBlockComment {
@@ -47,5 +50,34 @@ mod tests {
         f.write_all(source.as_bytes()).unwrap();
         let batch = extract_file(f.path(), source);
         assert!(!batch.nodes.is_empty());
+    }
+
+    /// Regression: with `name_field` pointing at a node kind instead of the
+    /// grammar's `name` field, Kotlin symbol naming silently relied on the
+    /// walker's permissive fallback; tightening that fallback made Kotlin
+    /// extract zero symbols. Both the config and the fallback now name these.
+    #[test]
+    fn declarations_are_named() {
+        use crate::ast_walker::extract_file;
+        use std::io::Write;
+        let source = r#"
+fun target(): Int = 1
+class Holder {
+    fun method(): Int = 2
+}
+object Single {
+    fun run(): Int = 3
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".kt").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let names: Vec<String> = batch.nodes.iter().map(|n| n.name.clone()).collect();
+        for expected in ["target", "Holder", "method", "Single", "run"] {
+            assert!(
+                names.iter().any(|n| n == expected),
+                "missing symbol {expected}; got {names:?}"
+            );
+        }
     }
 }

@@ -1,6 +1,6 @@
 /// Concrete SQLite implementation of ExtractionStore, QueryHandle, ResolutionStore, SyncStore.
 use crate::cache::{build_node_cache, NodeCache};
-use crate::graph::traversal::{GraphTraverser, TraversalOptions};
+use crate::graph::traversal::{CallRows, GraphTraverser, TraversalOptions};
 use crate::queries::{edges as eq, files as fq, meta as mq, nodes as nq, unresolved as uq};
 use crate::search::{
     extract_search_terms, extract_symbols_from_query, get_stem_variants, is_test_file,
@@ -37,6 +37,41 @@ pub struct StorageImpl {
 }
 
 impl StorageImpl {
+    /// Callers of `node_id`, each tagged with the hop distance at which the
+    /// edge was found (1 == direct). Returns `(rows, truncated)`.
+    ///
+    /// Inherent rather than part of [`QueryHandle`] so the trait — and every
+    /// implementor of it, including the MCP test double — stays untouched.
+    pub fn get_callers_with_depth(
+        &self,
+        node_id: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<CallRows, CodeWikiError> {
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            traverser.get_callers_with_depth(node_id, depth, limit)
+        })
+    }
+
+    /// Callees of `node_id`. Mirror of [`Self::get_callers_with_depth`].
+    pub fn get_callees_with_depth(
+        &self,
+        node_id: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<CallRows, CodeWikiError> {
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            traverser.get_callees_with_depth(node_id, depth, limit)
+        })
+    }
+
+    /// Delete every edge with the given provenance; returns the count.
+    pub fn delete_edges_by_provenance(&self, provenance: &str) -> Result<usize, CodeWikiError> {
+        self.with_conn(|conn| eq::delete_edges_by_provenance(conn, provenance))
+    }
+
     pub fn new(conn: Connection, cache_capacity: u64) -> Self {
         Self {
             conn: Mutex::new(conn),
@@ -131,9 +166,7 @@ impl StorageImpl {
                         continue;
                     }
 
-                    nq::delete_nodes_by_file(conn, &path_str)?;
-                    uq::delete_unresolved_by_node(conn, &path_str).ok();
-                    nq::insert_nodes_batch(conn, &batch.nodes)?;
+                    reconcile_file_nodes(conn, &path_str, &batch.nodes)?;
 
                     // FK backstop (mirrors `commit_resolved_batch`): an extraction
                     // bug can emit an *orphan* edge whose source/target node id was
@@ -235,7 +268,7 @@ impl StorageImpl {
     /// The family lookup is bounded by `MAX_FAMILY_NODES` so a pathological
     /// same-name set (e.g. a generated codebase with thousands of `new`) can't
     /// blow up traversal cost; the most relevant members (by search rank) win.
-    fn resolve_symbol_family(
+    pub fn resolve_symbol_family(
         &self,
         symbol: &str,
     ) -> Result<Option<(Vec<String>, String, usize)>, CodeWikiError> {
@@ -350,6 +383,106 @@ impl StorageImpl {
 // ExtractionStore
 // ---------------------------------------------------------------------------
 
+/// Reconcile a file's stored node set against a freshly-extracted batch
+/// WITHOUT cascading away the incoming cross-file edges.
+///
+/// The old path (`delete_nodes_by_file` → re-insert) let `ON DELETE CASCADE`
+/// destroy every edge touching the file's nodes; incoming edges from other
+/// files could never be re-created, because their unresolved refs were
+/// consumed at resolution time. Verified corpus damage: one trailing-comment
+/// edit killed 1,926 incoming edges with byte-identical node ids.
+///
+/// Steps, all inside the caller's transaction:
+/// 1. old node identities; empty ⇒ plain insert (init fast path);
+/// 2. delete OUTGOING edges of every old node — always rebuilt from the fresh
+///    parse plus re-resolution;
+/// 3. delete the file's own pending refs (they are re-emitted by the batch);
+/// 4. upsert the new nodes (`ON CONFLICT DO UPDATE`, never REPLACE);
+/// 5. pair each stale old node with a brand-new node of the same (kind, name)
+///    — exact-id survivors are excluded FIRST, so a deleted duplicate can
+///    never steal a surviving twin's edges — preferring an equal
+///    qualified_name, then source order; retarget incoming edges to the new
+///    id in place: zero visibility gap, no re-resolution;
+/// 6. harvest the incoming edges of genuinely-vanished nodes into
+///    `unresolved_refs` (pending is the correct state for a dangling ref);
+/// 7. only then delete the stale node rows.
+fn reconcile_file_nodes(
+    conn: &Connection,
+    path_str: &str,
+    new_nodes: &[Node],
+) -> Result<(), CodeWikiError> {
+    let old = nq::get_node_identities_by_file(conn, path_str)?;
+    if old.is_empty() {
+        nq::insert_nodes_batch(conn, new_nodes)?;
+        return Ok(());
+    }
+
+    let old_ids: Vec<&str> = old.iter().map(|o| o.id.as_str()).collect();
+    eq::delete_edges_by_sources(conn, &old_ids)?;
+    uq::delete_unresolved_refs_for_file(conn, path_str)?;
+    nq::insert_nodes_batch(conn, new_nodes)?;
+
+    let new_ids: std::collections::HashSet<&str> =
+        new_nodes.iter().map(|n| n.id.as_str()).collect();
+    let old_id_set: std::collections::HashSet<&str> = old_ids.iter().copied().collect();
+
+    // Brand-new nodes (id not previously stored), in source order.
+    let mut fresh: Vec<&Node> = new_nodes
+        .iter()
+        .filter(|n| !old_id_set.contains(n.id.as_str()))
+        .collect();
+    fresh.sort_by_key(|n| n.start_line);
+    let fresh_kinds: Vec<String> = fresh.iter().map(|n| nq::node_kind_str(n)).collect();
+
+    // Old nodes no longer present under their exact id, in source order.
+    let mut stale: Vec<&nq::NodeIdentity> = old
+        .iter()
+        .filter(|o| !new_ids.contains(o.id.as_str()))
+        .collect();
+    stale.sort_by_key(|o| o.start_line);
+
+    let mut claimed = vec![false; fresh.len()];
+    let mut vanished: Vec<&str> = Vec::new();
+    for o in &stale {
+        let mut pick: Option<usize> = None;
+        for (i, n) in fresh.iter().enumerate() {
+            if claimed[i] || fresh_kinds[i] != o.kind || n.name != o.name {
+                continue;
+            }
+            if n.qualified_name == o.qualified_name {
+                pick = Some(i);
+                break;
+            }
+            if pick.is_none() {
+                pick = Some(i);
+            }
+        }
+        match pick {
+            Some(i) => {
+                claimed[i] = true;
+                eq::retarget_incoming_edges(conn, &o.id, &fresh[i].id)?;
+            }
+            None => vanished.push(o.id.as_str()),
+        }
+    }
+
+    if !vanished.is_empty() {
+        let harvested = uq::harvest_incoming_edges(conn, &vanished, path_str)?;
+        if harvested > 0 {
+            tracing::debug!(
+                path = %path_str,
+                vanished = vanished.len(),
+                harvested,
+                "harvested incoming edges of vanished nodes back into unresolved_refs"
+            );
+        }
+    }
+
+    let stale_ids: Vec<&str> = stale.iter().map(|o| o.id.as_str()).collect();
+    nq::delete_nodes_by_ids(conn, &stale_ids)?;
+    Ok(())
+}
+
 impl ExtractionStore for StorageImpl {
     fn store_extraction_batch(&self, batch: ExtractionBatch) -> Result<(), CodeWikiError> {
         let path_str = batch.file.path.to_string_lossy().to_string();
@@ -374,9 +507,7 @@ impl ExtractionStore for StorageImpl {
             // Single transaction: delete old → insert new → upsert file
             conn.execute_batch("BEGIN IMMEDIATE")?;
             let result = (|| {
-                nq::delete_nodes_by_file(conn, &path_str)?;
-                uq::delete_unresolved_by_node(conn, &path_str).ok(); // best-effort
-                nq::insert_nodes_batch(conn, &batch.nodes)?;
+                reconcile_file_nodes(conn, &path_str, &batch.nodes)?;
                 for edge in &batch.edges {
                     eq::insert_edge(conn, edge)?;
                 }
@@ -406,6 +537,17 @@ impl ExtractionStore for StorageImpl {
             let result = (|| {
                 // Delete dependents first (nodes table has no FK referencing files).
                 uq::delete_unresolved_refs_for_file(conn, &path_str)?;
+                // Harvest incoming cross-file edges into unresolved_refs BEFORE
+                // deleting the nodes: a file removal is routinely transient — a
+                // branch checkout, `git stash`, a revert (the installed sync git
+                // hooks fire on all of them). Harvested refs re-resolve the
+                // moment the file comes back; while it is gone they are pending,
+                // which is the correct state for a dangling reference.
+                let old = nq::get_node_identities_by_file(conn, &path_str)?;
+                if !old.is_empty() {
+                    let old_ids: Vec<&str> = old.iter().map(|o| o.id.as_str()).collect();
+                    uq::harvest_incoming_edges(conn, &old_ids, &path_str)?;
+                }
                 eq::delete_edges_by_file(conn, &path_str)?;
                 nq::delete_nodes_by_file(conn, &path_str)?;
                 fq::delete_file(conn, &path_str)?;
@@ -448,8 +590,7 @@ impl ExtractionStore for StorageImpl {
                         continue;
                     }
 
-                    nq::delete_nodes_by_file(conn, &path_str)?;
-                    nq::insert_nodes_batch(conn, &batch.nodes)?;
+                    reconcile_file_nodes(conn, &path_str, &batch.nodes)?;
                     for edge in &batch.edges {
                         eq::insert_edge(conn, edge)?;
                     }
@@ -2094,17 +2235,21 @@ impl ResolutionStore for StorageImpl {
                     );
                 } else {
                     valid_edges.push(&resolved.edge);
-                }
-                // Always delete the unresolved_ref regardless of whether the edge was inserted.
-                let ref_id = resolved.resolved_from.unresolved_ref_id;
-                if ref_id != 0 {
-                    delete_ids.push(ref_id);
-                } else {
-                    fallback_tuples.push((
-                        resolved.resolved_from.from_node_id.as_str(),
-                        resolved.resolved_from.reference_name.as_str(),
-                        resolved.resolved_from.reference_kind.as_str(),
-                    ));
+                    // Consume the unresolved_ref ONLY when its edge was actually
+                    // inserted. A skipped edge (endpoint re-stored mid-resolution)
+                    // must leave its ref pending, or the relationship is lost
+                    // permanently — the ref is the only artifact that can
+                    // re-create the edge on the next cycle.
+                    let ref_id = resolved.resolved_from.unresolved_ref_id;
+                    if ref_id != 0 {
+                        delete_ids.push(ref_id);
+                    } else {
+                        fallback_tuples.push((
+                            resolved.resolved_from.from_node_id.as_str(),
+                            resolved.resolved_from.reference_name.as_str(),
+                            resolved.resolved_from.reference_kind.as_str(),
+                        ));
+                    }
                 }
             }
 
@@ -2227,6 +2372,7 @@ impl SyncStore for StorageImpl {
 mod tests {
     use super::*;
     use crate::connection::open_in_memory;
+    use crate::traits::{ResolvedBy, ResolvedFromRef};
     use codewiki_core::{Language, Node, NodeKind};
 
     fn make_storage() -> StorageImpl {
@@ -2261,6 +2407,528 @@ mod tests {
             edges: vec![],
             unresolved_refs: vec![],
         }
+    }
+
+    /// A bare name usually names a family. `resolve_symbol_family` must return
+    /// every definition carrying it, so `callers`/`callees` can union their
+    /// neighbours instead of reporting one definition's and staying silent
+    /// about the rest — which reads as a confident `(none)`.
+    #[test]
+    fn resolve_symbol_family_returns_every_same_named_definition() {
+        let storage = make_storage();
+        for (i, file) in ["a.ts", "b.ts", "c.ts"].iter().enumerate() {
+            storage
+                .store_extraction_batch(ExtractionBatch {
+                    file: FileRecord {
+                        path: PathBuf::from(file),
+                        content_hash: format!("h{i}"),
+                        language: "typescript".to_string(),
+                        size: 10,
+                        modified_at: 1,
+                        indexed_at: now_ms(),
+                        node_count: 1,
+                        errors: vec![],
+                    },
+                    nodes: vec![Node {
+                        id: format!("{file}-mk"),
+                        name: "makeThing".to_string(),
+                        qualified_name: "makeThing".to_string(),
+                        kind: NodeKind::Function,
+                        language: Language::TypeScript,
+                        file_path: file.to_string(),
+                        start_line: 1,
+                        ..Default::default()
+                    }],
+                    edges: vec![],
+                    unresolved_refs: vec![],
+                })
+                .unwrap();
+        }
+
+        let (ids, name, size) = storage
+            .resolve_symbol_family("makeThing")
+            .unwrap()
+            .expect("family must resolve");
+        assert_eq!(name, "makeThing");
+        assert_eq!(size, 3, "all three definitions must be in the family");
+        assert_eq!(ids.len(), 3, "got {ids:?}");
+    }
+
+    // ── Cascade-fix regression suite ─────────────────────────────────────
+    //
+    // Each test encodes a way the old delete-then-cascade store path
+    // permanently destroyed edges. Verified corpus damage before the fix: a
+    // one-character edit killed 1,926 incoming edges; rm + restore killed
+    // 1,862; 22,698 edges died in one incremental pass.
+
+    fn mk_node(id: &str, name: &str, file: &str, line: u32) -> Node {
+        Node {
+            id: id.to_string(),
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: NodeKind::Function,
+            language: Language::TypeScript,
+            file_path: file.to_string(),
+            start_line: line,
+            ..Default::default()
+        }
+    }
+
+    fn mk_batch2(path: &str, hash: &str, nodes: Vec<Node>) -> ExtractionBatch {
+        ExtractionBatch {
+            file: FileRecord {
+                path: PathBuf::from(path),
+                content_hash: hash.to_string(),
+                language: "typescript".to_string(),
+                size: 1024,
+                modified_at: 1_000_000,
+                indexed_at: now_ms(),
+                node_count: nodes.len() as u32,
+                errors: vec![],
+            },
+            nodes,
+            edges: vec![],
+            unresolved_refs: vec![],
+        }
+    }
+
+    /// Insert a resolved cross-file `calls` edge the way resolution does.
+    fn commit_call_edge(storage: &StorageImpl, source: &str, target: &str) {
+        let edge = codewiki_core::Edge {
+            id: format!("{source}->{target}"),
+            source_id: source.to_string(),
+            target_id: target.to_string(),
+            kind: codewiki_core::EdgeKind::Calls,
+            line: Some(7),
+            ..Default::default()
+        };
+        storage
+            .commit_resolved_batch(vec![ResolvedEdge {
+                edge,
+                resolved_from: ResolvedFromRef {
+                    from_node_id: source.to_string(),
+                    reference_name: "g".to_string(),
+                    reference_kind: "calls".to_string(),
+                    unresolved_ref_id: 0,
+                },
+                confidence: 0.9,
+                resolved_by: ResolvedBy::NameMatcher,
+            }])
+            .unwrap();
+    }
+
+    fn count_edges(storage: &StorageImpl, source: &str, target: &str) -> i64 {
+        storage
+            .with_conn(|conn| {
+                Ok(conn
+                    .query_row(
+                        "SELECT count(*) FROM edges WHERE source=?1 AND target=?2",
+                        rusqlite::params![source, target],
+                        |r| r.get(0),
+                    )
+                    .unwrap())
+            })
+            .unwrap()
+    }
+
+    fn pending_refs(storage: &StorageImpl, from: &str, name: &str) -> i64 {
+        storage
+            .with_conn(|conn| {
+                Ok(conn
+                    .query_row(
+                        "SELECT count(*) FROM unresolved_refs
+                          WHERE from_node_id=?1 AND reference_name=?2",
+                        rusqlite::params![from, name],
+                        |r| r.get(0),
+                    )
+                    .unwrap())
+            })
+            .unwrap()
+    }
+
+    /// T1 — re-storing a file with identical node ids (e.g. a trailing-comment
+    /// edit) must not touch its incoming cross-file edges.
+    #[test]
+    fn incoming_cross_file_edge_survives_restore() {
+        let storage = make_storage();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "a.ts",
+                "ha1",
+                vec![mk_node("A-f", "f", "a.ts", 1)],
+            ))
+            .unwrap();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb1",
+                vec![mk_node("B-g", "g", "b.ts", 5)],
+            ))
+            .unwrap();
+        commit_call_edge(&storage, "A-f", "B-g");
+        assert_eq!(count_edges(&storage, "A-f", "B-g"), 1);
+
+        // Same nodes, new content hash — the trailing-comment shape.
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb2",
+                vec![mk_node("B-g", "g", "b.ts", 5)],
+            ))
+            .unwrap();
+        assert_eq!(
+            count_edges(&storage, "A-f", "B-g"),
+            1,
+            "incoming edge must survive an id-stable re-store"
+        );
+    }
+
+    /// T2 — a line shift re-keys the node id; the incoming edge must be
+    /// retargeted to the new id, not lost and not left dangling.
+    #[test]
+    fn incoming_edge_retargets_on_line_shift() {
+        let storage = make_storage();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "a.ts",
+                "ha1",
+                vec![mk_node("A-f", "f", "a.ts", 1)],
+            ))
+            .unwrap();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb1",
+                vec![mk_node("B-g5", "g", "b.ts", 5)],
+            ))
+            .unwrap();
+        commit_call_edge(&storage, "A-f", "B-g5");
+
+        // `g` moves to line 6 → different id.
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb2",
+                vec![mk_node("B-g6", "g", "b.ts", 6)],
+            ))
+            .unwrap();
+        assert_eq!(
+            count_edges(&storage, "A-f", "B-g6"),
+            1,
+            "edge must follow the moved symbol"
+        );
+        assert_eq!(
+            count_edges(&storage, "A-f", "B-g5"),
+            0,
+            "no edge may point at the dead id"
+        );
+    }
+
+    /// T3 — when the target symbol genuinely vanishes, the incoming edge
+    /// degrades to a pending unresolved ref instead of disappearing.
+    #[test]
+    fn vanished_node_harvests_incoming_edge() {
+        let storage = make_storage();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "a.ts",
+                "ha1",
+                vec![mk_node("A-f", "f", "a.ts", 1)],
+            ))
+            .unwrap();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb1",
+                vec![mk_node("B-g", "g", "b.ts", 5)],
+            ))
+            .unwrap();
+        commit_call_edge(&storage, "A-f", "B-g");
+
+        // `g` is deleted from b.ts.
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb2",
+                vec![mk_node("B-h", "h", "b.ts", 5)],
+            ))
+            .unwrap();
+        assert_eq!(count_edges(&storage, "A-f", "B-g"), 0);
+        assert_eq!(
+            pending_refs(&storage, "A-f", "g"),
+            1,
+            "the caller's reference must survive as a pending unresolved ref"
+        );
+    }
+
+    /// T4 — exact-id survivors are excluded from (kind, name) pairing, so a
+    /// deleted duplicate cannot steal a surviving twin's incoming edges.
+    #[test]
+    fn deleted_duplicate_does_not_steal_survivor_edges() {
+        let storage = make_storage();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "a.ts",
+                "ha1",
+                vec![mk_node("A-f", "f", "a.ts", 1)],
+            ))
+            .unwrap();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb1",
+                vec![
+                    mk_node("B-g10", "g", "b.ts", 10),
+                    mk_node("B-g20", "g", "b.ts", 20),
+                ],
+            ))
+            .unwrap();
+        commit_call_edge(&storage, "A-f", "B-g10");
+
+        // The first `g` is deleted; the second keeps its exact id.
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb2",
+                vec![mk_node("B-g20", "g", "b.ts", 20)],
+            ))
+            .unwrap();
+        assert_eq!(
+            count_edges(&storage, "A-f", "B-g20"),
+            0,
+            "the survivor must not inherit the deleted twin's edges"
+        );
+        assert_eq!(
+            pending_refs(&storage, "A-f", "g"),
+            1,
+            "the dangling ref goes pending"
+        );
+    }
+
+    /// T5 — the edge-identity unique index makes INSERT OR IGNORE real.
+    #[test]
+    fn edge_identity_index_dedupes() {
+        let storage = make_storage();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "a.ts",
+                "ha1",
+                vec![mk_node("A-f", "f", "a.ts", 1)],
+            ))
+            .unwrap();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb1",
+                vec![mk_node("B-g", "g", "b.ts", 5)],
+            ))
+            .unwrap();
+        commit_call_edge(&storage, "A-f", "B-g");
+        commit_call_edge(&storage, "A-f", "B-g");
+        assert_eq!(
+            count_edges(&storage, "A-f", "B-g"),
+            1,
+            "identical edges must dedupe"
+        );
+    }
+
+    /// T6 — a resolved edge skipped because its endpoint vanished mid-race must
+    /// NOT consume its unresolved ref: the ref is the only artifact that can
+    /// re-create the edge later.
+    #[test]
+    fn commit_skipped_edge_keeps_uref() {
+        let storage = make_storage();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "a.ts",
+                "ha1",
+                vec![mk_node("A-f", "f", "a.ts", 1)],
+            ))
+            .unwrap();
+        // Pending ref from A-f to a name that resolution matched against a
+        // node id that no longer exists.
+        storage
+            .with_conn(|conn| {
+                crate::queries::unresolved::insert_unresolved_ref(
+                    conn,
+                    &codewiki_core::UnresolvedRef {
+                        id: "0".to_string(),
+                        from_node_id: "A-f".to_string(),
+                        reference_name: "gone".to_string(),
+                        reference_kind: "calls".to_string(),
+                        file_path: "a.ts".to_string(),
+                        line: Some(3),
+                        col: Some(0),
+                        metadata: None,
+                    },
+                )
+            })
+            .unwrap();
+        let ref_id: i64 = storage
+            .with_conn(|conn| {
+                Ok(conn
+                    .query_row("SELECT id FROM unresolved_refs LIMIT 1", [], |r| r.get(0))
+                    .unwrap())
+            })
+            .unwrap();
+
+        storage
+            .commit_resolved_batch(vec![ResolvedEdge {
+                edge: codewiki_core::Edge {
+                    id: "A-f->ghost".to_string(),
+                    source_id: "A-f".to_string(),
+                    target_id: "ghost-node-id".to_string(),
+                    kind: codewiki_core::EdgeKind::Calls,
+                    ..Default::default()
+                },
+                resolved_from: ResolvedFromRef {
+                    from_node_id: "A-f".to_string(),
+                    reference_name: "gone".to_string(),
+                    reference_kind: "calls".to_string(),
+                    unresolved_ref_id: ref_id,
+                },
+                confidence: 0.9,
+                resolved_by: ResolvedBy::NameMatcher,
+            }])
+            .unwrap();
+
+        assert_eq!(
+            count_edges(&storage, "A-f", "ghost-node-id"),
+            0,
+            "edge was rightly skipped"
+        );
+        assert_eq!(
+            pending_refs(&storage, "A-f", "gone"),
+            1,
+            "the skipped edge's ref must stay pending"
+        );
+    }
+
+    /// T14 — deleting a file (branch checkout, stash, git mv) harvests its
+    /// incoming edges instead of cascading them away.
+    #[test]
+    fn delete_file_harvests_incoming_edges() {
+        let storage = make_storage();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "a.ts",
+                "ha1",
+                vec![mk_node("A-f", "f", "a.ts", 1)],
+            ))
+            .unwrap();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb1",
+                vec![mk_node("B-g", "g", "b.ts", 5)],
+            ))
+            .unwrap();
+        commit_call_edge(&storage, "A-f", "B-g");
+
+        ExtractionStore::delete_file(&storage, Path::new("b.ts")).unwrap();
+        assert_eq!(count_edges(&storage, "A-f", "B-g"), 0);
+        assert_eq!(
+            pending_refs(&storage, "A-f", "g"),
+            1,
+            "delete_file must leave the caller's reference pending"
+        );
+    }
+
+    /// T15 — remove + restore round-trips: the harvested ref re-creates the
+    /// edge once resolution runs again.
+    #[test]
+    fn remove_then_restore_recovers_incoming_edge() {
+        let storage = make_storage();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "a.ts",
+                "ha1",
+                vec![mk_node("A-f", "f", "a.ts", 1)],
+            ))
+            .unwrap();
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb1",
+                vec![mk_node("B-g", "g", "b.ts", 5)],
+            ))
+            .unwrap();
+        commit_call_edge(&storage, "A-f", "B-g");
+        ExtractionStore::delete_file(&storage, Path::new("b.ts")).unwrap();
+
+        // The file comes back byte-identical.
+        storage
+            .store_extraction_batch(mk_batch2(
+                "b.ts",
+                "hb1",
+                vec![mk_node("B-g", "g", "b.ts", 5)],
+            ))
+            .unwrap();
+        let ref_id: i64 = storage
+            .with_conn(|conn| {
+                Ok(conn
+                    .query_row(
+                        "SELECT id FROM unresolved_refs
+                          WHERE from_node_id='A-f' AND reference_name='g'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .unwrap())
+            })
+            .unwrap();
+
+        // Resolution picks the harvested ref back up.
+        storage
+            .commit_resolved_batch(vec![ResolvedEdge {
+                edge: codewiki_core::Edge {
+                    id: "A-f->B-g".to_string(),
+                    source_id: "A-f".to_string(),
+                    target_id: "B-g".to_string(),
+                    kind: codewiki_core::EdgeKind::Calls,
+                    line: Some(7),
+                    ..Default::default()
+                },
+                resolved_from: ResolvedFromRef {
+                    from_node_id: "A-f".to_string(),
+                    reference_name: "g".to_string(),
+                    reference_kind: "calls".to_string(),
+                    unresolved_ref_id: ref_id,
+                },
+                confidence: 0.9,
+                resolved_by: ResolvedBy::NameMatcher,
+            }])
+            .unwrap();
+        assert_eq!(count_edges(&storage, "A-f", "B-g"), 1, "edge restored");
+        assert_eq!(
+            pending_refs(&storage, "A-f", "g"),
+            0,
+            "ref consumed on real insert"
+        );
+    }
+
+    /// Outgoing edges are rebuilt per re-store, never duplicated.
+    #[test]
+    fn outgoing_edges_rebuilt_not_duplicated() {
+        let storage = make_storage();
+        let mut batch = mk_batch2(
+            "c.ts",
+            "hc1",
+            vec![
+                mk_node("C-x", "x", "c.ts", 1),
+                mk_node("C-y", "y", "c.ts", 9),
+            ],
+        );
+        batch.edges.push(codewiki_core::Edge {
+            id: "C-x->C-y".to_string(),
+            source_id: "C-x".to_string(),
+            target_id: "C-y".to_string(),
+            kind: codewiki_core::EdgeKind::Contains,
+            ..Default::default()
+        });
+        storage.store_extraction_batch(batch.clone()).unwrap();
+        batch.file.content_hash = "hc2".to_string();
+        storage.store_extraction_batch(batch).unwrap();
+        assert_eq!(count_edges(&storage, "C-x", "C-y"), 1);
     }
 
     #[test]
@@ -2647,11 +3315,13 @@ mod tests {
             .commit_resolved_batch(vec![phantom_edge, good_edge])
             .expect("commit_resolved_batch must not fail when target node is absent");
 
-        // Unresolved refs for both edges were consumed.
+        // Spec change (cascade fix): only the ref whose edge actually landed
+        // is consumed. The skipped edge's ref stays pending — it is the only
+        // artifact that can re-create the edge on a later cycle.
         assert_eq!(
             storage.get_unresolved_count().unwrap(),
-            0,
-            "both unresolved refs must be consumed even when one edge was skipped"
+            1,
+            "the skipped edge's unresolved ref must stay pending"
         );
 
         // The valid edge was stored; the phantom edge was not.

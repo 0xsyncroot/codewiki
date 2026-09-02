@@ -3,6 +3,7 @@
 use codewiki_core::Language;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::Path;
 
 /// A per-thread pool of `tree_sitter::Parser` instances, one per language.
 ///
@@ -18,6 +19,10 @@ pub struct ParserPool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum LanguageKey {
     TypeScript,
+    /// TypeScript with JSX. Same `Language::TypeScript` at every other layer,
+    /// but `.tsx` needs the TSX grammar: the plain one cannot parse JSX, the
+    /// tree fills with errors, and most top-level declarations vanish.
+    Tsx,
     JavaScript,
     Python,
     Go,
@@ -58,6 +63,7 @@ impl LanguageKey {
     fn tree_sitter_language(self) -> tree_sitter::Language {
         match self {
             Self::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            Self::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
             Self::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
             Self::Python => tree_sitter_python::LANGUAGE.into(),
             Self::Go => tree_sitter_go::LANGUAGE.into(),
@@ -86,12 +92,34 @@ impl ParserPool {
         }
     }
 
+    /// Return the parser for `language` as used on `path`, creating it on
+    /// first use. `.tsx` files get the TSX grammar; everything else follows
+    /// [`Self::parser_for_language`].
+    pub fn parser_for_file(
+        &mut self,
+        language: &Language,
+        path: &Path,
+    ) -> Option<&mut tree_sitter::Parser> {
+        let mut key = LanguageKey::from_language(language)?;
+        if key == LanguageKey::TypeScript
+            && path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("tsx"))
+        {
+            key = LanguageKey::Tsx;
+        }
+        self.parser_for_key(key)
+    }
+
     /// Return a mutable reference to the parser for `language`, creating it on
     /// first use. Returns `None` for WASM-backed languages (Lua, Luau, Pascal,
     /// Scala) and special-case languages (Svelte, Vue, Liquid, DFM).
     pub fn parser_for_language(&mut self, language: &Language) -> Option<&mut tree_sitter::Parser> {
         let key = LanguageKey::from_language(language)?;
+        self.parser_for_key(key)
+    }
 
+    fn parser_for_key(&mut self, key: LanguageKey) -> Option<&mut tree_sitter::Parser> {
         // Recycle parser every N parses to reclaim fragmented memory.
         let count = self.parse_counts.entry(key).or_insert(0);
         if *count >= PARSER_RECYCLE_INTERVAL {
@@ -103,7 +131,7 @@ impl ParserPool {
             let mut parser = tree_sitter::Parser::new();
             let ts_lang = key.tree_sitter_language();
             if let Err(err) = parser.set_language(&ts_lang) {
-                tracing::warn!(?language, %err, "failed to set parser language");
+                tracing::warn!(?key, %err, "failed to set parser language");
                 return None;
             }
             e.insert(parser);

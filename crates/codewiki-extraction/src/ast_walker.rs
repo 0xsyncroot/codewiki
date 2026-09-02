@@ -178,14 +178,18 @@ impl<'a> ExtractCtx<'a> {
         Some(id)
     }
 
-    pub fn emit_call(&mut self, from_id: &str, callee: &str, line: u32) {
+    /// Record a call reference at its exact position. `col` matters: two calls
+    /// to the same callee on one line (`local x, y = f(), f()`) are distinct
+    /// call sites, and the edge identity index keys on (line, col) — without a
+    /// real column they collapse into one edge.
+    pub fn emit_call(&mut self, from_id: &str, callee: &str, line: u32, col: u32) {
         if callee.is_empty() {
             return;
         }
         let ref_id = generate_node_id(
             self.file_path,
             &NodeKind::Function,
-            &format!("call:{callee}@{line}"),
+            &format!("call:{callee}@{line}:{col}"),
             line,
         );
         self.unresolved.push(UnresolvedRef {
@@ -195,7 +199,7 @@ impl<'a> ExtractCtx<'a> {
             reference_kind: "calls".to_string(),
             file_path: self.file_path.to_string(),
             line: Some(line),
-            col: None,
+            col: Some(col),
             metadata: None,
         });
     }
@@ -749,9 +753,24 @@ pub fn walk_node(
         skip_children = true;
     } else if cfg.variable_types.contains(&node_type)
         && !is_in_class_scope(ctx)
-        && !is_in_function_scope(ctx)
+        && !is_in_value_scope(ctx)
     {
-        extract_variable(node, ctx);
+        // Walk the initialiser. `const f = () => { ... }` and `const x = call()`
+        // carry real calls that were previously dropped outright — the subtree
+        // was skipped, so nothing downstream could recover them. Attribute those
+        // calls to the binding when it names a single identifier.
+        let scope_id = extract_variable(node, ctx);
+        let pushed = scope_id.is_some();
+        if let Some(id) = scope_id {
+            ctx.scope.push(id);
+        }
+        let mut cursor = node.walk();
+        for child in node.named_children(&mut cursor) {
+            walk_node(&child, ctx, extractor);
+        }
+        if pushed {
+            ctx.scope.pop();
+        }
         skip_children = true;
     } else if cfg.import_types.contains(&node_type) {
         extract_import(node, ctx);
@@ -808,6 +827,39 @@ fn is_in_class_scope(ctx: &ExtractCtx) -> bool {
 /// Walks the scope stack inward-out; stops (returns `false`) as soon as it
 /// finds a `File` node, meaning we reached module level without crossing a
 /// function boundary.
+/// Like [`is_in_function_scope`], but a variable binding also counts as a value
+/// scope.
+///
+/// Used only to decide whether a declaration is genuinely top-level. A `const`
+/// inside the initialiser of another `const` is function-local in every sense
+/// that matters and must stay suppressed — otherwise walking initialisers would
+/// silently reverse the deliberate "suppress function-local variable nodes"
+/// parity decision.
+///
+/// Separate from [`is_in_function_scope`], whose narrower semantics other
+/// callers still rely on.
+pub fn is_in_value_scope(ctx: &ExtractCtx) -> bool {
+    for id in ctx.scope.iter().rev() {
+        if let Some(n) = ctx.nodes.iter().find(|n| &n.id == id) {
+            match n.kind {
+                // Every kind a binding can be emitted as must count, or a
+                // declaration nested in that binding's initialiser (a `val`
+                // inside a lambda assigned to a top-level `val`, which Scala
+                // emits as Constant) reads as top-level and gets emitted.
+                NodeKind::Function
+                | NodeKind::Method
+                | NodeKind::Variable
+                | NodeKind::Constant
+                | NodeKind::Field
+                | NodeKind::Property => return true,
+                NodeKind::File => return false,
+                _ => {}
+            }
+        }
+    }
+    false
+}
+
 pub fn is_in_function_scope(ctx: &ExtractCtx) -> bool {
     for id in ctx.scope.iter().rev() {
         if let Some(n) = ctx.nodes.iter().find(|n| &n.id == id) {
@@ -828,14 +880,35 @@ fn extract_name_from_node(node: &tree_sitter::Node, source: &[u8], name_field: &
             .unwrap_or("<invalid>")
             .to_string();
     }
+    // Fallback: the first identifier-shaped child that is either unfielded or
+    // bound to the assignment-LHS field `left` (Python/Ruby `a = …` bind the
+    // name there and have no `name` field at all). Any OTHER field is not a
+    // name: without this check, anonymous nodes borrowed a name from whatever
+    // identifier came first — an arrow function's `parameter` field made
+    // `a => …` a Function named `a`, and its bare-identifier `body` made
+    // `() => counter` a Function named `counter`.
     let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        let kind = child.kind();
-        if matches!(
-            kind,
-            "identifier" | "type_identifier" | "simple_identifier" | "property_identifier"
-        ) {
-            return child.utf8_text(source).unwrap_or("<invalid>").to_string();
+    if cursor.goto_first_child() {
+        loop {
+            let child = cursor.node();
+            let field = cursor.field_name();
+            // `name`: a language config may point `name_field` at the wrong
+            // field (Kotlin did, for a grammar swap); a child bound to a
+            // field literally called `name` is a name regardless.
+            if child.is_named()
+                && (field.is_none() || field == Some("left") || field == Some("name"))
+            {
+                let kind = child.kind();
+                if matches!(
+                    kind,
+                    "identifier" | "type_identifier" | "simple_identifier" | "property_identifier"
+                ) {
+                    return child.utf8_text(source).unwrap_or("<invalid>").to_string();
+                }
+            }
+            if !cursor.goto_next_sibling() {
+                break;
+            }
         }
     }
     String::new()
@@ -961,10 +1034,12 @@ fn extract_function(
     if let Some(id) = ctx.emit_node(NodeKind::Function, &name, node, exported, None, docstring) {
         ctx.scope.push(id);
         if let Some(body) = node.child_by_field_name(ctx.config.body_field) {
-            let mut cursor = body.walk();
-            for child in body.named_children(&mut cursor) {
-                walk_node(&child, ctx, extractor);
-            }
+            // Walk the body NODE, not just its children: when the body is the
+            // expression itself (`def f() = g()`), the call node IS the body
+            // and iterating its children would never visit it. For a block
+            // body this is equivalent — no grammar lists a block kind in any
+            // type list, so `walk_node` falls through to walking its children.
+            walk_node(&body, ctx, extractor);
         }
         ctx.scope.pop();
     }
@@ -1014,8 +1089,15 @@ fn extract_method(
         }
         ctx.scope.push(id);
         if let Some(body) = node.child_by_field_name(ctx.config.body_field) {
-            let mut cursor = body.walk();
-            for child in body.named_children(&mut cursor) {
+            // See extract_function: walk the body node itself so an
+            // expression body (`def f() = g()`) is visited, not skipped.
+            walk_node(&body, ctx, extractor);
+        } else {
+            // No `body` field. TypeScript's `public_field_definition` keeps its
+            // initialiser in `value`, so `readonly f = () => call()` would
+            // otherwise contribute no edges at all.
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
                 walk_node(&child, ctx, extractor);
             }
         }
@@ -1217,9 +1299,17 @@ fn extract_field(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
     ctx.emit_node(NodeKind::Field, &name, node, false, None, None);
 }
 
-fn extract_variable(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
+/// Emit a node per binding in a variable declaration.
+///
+/// Returns the id of the emitted binding **only** when the declaration binds
+/// exactly one identifier-shaped name — the sole case where using that binding
+/// as a scope for calls in the initialiser produces a sensible caller name.
+/// Destructuring patterns, multi-binding declarations and grammars whose
+/// declarator text is not a bare name all return `None`; their initialisers are
+/// still walked, but the calls attribute to the enclosing scope.
+fn extract_variable(node: &tree_sitter::Node, ctx: &mut ExtractCtx) -> Option<String> {
     let mut cursor = node.walk();
-    let mut found_any = false;
+    let mut emitted: Vec<(String, Option<String>)> = Vec::new();
     for child in node.named_children(&mut cursor) {
         let kind = child.kind();
         if kind == "variable_declarator" || kind == "lexical_binding" {
@@ -1230,19 +1320,39 @@ fn extract_variable(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
                     .to_string();
                 if !name.is_empty() {
                     let exported = is_exported(node);
-                    ctx.emit_node(NodeKind::Variable, &name, &child, exported, None, None);
-                    found_any = true;
+                    let id = ctx.emit_node(NodeKind::Variable, &name, &child, exported, None, None);
+                    emitted.push((name, id));
                 }
             }
         }
     }
-    if !found_any {
+    if emitted.is_empty() {
         let name = extract_name_from_node(node, ctx.source.as_bytes(), ctx.config.name_field);
         if !name.is_empty() {
             let exported = is_exported(node);
-            ctx.emit_node(NodeKind::Variable, &name, node, exported, None, None);
+            let id = ctx.emit_node(NodeKind::Variable, &name, node, exported, None, None);
+            emitted.push((name, id));
         }
     }
+    match emitted.as_slice() {
+        [(name, Some(id))] if is_identifier_shaped(name) => Some(id.clone()),
+        _ => None,
+    }
+}
+
+/// Whether `name` is usable as a scope segment: a bare identifier, not a
+/// destructuring pattern (`{ deps, log }`), a multi-line binding, or an
+/// assignment expression captured verbatim (C renders `x = foo(1)` as the name).
+pub fn is_identifier_shaped(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$')
+        && name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '$')
 }
 
 fn extract_import(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
@@ -1307,8 +1417,32 @@ fn extract_call(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
         let name = text.split('.').next_back().unwrap_or(&text).to_string();
         if !name.is_empty() && name != "new" {
             let from_id = ctx.scope.last().cloned().unwrap_or_default();
-            let line = node.start_position().row as u32 + 1;
-            ctx.emit_call(&from_id, &name, line);
+            // The call site is where the callee NAME is, not where the whole
+            // expression starts: in `b.bump().bump()` both call expressions
+            // start at `b`, so keying on the call node's start collapsed the
+            // two bump sites into one edge. The rightmost identifier leaf of
+            // the callee (`bump` after the last `.`) is distinct per site.
+            let site = rightmost_leaf(&callee);
+            let line = site.start_position().row as u32 + 1;
+            let col = site.start_position().column as u32;
+            ctx.emit_call(&from_id, &name, line, col);
+        }
+    }
+}
+
+/// Descend through the last named child until a leaf: for a member/field/
+/// scoped expression that is the final name segment (`a.b().c` → `c`,
+/// `Vec::<T>::new` → `new`); for a bare identifier, the identifier itself.
+fn rightmost_leaf<'a>(node: &tree_sitter::Node<'a>) -> tree_sitter::Node<'a> {
+    let mut cur = *node;
+    loop {
+        let n = cur.named_child_count();
+        if n == 0 {
+            return cur;
+        }
+        match cur.named_child(n - 1) {
+            Some(child) => cur = child,
+            None => return cur,
         }
     }
 }
@@ -1465,7 +1599,7 @@ pub fn extract_file(path: &Path, source: &str) -> ExtractionBatch {
             // Parse with the per-thread pool.
             let tree = THREAD_PARSERS.with(|pool| {
                 let mut pool = pool.borrow_mut();
-                pool.parser_for_language(&language)
+                pool.parser_for_file(&language, path)
                     .and_then(|p| p.parse(source, None))
             });
 

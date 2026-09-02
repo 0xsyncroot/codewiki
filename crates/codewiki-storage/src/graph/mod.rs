@@ -1,2 +1,2 @@
 pub mod traversal;
-pub use traversal::GraphTraverser;
+pub use traversal::{CallRow, CallRows, GraphTraverser};

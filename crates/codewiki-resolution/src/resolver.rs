@@ -901,9 +901,14 @@ fn make_name_match_edge(
             // `codewiki-storage::graph::traversal::type_ancestors`, which walks
             // OUTGOING Implements/Extends edges from a type to its supertypes).
             kind: edge_kind_from_reference_kind(&uref.reference_kind),
+            // Preserve the extractor's call-site position. Without these two
+            // fields every call site of the same caller→callee pair collapses
+            // into byte-identical rows that no consumer can tell apart.
+            line: uref.line,
+            col: uref.col,
             confidence: Some(confidence),
             provenance: Some(format!("{:?}", resolved_by)),
-            ..Default::default()
+            metadata: None,
         },
         resolved_from: ResolvedFromRef {
             from_node_id: uref.from_node_id.clone(),

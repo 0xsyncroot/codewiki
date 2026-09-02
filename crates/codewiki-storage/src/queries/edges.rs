@@ -140,6 +140,51 @@ pub fn delete_edges_by_source(conn: &Connection, source_id: &str) -> Result<(), 
 /// deleting nodes already cascades edges — but this helper is called
 /// explicitly before `delete_nodes_by_file` to handle any edges that
 /// reference nodes from *other* files pointing into the deleted file's nodes.
+/// Delete every edge whose source is one of `ids` (chunked IN-list).
+///
+/// Used when re-storing a file: outgoing edges are always rebuilt from the
+/// fresh parse plus re-resolution, so they are deleted wholesale — unlike
+/// incoming edges, which are retargeted or harvested, never cascaded away.
+pub fn delete_edges_by_sources(conn: &Connection, ids: &[&str]) -> Result<(), CodeWikiError> {
+    for chunk in ids.chunks(500) {
+        let placeholders = vec!["?"; chunk.len()].join(",");
+        let sql = format!("DELETE FROM edges WHERE source IN ({placeholders})");
+        let mut stmt = conn.prepare(&sql)?;
+        stmt.execute(rusqlite::params_from_iter(chunk.iter()))?;
+    }
+    Ok(())
+}
+
+/// Repoint every incoming edge from `old_target` to `new_target`.
+///
+/// `UPDATE OR IGNORE`: once the unique edge-identity index exists, a retarget
+/// that would collide with an already-present identical edge is skipped — the
+/// stale row is then swept by the stale-node delete's cascade.
+pub fn retarget_incoming_edges(
+    conn: &Connection,
+    old_target: &str,
+    new_target: &str,
+) -> Result<(), CodeWikiError> {
+    conn.execute(
+        "UPDATE OR IGNORE edges SET target = ?2 WHERE target = ?1",
+        params![old_target, new_target],
+    )?;
+    Ok(())
+}
+
+/// Delete every edge carrying `provenance`. Used to refresh a whole class of
+/// synthesised edges (e.g. Go structural `implements`) before re-inserting it.
+pub fn delete_edges_by_provenance(
+    conn: &Connection,
+    provenance: &str,
+) -> Result<usize, CodeWikiError> {
+    let n = conn.execute(
+        "DELETE FROM edges WHERE provenance = ?1",
+        params![provenance],
+    )?;
+    Ok(n)
+}
+
 pub fn delete_edges_by_file(conn: &Connection, file_path: &str) -> Result<(), CodeWikiError> {
     conn.execute(
         "DELETE FROM edges WHERE source IN (SELECT id FROM nodes WHERE file_path = ?1)

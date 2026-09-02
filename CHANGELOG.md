@@ -7,6 +7,111 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **`codewiki callers` / `codewiki callees` answer their own question.**
+  `--depth` now defaults to 1; transitive rows are labelled `←…← (depth N)`
+  instead of sharing the direct-call arrow; rows carry the real call-site line;
+  a caller with N call sites shows `xN call sites` instead of N identical rows;
+  file-scope and self-recursive callers are labelled; truncation is explicit.
+  The traversal no longer drops direct edges first reached on a deeper path,
+  and self-recursive functions now list themselves.
+- **`callers`/`callees` no longer report one definition and omit the rest.**
+  The CLI resolved a bare name to a single node, so for any name carried by
+  more than one definition it reported that one definition's neighbours —
+  reading as a confident `(none)`. On a fresh index of pallets/flask,
+  `codewiki callers create_app` printed `(none)` for a name with 14
+  definitions and 5 call edges. Both commands now union the same-name family
+  (as the MCP tools already did) while keeping per-call-site lines and hop
+  labelling, and say `(aggregated across N definitions with this name)` when
+  the name is not unique. A qualified name still resolves to exactly one node.
+- **CI green on current stable.** Clippy 1.98 rejects two patterns that passed
+  when written (`question_mark` in the name matcher, `useless_format` in the
+  Hermes installer target); with `-D warnings` they were hard CI failures on a
+  clean checkout. Lint hygiene only, no behavior change.
+- **Module-scope initialisers are indexed.** The body of
+  `export const handler = async () => {…}` and every `const x = call()` —
+  including inside anonymous `it()`/`describe()` callbacks — previously
+  produced no call edges at all; the initialiser subtree was skipped outright.
+  Calls now attribute to the binding when it names a single identifier.
+  Class-field initialisers (`readonly f = () => call()`) are walked too.
+- **Anonymous arrows no longer borrow a name.** `a => …` produced a Function
+  named `a` (from its `parameter` field) and `() => counter` one named
+  `counter` (from its bare-identifier body); because resolution matches by
+  name, these junk nodes captured false edges — 12,000 `it(...)` calls
+  resolved onto one junk node in a measured corpus. The name fallback is now
+  grammar-field-aware, while still accepting assignment-LHS (`left`) names so
+  Python/Ruby module variables keep their nodes.
+- **`.tsx` parses with the TSX grammar.** JSX broke the plain-TypeScript
+  parse and silently dropped declarations (one file kept 2 of 6 top-level
+  functions). `LANGUAGE_TSX` is now used for `.tsx`; `.ts` is unchanged and
+  `.jsx` was never affected.
+- **Incremental indexing no longer destroys edges (data loss).** Re-storing a
+  changed file deleted its nodes wholesale, and the `ON DELETE CASCADE`
+  silently removed every edge touching them — including incoming edges from
+  untouched files, whose consumed unresolved refs could never re-create them.
+  Measured: a one-line edit permanently killed 1,926 incoming edges; a file
+  delete + restore (branch checkout, stash, revert via the installed git
+  hooks) killed 1,862. Re-stores now retarget incoming edges of moved symbols
+  in place and degrade edges of genuinely-removed symbols to pending
+  unresolved refs, which re-resolve when the symbol returns.
+- **Framework nodes survive source edits.** Components/hooks/routes were wiped
+  by any edit to their source file and never re-created (stale virtual-manifest
+  hash gate; no framework extract on the incremental path). The extract pass
+  now runs scoped to changed files, manifests carry an honest source hash, and
+  stale manifests are cleared.
+- A resolved reference is consumed only when its edge is actually inserted;
+  `delete_unresolved_by_node` no longer silently no-ops on a file path.
+- **Structural Go `implements` edges survive incremental sync.** The
+  incremental resolution path only re-ran the name matcher; structural
+  `implements` edges (derived from method-set matching, provenance
+  `structural-go`) were dropped by the per-file cascade and never re-created,
+  so a single `codewiki sync` after touching any Go file left `implementers` /
+  `implements` queries empty until the next full index. The incremental path now
+  re-synthesises structural edges whenever a Go file changed — even when there
+  are no unresolved references to process.
+- **A failed batch store is no longer reported as indexed.** When
+  `store_batch` errored, the batch's files still counted towards `Indexed N
+  files` and their symbols were assumed present. Failed batches are now excluded
+  from the results and summarised as one error line.
+- **`codewiki index` prunes files that vanished from disk.** A full re-index
+  only upserted files it discovered; rows for deleted / renamed / newly-ignored
+  files stayed in the index with their stale nodes and edges. `index_all` now
+  deletes known files that were not rediscovered and no longer exist.
+- **Project root is canonicalised.** `codewiki init .` and `codewiki init
+  /abs/path` stored file paths under different spellings (`./src/a.ts` vs
+  `src/a.ts`), so a later `sync` from the other spelling treated every file as
+  new and duplicated the graph. `resolve_root` now canonicalises the root.
+- **Chained calls on one line keep distinct positions.** A call site was keyed
+  on the start of the whole call expression, so `b.bump().bump()` produced two
+  edges with identical `(line, col)` that the edge identity index collapsed into
+  one. Positions now anchor on the callee name (the rightmost identifier of the
+  callee), giving each chained call its own column.
+- **Scala/Lua/Luau initialisers are walked; expression-bodied functions
+  keep their calls.** The `val`/`var`, `variable_declaration` and
+  `local_var_stmt` hooks emitted the binding and skipped its subtree, so every
+  call inside an initialiser was lost; `def f() = g()` never visited the body
+  expression. Same-line repeated calls (`f(), f()`) now record a column so the
+  edge identity index keeps both.
+
+### Changed
+
+- Call-graph shape improves after a reindex: measured on a 2,085-file
+  TypeScript corpus, calls edges 49,670 → 61,877 with false short-named-target
+  edges 12,430 → 515.
+- **Migration v7** adds a unique edge-identity index (deduping existing rows)
+  and schedules a one-time full re-store on the next `index`/`sync`: databases
+  written before this fix have silently lost edges that cannot be recovered
+  from the database alone, so they are rebuilt from source through the safe
+  path.
+
+- `callers`/`callees` CLI output format (see above) — scripts parsing the old
+  format need updating. Call-site lines require a reindex to appear.
+
+---
+
 ## [0.2.1] - 2026-05-26
 
 Small UX release: the `init`/`index` indexing display is now a determinate,

@@ -159,8 +159,8 @@ enum Commands {
     Callers {
         /// Symbol name
         name: String,
-        /// Traversal depth
-        #[arg(short, long, default_value = "2")]
+        /// Traversal depth (1 = direct callers only)
+        #[arg(short, long, default_value = "1")]
         depth: usize,
         /// Path to project root
         #[arg(long)]
@@ -172,8 +172,8 @@ enum Commands {
     Callees {
         /// Symbol name
         name: String,
-        /// Traversal depth
-        #[arg(short, long, default_value = "2")]
+        /// Traversal depth (1 = direct callers only)
+        #[arg(short, long, default_value = "1")]
         depth: usize,
         /// Path to project root
         #[arg(long)]

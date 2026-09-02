@@ -81,6 +81,12 @@ impl ResolutionBatchRunner {
         // Safety cap to prevent runaway loops if the pagination logic ever drifts.
         let mut iter_count = 0usize;
         const MAX_ITERS: usize = 100_000;
+        // Stall detector: since commit_resolved_batch consumes a ref only when
+        // its edge actually lands, a page can (rarely, mid-race) resolve fully
+        // yet consume nothing — same offset, same rows, forever. Track the
+        // first ref id per page; an identical repeat means zero progress, so
+        // skip past the page and leave those refs pending for the next cycle.
+        let mut last_first_id: Option<String> = None;
 
         loop {
             iter_count += 1;
@@ -150,6 +156,17 @@ impl ResolutionBatchRunner {
             // remainder forward. Advance the cursor by (batch_len - n) so
             // we skip past the unresolvable refs and don't re-read them.
             offset += batch_len - n;
+
+            let first_id = unresolved.first().map(|u| u.id.clone());
+            if n > 0 && batch_len == n && first_id.is_some() && first_id == last_first_id {
+                tracing::debug!(
+                    offset,
+                    batch_len,
+                    "page re-read with zero refs consumed — skipping past it"
+                );
+                offset += batch_len;
+            }
+            last_first_id = first_id;
 
             // End of table.
             if batch_len < self.batch_size {

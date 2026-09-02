@@ -11,8 +11,8 @@
 //!   skips children for — so we must scan for require() inside the hook.
 
 use crate::ast_walker::{
-    generate_node_id, is_in_function_scope, DocCommentStyle, ExtractCtx, LanguageConfig,
-    LanguageExtractor,
+    generate_node_id, is_identifier_shaped, is_in_value_scope, walk_node, DocCommentStyle,
+    ExtractCtx, LanguageConfig, LanguageExtractor,
 };
 use codewiki_core::{Edge, EdgeKind, Node, NodeKind};
 
@@ -312,42 +312,80 @@ impl LanguageExtractor for LuaExtractor {
             "variable_declaration" => {
                 // Always scan for require() calls even inside function bodies (import refs).
                 scan_for_require(node, ctx);
-                // Skip variable emission for function-local declarations (TS parity).
-                if is_in_function_scope(ctx) {
-                    return true; // consumed — suppress default extract_variable
-                }
-                let src = ctx.source.as_bytes();
-                let mut emitted = false;
-                let mut cursor = node.walk();
-                for child in node.named_children(&mut cursor) {
-                    if child.kind() == "assignment_statement" {
-                        // Multi-name form: walk variable_list inside the assignment_statement.
-                        if let Some(var_list) = child.named_child(0) {
-                            if var_list.kind() == "variable_list" {
-                                let mut c2 = var_list.walk();
-                                for ident in var_list.named_children(&mut c2) {
-                                    if ident.kind() == "identifier" {
-                                        let name = ident.utf8_text(src).unwrap_or("").to_string();
-                                        if !name.is_empty() {
-                                            ctx.emit_node(
-                                                NodeKind::Variable,
-                                                &name,
-                                                &ident,
-                                                false,
-                                                None,
-                                                None,
-                                            );
-                                            emitted = true;
-                                        }
-                                    }
+
+                // Shape: variable_declaration > assignment_statement > (variable_list, expression_list).
+                // The expression_list is the initialiser; it carries real calls whether
+                // or not the bindings are emitted. Returning `true` without walking it
+                // dropped every `local x = f()` call — top-level and function-local alike.
+                let mut expr_list: Option<tree_sitter::Node> = None;
+                let mut var_list: Option<tree_sitter::Node> = None;
+                {
+                    let mut cursor = node.walk();
+                    for child in node.named_children(&mut cursor) {
+                        if child.kind() == "assignment_statement" {
+                            let mut c2 = child.walk();
+                            for part in child.named_children(&mut c2) {
+                                match part.kind() {
+                                    "variable_list" => var_list = Some(part),
+                                    "expression_list" => expr_list = Some(part),
+                                    _ => {}
                                 }
                             }
                         }
                     }
                 }
+
+                // Skip variable emission for function-local declarations (TS parity),
+                // but still walk the initialiser under the enclosing scope.
+                if is_in_value_scope(ctx) {
+                    if let Some(el) = expr_list {
+                        walk_node(&el, ctx, self);
+                    }
+                    return true; // consumed — suppress default extract_variable
+                }
+
+                let src = ctx.source.as_bytes();
+                let mut emitted: Vec<(String, Option<String>)> = Vec::new();
+                if let Some(vl) = var_list {
+                    let mut c2 = vl.walk();
+                    for ident in vl.named_children(&mut c2) {
+                        if ident.kind() == "identifier" {
+                            let name = ident.utf8_text(src).unwrap_or("").to_string();
+                            if !name.is_empty() {
+                                let id = ctx.emit_node(
+                                    NodeKind::Variable,
+                                    &name,
+                                    &ident,
+                                    false,
+                                    None,
+                                    None,
+                                );
+                                emitted.push((name, id));
+                            }
+                        }
+                    }
+                }
+
+                if let Some(el) = expr_list {
+                    // Attribute the initialiser's calls to the binding when there is
+                    // exactly one identifier-shaped name; `local a, b = f(), g()`
+                    // falls back to the enclosing scope.
+                    let scoped = match emitted.as_slice() {
+                        [(name, Some(id))] if is_identifier_shaped(name) => {
+                            ctx.scope.push(id.clone());
+                            true
+                        }
+                        _ => false,
+                    };
+                    walk_node(&el, ctx, self);
+                    if scoped {
+                        ctx.scope.pop();
+                    }
+                }
+
                 // Return true only if we handled names ourselves (suppress default extract_variable
                 // which would find only the first identifier, causing duplication if we did emit).
-                emitted
+                !emitted.is_empty()
             }
 
             _ => false,
@@ -509,5 +547,54 @@ M.count = 42
                 "expected Variable '{var}'; nodes: {names:?}"
             );
         }
+    }
+
+    /// Regression: initialiser calls were dropped outright — the hook emitted
+    /// the binding and returned `true`, so `walk_node` skipped the subtree.
+    /// Top-level and function-local alike.
+    #[test]
+    fn initialiser_calls_are_extracted() {
+        let source = r#"
+local function target() return 1 end
+local top = target()
+local x, y = target(), target()
+local function inFn()
+  local r = target()
+  return r
+end
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".lua").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_wasm(source, f.path(), WasmGrammar::Lua)
+            .expect("WASM extraction should succeed");
+        let callers: Vec<String> = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_name == "target")
+            .map(|r| {
+                batch
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == r.from_node_id)
+                    .map(|n| n.name.clone())
+                    .unwrap_or_else(|| "?".to_string())
+            })
+            .collect();
+        for expected in ["top", "inFn"] {
+            assert!(
+                callers.iter().any(|c| c == expected),
+                "missing caller {expected}; callers of target: {callers:?}"
+            );
+        }
+        // `local x, y = target(), target()` — two call sites on one line must
+        // stay two references, distinguished by column.
+        let same_line: Vec<u32> = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_name == "target" && r.line == Some(4))
+            .filter_map(|r| r.col)
+            .collect();
+        assert_eq!(same_line.len(), 2, "two calls on line 4: {same_line:?}");
+        assert_ne!(same_line[0], same_line[1], "columns must differ");
     }
 }

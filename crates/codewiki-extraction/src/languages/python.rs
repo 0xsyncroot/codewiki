@@ -72,4 +72,44 @@ class Animal:
         let batch = extract_file(f.path(), source);
         assert!(!batch.unresolved_refs.is_empty(), "expected import refs");
     }
+
+    /// Regression: Python's `assignment` binds its LHS identifier to the
+    /// `left` grammar field (there is no `name` field), so the field-aware
+    /// name fallback must accept `left` — otherwise every module-level
+    /// `bp = Blueprint(...)` singleton loses its Variable node entirely
+    /// (observed: 136 -> 0 on pallets/flask).
+    #[test]
+    fn module_assignment_keeps_its_variable_node_and_calls() {
+        let source = r#"
+def make_thing():
+    return 1
+
+thing = make_thing()
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".py").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let var = batch
+            .nodes
+            .iter()
+            .find(|n| matches!(n.kind, codewiki_core::NodeKind::Variable) && n.name == "thing");
+        assert!(
+            var.is_some(),
+            "module-level assignment must emit its Variable node"
+        );
+        // The initialiser call attributes to the binding.
+        let var_id = &var.unwrap().id;
+        assert!(
+            batch
+                .unresolved_refs
+                .iter()
+                .any(|r| r.reference_name == "make_thing" && &r.from_node_id == var_id),
+            "the initialiser call must attribute to `thing`; refs: {:?}",
+            batch
+                .unresolved_refs
+                .iter()
+                .map(|r| (&r.reference_name, &r.from_node_id))
+                .collect::<Vec<_>>()
+        );
+    }
 }
