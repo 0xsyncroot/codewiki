@@ -1417,9 +1417,32 @@ fn extract_call(node: &tree_sitter::Node, ctx: &mut ExtractCtx) {
         let name = text.split('.').next_back().unwrap_or(&text).to_string();
         if !name.is_empty() && name != "new" {
             let from_id = ctx.scope.last().cloned().unwrap_or_default();
-            let line = node.start_position().row as u32 + 1;
-            let col = node.start_position().column as u32;
+            // The call site is where the callee NAME is, not where the whole
+            // expression starts: in `b.bump().bump()` both call expressions
+            // start at `b`, so keying on the call node's start collapsed the
+            // two bump sites into one edge. The rightmost identifier leaf of
+            // the callee (`bump` after the last `.`) is distinct per site.
+            let site = rightmost_leaf(&callee);
+            let line = site.start_position().row as u32 + 1;
+            let col = site.start_position().column as u32;
             ctx.emit_call(&from_id, &name, line, col);
+        }
+    }
+}
+
+/// Descend through the last named child until a leaf: for a member/field/
+/// scoped expression that is the final name segment (`a.b().c` → `c`,
+/// `Vec::<T>::new` → `new`); for a bare identifier, the identifier itself.
+fn rightmost_leaf<'a>(node: &tree_sitter::Node<'a>) -> tree_sitter::Node<'a> {
+    let mut cur = *node;
+    loop {
+        let n = cur.named_child_count();
+        if n == 0 {
+            return cur;
+        }
+        match cur.named_child(n - 1) {
+            Some(child) => cur = child,
+            None => return cur,
         }
     }
 }

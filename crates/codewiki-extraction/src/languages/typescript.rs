@@ -178,6 +178,31 @@ function helper(): number { return 1 }
         }
     }
 
+    /// Regression: chained calls to the same method on one line
+    /// (`b.bump().bump()`) start at the same column as the whole expression,
+    /// so keying a call site on the call node's start made them one edge.
+    /// The call site is the callee identifier's position, which differs.
+    #[test]
+    fn chained_calls_get_distinct_columns() {
+        let source = r#"
+class B { bump(): B { return this } }
+export function chain(b: B): B {
+    return b.bump().bump()
+}
+"#;
+        let mut f = tempfile::NamedTempFile::with_suffix(".ts").unwrap();
+        f.write_all(source.as_bytes()).unwrap();
+        let batch = extract_file(f.path(), source);
+        let cols: Vec<u32> = batch
+            .unresolved_refs
+            .iter()
+            .filter(|r| r.reference_name == "bump")
+            .filter_map(|r| r.col)
+            .collect();
+        assert_eq!(cols.len(), 2, "two call references expected: {cols:?}");
+        assert_ne!(cols[0], cols[1], "chained calls must not share a column");
+    }
+
     /// Regression: anonymous arrows must never borrow a name from their
     /// `parameter` or `body` fields. Before the field-aware name fallback,
     /// `xs.find(a => a.ok)` emitted a Function named `a`, and `() => counter`
