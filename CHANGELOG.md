@@ -89,6 +89,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   edges with identical `(line, col)` that the edge identity index collapsed into
   one. Positions now anchor on the callee name (the rightmost identifier of the
   callee), giving each chained call its own column.
+- **Scala/Lua/Luau initialisers are walked; expression-bodied functions
+  keep their calls.** The `val`/`var`, `variable_declaration` and
+  `local_var_stmt` hooks emitted the binding and skipped its subtree, so every
+  call inside an initialiser was lost; `def f() = g()` never visited the body
+  expression. Same-line repeated calls (`f(), f()`) now record a column so the
+  edge identity index keeps both.
 
 ### Changed
 
@@ -100,8 +106,6 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   written before this fix have silently lost edges that cannot be recovered
   from the database alone, so they are rebuilt from source through the safe
   path.
-
-### Changed
 
 - `callers`/`callees` CLI output format (see above) — scripts parsing the old
   format need updating. Call-site lines require a reindex to appear.
