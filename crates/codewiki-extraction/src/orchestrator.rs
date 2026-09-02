@@ -9,6 +9,7 @@ use crate::file_reader::read_source_file;
 use crate::language_detector::is_source_file;
 use crate::path_norm::normalize_path;
 use codewiki_core::ExtractionBatch;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -24,6 +25,9 @@ pub struct IndexCounts {
     /// distinguish "no source files to index" (clean 0) from "found source
     /// files but indexed none" (a real failure).
     pub discovered: usize,
+    /// Index entries removed because their file no longer exists on disk
+    /// (only a full index can notice these; sync learns them from its walk).
+    pub pruned: usize,
     /// Number of `flush_bulk` calls that returned an error. With the FK
     /// backstop in the storage layer these should be rare, but a non-zero
     /// value means at least one chunk of parsed files failed to persist and
@@ -40,6 +44,16 @@ pub trait ExtractionStore: Send + Sync {
 
     /// Remove all data for a deleted file.
     fn delete_file(&self, path: &Path) -> Result<(), String>;
+
+    /// Every source file path the store currently has an index entry for.
+    ///
+    /// Used by `index_all` to prune entries whose file no longer exists on
+    /// disk. Synthetic framework-manifest rows (under `.codewiki/routes/`)
+    /// must NOT be included. The default (empty) disables pruning, for stores
+    /// that cannot enumerate.
+    fn known_files(&self) -> Vec<PathBuf> {
+        Vec::new()
+    }
 
     /// Flush a sub-batch of parsed batches during `index_all`.
     ///
@@ -117,7 +131,38 @@ impl ExtractionOrchestratorImpl {
     /// and are never all held in RAM at once (OPT-5).
     pub fn index_all(&self, root: &Path) -> IndexCounts {
         let files = discover_files(root);
-        self.parse_files_and_stream(files)
+        let pruned = self.prune_vanished(&files);
+        let mut counts = self.parse_files_and_stream(files);
+        counts.pruned = pruned;
+        counts
+    }
+
+    /// Delete index entries for files the store knows but the walk no longer
+    /// found. Without this, `index` over an existing database keeps ghosts:
+    /// a deleted file's nodes and edges survive, and a renamed file exists
+    /// twice (old path and new). Only `sync` computed removals before.
+    fn prune_vanished(&self, discovered: &[PathBuf]) -> usize {
+        let known = self.store.known_files();
+        if known.is_empty() {
+            return 0;
+        }
+        let present: HashSet<&Path> = discovered.iter().map(PathBuf::as_path).collect();
+        let mut pruned = 0usize;
+        for path in &known {
+            if present.contains(path.as_path()) || path.exists() {
+                continue;
+            }
+            match self.store.delete_file(path) {
+                Ok(()) => pruned += 1,
+                Err(e) => {
+                    tracing::warn!(path = %path.display(), err = %e, "failed to prune vanished file")
+                }
+            }
+        }
+        if pruned > 0 {
+            tracing::info!(pruned, "removed index entries for files no longer on disk");
+        }
+        pruned
     }
 
     /// Process a set of changed files.
@@ -271,6 +316,7 @@ impl ExtractionOrchestratorImpl {
             nodes: total_nodes.load(Ordering::Relaxed),
             edges: total_edges.load(Ordering::Relaxed),
             discovered,
+            pruned: 0,
             store_errors: store_errors.load(Ordering::Relaxed),
         }
     }
@@ -310,18 +356,38 @@ impl ExtractionOrchestratorImpl {
 
         // Parse phase — run in the dedicated rayon pool.
         let store = Arc::clone(&self.store);
-        self.rayon_pool.install(|| {
+        let failed = std::sync::atomic::AtomicUsize::new(0);
+        let batches: Vec<ExtractionBatch> = self.rayon_pool.install(|| {
             work.into_par_iter()
                 .filter_map(|(path, source)| {
                     tracing::debug!(path = %path.display(), "parsing file");
                     let batch = extract_file(&path, &source);
                     if let Err(e) = store.store_batch(batch.clone()) {
-                        tracing::warn!(path = %path.display(), err = %e, "failed to store batch");
+                        // Do NOT return the batch: callers persist the returned
+                        // FileRecords (hash, mtime, size) as "indexed", which
+                        // would make change detection consider this file up to
+                        // date and never retry it — its symbols would stay
+                        // unreachable until the content changed again.
+                        tracing::warn!(
+                            path = %path.display(),
+                            err = %e,
+                            "failed to store batch; file left as changed so the next run retries it"
+                        );
+                        failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        return None;
                     }
                     Some(batch)
                 })
                 .collect()
-        })
+        });
+        let failed = failed.load(std::sync::atomic::Ordering::Relaxed);
+        if failed > 0 {
+            tracing::error!(
+                failed,
+                "{failed} file(s) could not be stored; their index entries are stale until the next run"
+            );
+        }
+        batches
     }
 }
 
@@ -409,6 +475,49 @@ mod tests {
             !batches.is_empty(),
             "expected at least one batch for {}",
             ts_path.display()
+        );
+    }
+
+    /// Regression: a batch whose store failed must NOT be returned. The sync
+    /// loop persists the returned batches' FileRecords (hash, mtime, size),
+    /// which marks the file up to date — so a transient store failure made
+    /// the file's symbols unreachable until its content changed again, with
+    /// no retry and exit code 0.
+    #[test]
+    fn failed_store_excludes_batch_from_results() {
+        struct FailingStore;
+        impl ExtractionStore for FailingStore {
+            fn store_batch(&self, batch: ExtractionBatch) -> Result<(), String> {
+                if batch.file.path.to_string_lossy().ends_with("bad.ts") {
+                    Err("simulated store failure".to_string())
+                } else {
+                    Ok(())
+                }
+            }
+            fn delete_file(&self, _path: &Path) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let good = dir.path().join("good.ts");
+        let bad = dir.path().join("bad.ts");
+        std::fs::write(&good, b"function good() {}").unwrap();
+        std::fs::write(&bad, b"function bad() {}").unwrap();
+
+        let orch = ExtractionOrchestratorImpl::new(Arc::new(FailingStore));
+        let batches = orch.process_changes(ChangedFiles {
+            added: vec![good.clone(), bad.clone()],
+            modified: Vec::new(),
+            removed: Vec::new(),
+        });
+        let paths: Vec<String> = batches
+            .iter()
+            .map(|b| b.file.path.to_string_lossy().into_owned())
+            .collect();
+        assert!(paths.iter().any(|p| p.ends_with("good.ts")), "{paths:?}");
+        assert!(
+            !paths.iter().any(|p| p.ends_with("bad.ts")),
+            "a batch that failed to store must not be reported as indexed: {paths:?}"
         );
     }
 

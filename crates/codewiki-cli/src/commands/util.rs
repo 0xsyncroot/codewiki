@@ -125,8 +125,17 @@ pub fn open_storage(root: &Path) -> Result<StorageImpl> {
 }
 
 /// Resolve cwd when an optional `--path` is not given.
+/// The project root every command indexes and queries.
+///
+/// Always canonical (absolute, symlinks resolved): file paths are stored
+/// verbatim under this root, so two spellings of the same directory —
+/// `--path .` versus the cwd, `./src` versus `/abs/src` — would otherwise
+/// produce two disjoint index universes, and a `sync` after an `init --path .`
+/// classified every file as removed + added.
 pub fn resolve_root(path: Option<std::path::PathBuf>) -> std::path::PathBuf {
-    path.unwrap_or_else(|| std::env::current_dir().expect("cannot determine working directory"))
+    let root = path
+        .unwrap_or_else(|| std::env::current_dir().expect("cannot determine working directory"));
+    std::fs::canonicalize(&root).unwrap_or(root)
 }
 
 // Config-file extensions that framework resolvers may need but that are
@@ -583,7 +592,17 @@ pub fn run_resolution_incremental(
         "OPT-9: incremental resolution scoped ref set"
     );
 
-    if all_refs.is_empty() {
+    // Go structural `implements` edges are synthesised from the node
+    // inventory, not from unresolved refs, so nothing in the ref-scoped pass
+    // below can rebuild them. Re-storing a changed file deletes its outgoing
+    // edges (rightly: they come back from the fresh parse), which used to lose
+    // these permanently. When a Go file changed, refresh the whole class —
+    // even when the edit produced no refs at all.
+    let any_go_changed = changed_paths
+        .iter()
+        .any(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("go")));
+
+    if all_refs.is_empty() && !any_go_changed {
         return Ok(0);
     }
 
@@ -599,14 +618,35 @@ pub fn run_resolution_incremental(
         ReferenceResolver::new(project_root.to_path_buf(), qa_arc, NODE_CACHE_CAPACITY);
     ref_resolver.warm_caches();
 
-    let runner = ResolutionBatchRunner::new(storage_arc, ref_resolver, false);
+    // Synthesise from the just-updated inventory now; swapped in below.
+    let structural_edges = if any_go_changed {
+        ref_resolver.synthesize_structural_implements()
+    } else {
+        Vec::new()
+    };
+
+    let runner = ResolutionBatchRunner::new(Arc::clone(&storage_arc), ref_resolver, false);
     let resolved_count = runner
         .run_for_refs(all_refs)
         .map_err(|e| anyhow::anyhow!("incremental resolution failed: {}", e))?;
+
+    let mut structural_count = 0usize;
+    if any_go_changed {
+        storage
+            .delete_edges_by_provenance(codewiki_resolution::STRUCTURAL_GO_PROVENANCE)
+            .map_err(|e| anyhow::anyhow!("structural implements refresh failed: {}", e))?;
+        structural_count = structural_edges.len();
+        if structural_count > 0 {
+            storage_arc
+                .commit_resolved_batch(structural_edges)
+                .map_err(|e| anyhow::anyhow!("structural implements commit failed: {}", e))?;
+        }
+        tracing::info!(structural_count, "refreshed Go structural implements edges");
+    }
 
     tracing::info!(
         resolved_count,
         "OPT-9: incremental resolution pipeline complete"
     );
-    Ok(resolved_count)
+    Ok(resolved_count + structural_count)
 }

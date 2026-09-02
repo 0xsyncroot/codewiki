@@ -172,6 +172,19 @@ pub fn retarget_incoming_edges(
     Ok(())
 }
 
+/// Delete every edge carrying `provenance`. Used to refresh a whole class of
+/// synthesised edges (e.g. Go structural `implements`) before re-inserting it.
+pub fn delete_edges_by_provenance(
+    conn: &Connection,
+    provenance: &str,
+) -> Result<usize, CodeWikiError> {
+    let n = conn.execute(
+        "DELETE FROM edges WHERE provenance = ?1",
+        params![provenance],
+    )?;
+    Ok(n)
+}
+
 pub fn delete_edges_by_file(conn: &Connection, file_path: &str) -> Result<(), CodeWikiError> {
     conn.execute(
         "DELETE FROM edges WHERE source IN (SELECT id FROM nodes WHERE file_path = ?1)

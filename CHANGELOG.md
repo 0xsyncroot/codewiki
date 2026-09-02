@@ -64,6 +64,31 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stale manifests are cleared.
 - A resolved reference is consumed only when its edge is actually inserted;
   `delete_unresolved_by_node` no longer silently no-ops on a file path.
+- **Structural Go `implements` edges survive incremental sync.** The
+  incremental resolution path only re-ran the name matcher; structural
+  `implements` edges (derived from method-set matching, provenance
+  `structural-go`) were dropped by the per-file cascade and never re-created,
+  so a single `codewiki sync` after touching any Go file left `implementers` /
+  `implements` queries empty until the next full index. The incremental path now
+  re-synthesises structural edges whenever a Go file changed — even when there
+  are no unresolved references to process.
+- **A failed batch store is no longer reported as indexed.** When
+  `store_batch` errored, the batch's files still counted towards `Indexed N
+  files` and their symbols were assumed present. Failed batches are now excluded
+  from the results and summarised as one error line.
+- **`codewiki index` prunes files that vanished from disk.** A full re-index
+  only upserted files it discovered; rows for deleted / renamed / newly-ignored
+  files stayed in the index with their stale nodes and edges. `index_all` now
+  deletes known files that were not rediscovered and no longer exist.
+- **Project root is canonicalised.** `codewiki init .` and `codewiki init
+  /abs/path` stored file paths under different spellings (`./src/a.ts` vs
+  `src/a.ts`), so a later `sync` from the other spelling treated every file as
+  new and duplicated the graph. `resolve_root` now canonicalises the root.
+- **Chained calls on one line keep distinct positions.** A call site was keyed
+  on the start of the whole call expression, so `b.bump().bump()` produced two
+  edges with identical `(line, col)` that the edge identity index collapsed into
+  one. Positions now anchor on the callee name (the rightmost identifier of the
+  callee), giving each chained call its own column.
 
 ### Changed
 

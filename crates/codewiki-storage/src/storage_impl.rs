@@ -67,6 +67,11 @@ impl StorageImpl {
         })
     }
 
+    /// Delete every edge with the given provenance; returns the count.
+    pub fn delete_edges_by_provenance(&self, provenance: &str) -> Result<usize, CodeWikiError> {
+        self.with_conn(|conn| eq::delete_edges_by_provenance(conn, provenance))
+    }
+
     pub fn new(conn: Connection, cache_capacity: u64) -> Self {
         Self {
             conn: Mutex::new(conn),

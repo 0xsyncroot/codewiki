@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use codewiki_extraction::ExtractionOrchestratorImpl;
-use codewiki_storage::{ExtractionStore as StorageTrait, StorageImpl};
+use codewiki_storage::{ExtractionStore as StorageTrait, QueryHandle, StorageImpl};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -69,6 +69,18 @@ impl codewiki_extraction::ExtractionStore for StorageAdapter {
 
     fn delete_file(&self, path: &Path) -> Result<(), String> {
         StorageTrait::delete_file(&*self.storage, path).map_err(|e| e.to_string())
+    }
+
+    /// Real source files only — the synthetic `.codewiki/routes/…` manifests
+    /// have no disk presence and must never be pruned as "vanished".
+    fn known_files(&self) -> Vec<std::path::PathBuf> {
+        self.storage
+            .get_files(None)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|f| f.path)
+            .filter(|p| !p.to_string_lossy().contains("/.codewiki/routes/"))
+            .collect()
     }
 
     /// Bulk-insert path: calls `store_extraction_batch_bulk_init` which drops

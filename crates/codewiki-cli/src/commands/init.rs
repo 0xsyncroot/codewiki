@@ -14,7 +14,7 @@ use crate::ui::shimmer::{IndexProgress, Phase, ProgressReporter};
 const NODE_CACHE_CAPACITY: u64 = 50_000;
 
 pub fn run(path: Option<PathBuf>, no_index: bool) -> Result<()> {
-    let root = path.unwrap_or_else(|| std::env::current_dir().expect("cannot determine cwd"));
+    let root = crate::commands::util::resolve_root(path);
 
     // If already initialised, print info and exit.
     if is_initialized(&root) {
