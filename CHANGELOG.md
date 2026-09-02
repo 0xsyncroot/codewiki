@@ -7,6 +7,34 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **`codewiki callers` / `codewiki callees` answer their own question.**
+  `--depth` now defaults to 1; transitive rows are labelled `←…← (depth N)`
+  instead of sharing the direct-call arrow; rows carry the real call-site line;
+  a caller with N call sites shows `xN call sites` instead of N identical rows;
+  file-scope and self-recursive callers are labelled; truncation is explicit.
+  The traversal no longer drops direct edges first reached on a deeper path,
+  and self-recursive functions now list themselves.
+- **`callers`/`callees` no longer report one definition and omit the rest.**
+  The CLI resolved a bare name to a single node, so for any name carried by
+  more than one definition it reported that one definition's neighbours —
+  reading as a confident `(none)`. On a fresh index of pallets/flask,
+  `codewiki callers create_app` printed `(none)` for a name with 14
+  definitions and 5 call edges. Both commands now union the same-name family
+  (as the MCP tools already did) while keeping per-call-site lines and hop
+  labelling, and say `(aggregated across N definitions with this name)` when
+  the name is not unique. A qualified name still resolves to exactly one node.
+
+### Changed
+
+- `callers`/`callees` CLI output format (see above) — scripts parsing the old
+  format need updating. Call-site lines require a reindex to appear.
+
+---
+
 ## [0.2.1] - 2026-05-26
 
 Small UX release: the `init`/`index` indexing display is now a determinate,

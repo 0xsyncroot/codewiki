@@ -1,6 +1,6 @@
 /// Concrete SQLite implementation of ExtractionStore, QueryHandle, ResolutionStore, SyncStore.
 use crate::cache::{build_node_cache, NodeCache};
-use crate::graph::traversal::{GraphTraverser, TraversalOptions};
+use crate::graph::traversal::{CallRows, GraphTraverser, TraversalOptions};
 use crate::queries::{edges as eq, files as fq, meta as mq, nodes as nq, unresolved as uq};
 use crate::search::{
     extract_search_terms, extract_symbols_from_query, get_stem_variants, is_test_file,
@@ -37,6 +37,36 @@ pub struct StorageImpl {
 }
 
 impl StorageImpl {
+    /// Callers of `node_id`, each tagged with the hop distance at which the
+    /// edge was found (1 == direct). Returns `(rows, truncated)`.
+    ///
+    /// Inherent rather than part of [`QueryHandle`] so the trait — and every
+    /// implementor of it, including the MCP test double — stays untouched.
+    pub fn get_callers_with_depth(
+        &self,
+        node_id: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<CallRows, CodeWikiError> {
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            traverser.get_callers_with_depth(node_id, depth, limit)
+        })
+    }
+
+    /// Callees of `node_id`. Mirror of [`Self::get_callers_with_depth`].
+    pub fn get_callees_with_depth(
+        &self,
+        node_id: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<CallRows, CodeWikiError> {
+        self.with_conn(|conn| {
+            let traverser = GraphTraverser::new(conn);
+            traverser.get_callees_with_depth(node_id, depth, limit)
+        })
+    }
+
     pub fn new(conn: Connection, cache_capacity: u64) -> Self {
         Self {
             conn: Mutex::new(conn),
@@ -235,7 +265,7 @@ impl StorageImpl {
     /// The family lookup is bounded by `MAX_FAMILY_NODES` so a pathological
     /// same-name set (e.g. a generated codebase with thousands of `new`) can't
     /// blow up traversal cost; the most relevant members (by search rank) win.
-    fn resolve_symbol_family(
+    pub fn resolve_symbol_family(
         &self,
         symbol: &str,
     ) -> Result<Option<(Vec<String>, String, usize)>, CodeWikiError> {
@@ -2261,6 +2291,51 @@ mod tests {
             edges: vec![],
             unresolved_refs: vec![],
         }
+    }
+
+    /// A bare name usually names a family. `resolve_symbol_family` must return
+    /// every definition carrying it, so `callers`/`callees` can union their
+    /// neighbours instead of reporting one definition's and staying silent
+    /// about the rest — which reads as a confident `(none)`.
+    #[test]
+    fn resolve_symbol_family_returns_every_same_named_definition() {
+        let storage = make_storage();
+        for (i, file) in ["a.ts", "b.ts", "c.ts"].iter().enumerate() {
+            storage
+                .store_extraction_batch(ExtractionBatch {
+                    file: FileRecord {
+                        path: PathBuf::from(file),
+                        content_hash: format!("h{i}"),
+                        language: "typescript".to_string(),
+                        size: 10,
+                        modified_at: 1,
+                        indexed_at: now_ms(),
+                        node_count: 1,
+                        errors: vec![],
+                    },
+                    nodes: vec![Node {
+                        id: format!("{file}-mk"),
+                        name: "makeThing".to_string(),
+                        qualified_name: "makeThing".to_string(),
+                        kind: NodeKind::Function,
+                        language: Language::TypeScript,
+                        file_path: file.to_string(),
+                        start_line: 1,
+                        ..Default::default()
+                    }],
+                    edges: vec![],
+                    unresolved_refs: vec![],
+                })
+                .unwrap();
+        }
+
+        let (ids, name, size) = storage
+            .resolve_symbol_family("makeThing")
+            .unwrap()
+            .expect("family must resolve");
+        assert_eq!(name, "makeThing");
+        assert_eq!(size, 3, "all three definitions must be in the family");
+        assert_eq!(ids.len(), 3, "got {ids:?}");
     }
 
     #[test]
